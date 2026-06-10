@@ -21,6 +21,7 @@ Early. Design and docs exist; application code is not scaffolded yet. The `backe
 
 ## Hard rules
 - **Never commit to `main`.** All work goes through a branch + PR. (Also enforce with GitHub branch protection.)
+- **Ask before you commit.** Never run `git commit` (or `git push`) on your own initiative. When a change is ready, the last thing you say should be a request for permission to commit, with a one-line summary of what you'd commit; only commit after the user agrees.
 - **No unscoped UI messaging.** Do not add notifications, alerts, badges, toasts, banners, or modal warnings unless a spec explicitly calls for one. Default is to not show one. (Locked product decision in the PRD.)
 - **Don't over-engineer.** Build the simplest thing that satisfies the request. Don't expand scope or edit unrelated code. If a 50-line change is turning into 500, stop and check.
 - **Don't guess silently.** If a requirement is ambiguous, ask before building on the assumption.
