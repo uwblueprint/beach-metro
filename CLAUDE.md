@@ -25,9 +25,10 @@ Early. Design and docs exist; application code is not scaffolded yet. The `backe
 - **Don't over-engineer.** Build the simplest thing that satisfies the request. Don't expand scope or edit unrelated code. If a 50-line change is turning into 500, stop and check.
 - **Don't guess silently.** If a requirement is ambiguous, ask before building on the assumption.
 - **No secrets in the repo.** Use env vars and an untracked `.env`; commit `.env.example` placeholders only.
+- **No time-based cadences.** Don't express agent or workflow steps in wall-clock or calendar terms ("every two weeks", "daily", "in N days"). An agent has no reliable sense of elapsed time between sessions, so time-based instructions don't execute meaningfully — use event- or size-based triggers instead ("at session end", "when the file passes ~100 entries", "before opening a PR"). This governs how we instruct the agent, not real product facts like the paper's publication schedule or cache lifetimes.
 
 ## LEARNINGS protocol
-At session start, read `LEARNINGS.md`. At session end, run `/blueprint-wrapup` to triage what you learned (apply / capture / dismiss). Consolidate periodically with `/blueprint-consolidate-learnings`. CLAUDE.md holds stable facts; LEARNINGS.md holds discoveries specific to this codebase.
+At session start, read `LEARNINGS.md`. At session end, run `/blueprint-wrapup` to triage what you learned (apply / capture / dismiss). Consolidate with `/blueprint-consolidate-learnings` once `LEARNINGS.md` passes ~100 entries. CLAUDE.md holds stable facts; LEARNINGS.md holds discoveries specific to this codebase.
 
 ## Conventions
 - Commits & branches: follow `/blueprint-commit` (Conventional Commits; `<type>/<BM-ticket>-<kebab>` branches).

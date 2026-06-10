@@ -1,6 +1,6 @@
 ---
 name: blueprint-consolidate-learnings
-description: Periodic cleanup of LEARNINGS.md — prune outdated entries, merge duplicates, and promote recurring patterns into Consolidated Principles. Run every ~2 weeks, or when the file passes ~100 bullets.
+description: Cleanup of LEARNINGS.md — prune outdated entries, merge duplicates, and promote recurring patterns into Consolidated Principles. Run when the file passes ~100 entries.
 disable-model-invocation: true
 allowed-tools: Read Edit Bash(wc *) Bash(date *)
 ---

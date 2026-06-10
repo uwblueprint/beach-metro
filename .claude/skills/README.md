@@ -13,7 +13,7 @@ folder.
   - `blueprint-pull-request` — PR conventions
   - `blueprint-self-review` — pre-"done" quality gate
   - `blueprint-wrapup` — end-of-session LEARNINGS reflection
-  - `blueprint-consolidate-learnings` — periodic LEARNINGS cleanup
+  - `blueprint-consolidate-learnings` — LEARNINGS cleanup (when it passes ~100 entries)
 - **`beach-metro-*` — specific to this product** (route rules, PostGIS house
   counts, etc.). None yet; add as the codebase grows.
 
