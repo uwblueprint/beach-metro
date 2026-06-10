@@ -1,11 +1,17 @@
 # docs
 
-Source-of-truth design artifacts for Beach Metro.
+Source-of-truth design artifacts for Beach Metro: the PRD and the per-area flow
+specs. Each flow spec follows the prose + Mermaid format established by the route
+management flow (`route_management_flow_v2.md`). Reuse that format for new specs.
 
-These currently live on their own branches until they are merged into `main`:
-- `beach_metro_PRD.md` — product requirements (branch `prd-md`).
-- `route_management_flow_v2.md` — route management flow spec (branch `route-management-md`).
+## Documents
 
-As more flow specs and the data schema are written, add them here. Reuse the
-route flow doc's prose + Mermaid format for new flow specs so they stay
-consistent.
+| Doc | Area | Linear | Status | Where it lives |
+|---|---|---|---|---|
+| `beach_metro_PRD.md` | Product requirements | — | Drafted | `docs/` on branch `prd-md` |
+| `route_management_flow_v2.md` | Route management | BM-12 | Under review | `docs/` on branch `route-management-md` |
+| `people_management_flow_v1.md` | People management (volunteers + captains) | BM-24 | Draft | `docs/` on this branch |
+| Finances flow | Finances (issues, payouts) | BM-25 | Planned, not started | — |
+
+Until these branches merge into `main`, each doc lives in `docs/` on the branch
+noted above. As more specs are written, add a row here.
