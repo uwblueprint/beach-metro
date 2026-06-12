@@ -32,7 +32,7 @@ Early. Design and docs exist; application code is not scaffolded yet. The `backe
 At session start, read `LEARNINGS.md`. At session end, run `/blueprint-wrapup` to triage what you learned (apply / capture / dismiss). Consolidate with `/blueprint-consolidate-learnings` once `LEARNINGS.md` passes ~100 entries. CLAUDE.md holds stable facts; LEARNINGS.md holds discoveries specific to this codebase.
 
 ## Conventions
-- Commits & branches: follow `/blueprint-commit` (Conventional Commits; `<type>/<BM-ticket>-<kebab>` branches).
+- Commits & branches: follow `/blueprint-commit` (plain commit messages, no `type:` prefix; `<type>/<BM-ticket>-<kebab>` branches).
 - Pull requests: follow `/blueprint-pull-request` and `.github/pull_request_template.md`.
 - Before declaring any change done, run `/blueprint-self-review`.
 
