@@ -60,7 +60,7 @@ stateDiagram-v2
 
 Routes are deleted (removed from the system entirely) rather than retired. There is no archived or hidden state.
 
-**Carrier goes inactive (attention flag, not a state).** When the assigned volunteer's end date passes, the route does not become vacant. It stays Active-Assigned and the system raises an explicit "needs attention" flag in the UI, prompting Melinda to unassign or reassign it. This is a derived indicator (the assigned volunteer is inactive), not a separate lifecycle state. See 4f.
+**Carrier goes inactive (attention flag, not a state).** When the assigned volunteer becomes inactive (their end date passes, or they are retired in the people management flow), the route does not become vacant. It stays Active-Assigned and the system raises an explicit "needs attention" flag in the UI, prompting Melinda to unassign or reassign it. This is a derived indicator (the assigned volunteer is inactive), not a separate lifecycle state. See 4f.
 
 ### 3b. House count state
 
@@ -220,13 +220,13 @@ Unassign is manual only, performed by Melinda from the detail view; the route go
 
 ```mermaid
 flowchart TD
-    Trigger[Assigned volunteer end date passes] --> System[System trigger]
+    Trigger[Assigned volunteer becomes inactive - end date or retired] --> System[System trigger]
     System --> Flag[Route flagged - needs attention]
     Flag --> Stays[(Route - stays Active-Assigned)]
     Stays --> Decide[Melinda reviews and chooses Unassign or Reassign]
 ```
 
-When a volunteer's end date passes, the system does not vacate their routes. Each affected route stays Active-Assigned and is flagged in the UI as needing attention, so Melinda can decide whether to unassign it (sending it to Vacant) or reassign it to another volunteer. This flag is an explicit, scoped indicator requested for this case, not an ambient notification, and it clears once the route is unassigned or reassigned.
+When a volunteer becomes inactive, whether their end date passes or they are retired in the people management flow, the system does not vacate their routes. Each affected route stays Active-Assigned and is flagged in the UI as needing attention, so Melinda can decide whether to unassign it (sending it to Vacant) or reassign it to another volunteer. This flag is an explicit, scoped indicator requested for this case, not an ambient notification, and it clears once the route is unassigned or reassigned.
 
 **Reassign**
 
@@ -274,10 +274,9 @@ The background refresh runs monthly. House counts change slowly in practice, so 
 flowchart TD
     Start([Routes list view]) --> Multi[Multi-select via checkboxes]
     Multi --> Action{Pick bulk action}
-    Action -->|Reassign territory| Reassign[Bulk reassign to new territory]
+    Action -->|Unassign| Unassign[Bulk unassign to Vacant]
     Action -->|Delete| Delete[Bulk delete]
-    Reassign --> PickT[Pick destination territory]
-    PickT --> Confirm1[Confirm with summary]
+    Unassign --> Confirm1[Confirm with summary]
     Confirm1 --> Apply1[Apply to all selected]
     Delete --> Confirm2[Confirm with summary - destructive]
     Confirm2 --> Apply2[Apply to all selected]
@@ -287,7 +286,7 @@ flowchart TD
 
 Two highest-value bulk actions:
 
-**Bulk reassign to a different territory.** When a captain leaves, all their routes need to move to a new captain. Today that\'s many individual edits.
+**Bulk unassign.** Send a set of routes to Vacant at once, for example after a carrier change. Reassigning a captain's coverage is no longer a route-level action: captains connect to volunteers in the people management flow, so moving a captain's coverage is done there and routes follow their volunteers.
 
 **Bulk delete.** Useful when a block is being redeveloped or a coverage area is dropped. Confirmation should be especially prominent since this is destructive and irreversible.
 
@@ -329,7 +328,7 @@ Every legal transition, so the state machine is unambiguous.
 
 **Two admins edit the same route concurrently.** Out of scope for MVP. Beach Metro effectively has one admin (Melinda) doing route management; Hope and any future admin operate on payments. If real concurrency becomes an issue, last-write-wins with an "updated since you loaded this" warning is acceptable.
 
-**Volunteer\'s endDate passes (including set retroactively).** The route is not auto-vacated. On save, the system flags each of the volunteer\'s routes as needing attention and leaves them Active-Assigned, so Melinda resolves each one manually (unassign or reassign). This keeps "vacant" meaning a deliberate decision, not an automatic side effect.
+**Volunteer\'s endDate passes (including set retroactively).** The route is not auto-vacated. On save, the system flags each of the volunteer\'s routes as needing attention and leaves them Active-Assigned, so Melinda resolves each one manually (unassign or reassign). This keeps "vacant" meaning a deliberate decision, not an automatic side effect. The same attention flag is raised when the assigned volunteer is retired in the people management flow.
 
 **Deleting a route.** Soft delete: the route row stays in the database with a `deletedAt` timestamp (or equivalent flag) and is hidden from all UI lists, the map, and operational views. The assigned volunteer\'s `volunteerRouteIds` removes the deleted route. Confirmation modal required because the route disappears from active workflows.
 
