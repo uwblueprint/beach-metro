@@ -5,7 +5,7 @@ A prose-and-diagram walkthrough of how the distribution manager manages the peop
 Ticket: BM-24. Scope: volunteer and captain profiles, their lifecycle (add, edit, vacation, retire), and the territory model (a captain's territory = its assigned volunteers + its commercial drop addresses).
 
 Out of scope here and owned by other flows:
-- Route assignment and route definition: route flow (BM-12). Routes are not part of a territory.
+- Route assignment and route definition: route flow (BM-12). A route's captain is reached through its assigned volunteer.
 - Payout calculation, the issue lifecycle, and reimbursement amounts: finances flow (BM-25). Reimbursements appear here read-only.
 - Admin/staff accounts (the distribution and accounts managers): authentication flow.
 
@@ -13,20 +13,20 @@ Out of scope here and owned by other flows:
 
 ## 1. Object overview
 
-**Volunteer.** One of roughly 200 carriers who walk routes to deliver papers, often high-school students, so there is a steady churn of people joining and leaving. A volunteer record holds name, a validated address, email, phone, free-form notes, an optional assigned captain, an optional vacation window, an optional end date, and the routes they currently carry (assigned in the route flow, shown read-only here). Created by the distribution manager only; volunteers do not log in. Status: Active, On vacation, or Retired.
+**Volunteer.** One of roughly 200 carriers who walk routes to deliver papers, often high-school students, so there is a steady churn of people joining and leaving. A volunteer record holds first and last name, a validated address, email, phone, free-form notes, an optional assigned captain, an optional vacation window, an optional end date, and the routes they currently carry (assigned in the route flow, shown read-only here). Created by the distribution manager only; volunteers do not log in. Status: Active, On vacation, or Retired.
 
-**Captain.** One of the drivers who deliver bundles to volunteer houses and commercial drops. A captain record holds contact info, a validated address, a pay structure (a pay type of per bundle / per paper / per drop, a rate, and a pay cadence), an invoices-externally flag, the one territory they own, free-form notes, and a read-only reimbursement history sourced from the finances flow. Status: Active or Retired.
+**Captain.** One of the drivers who deliver bundles to volunteer houses and commercial drops. A captain record holds first and last name, contact info (phone and email), a pay structure (a pay type of per bundle / per paper / per drop, a rate, and a pay cadence), the one territory they own, free-form notes, and a read-only reimbursement history sourced from the finances flow. Status: Active or Retired.
 
-**Territory.** A captain's coverage area, owned by exactly one captain. A territory holds two lists: its **assigned volunteers** and its **commercial drop addresses**. It does not contain routes. People Management manages a territory's contents here (the volunteer list, via captain assignment, and the commercial drops directly).
+**Territory.** A captain's coverage area, one-to-one with that captain. A territory holds two lists: its **assigned volunteers** and its **commercial drop addresses**. It does not contain routes. People Management manages a territory's contents here (the volunteer list, via captain assignment, and the commercial drops directly).
 
 **Commercial drop.** A non-residential address that collects bundles from a captain (for example a building, school, church, or food-and-beverage spot), as opposed to a volunteer's home. Each commercial drop is a validated address belonging to one territory.
 
 **Key relationships.**
-- A captain owns exactly one territory; a territory has at most one captain. Both can be temporarily unset during a handoff (see 4k).
+- A captain is one-to-one with a territory. The territory has at most one captain; both can be temporarily unset during a handoff (see 4k).
 - A territory holds a list of assigned volunteers and a list of commercial drop addresses. No routes.
 - A volunteer is manually assigned to a captain. That assignment places the volunteer in the captain's territory: volunteer -> captain -> territory. A volunteer can be unassigned (no captain, and so in no territory) until the manager assigns one; reassigning them to a different captain moves them to that captain's territory.
-- A volunteer carries zero or more routes (assigned in the route flow). Routes are independent of the territory model.
-- Retiring a person is a manual, soft action; the record and history are preserved for past issues and payouts. There is no automatic retirement.
+- A volunteer carries zero or more routes (assigned in the route flow). A route's captain and territory are reached through its assigned volunteer: route -> volunteer -> captain -> territory.
+- Retiring a person is a manual, soft action; the record and history are preserved for past issues and payouts. There is no automatic retirement. Retiring a volunteer detaches them from their routes, which become Vacant.
 
 Status: volunteers run Active / On vacation / Retired; captains run Active / Retired. Vacation is the only date-driven automation that remains (a window that auto-applies and auto-resumes). Retirement is always a manual action; an end date passing never retires anyone on its own.
 
@@ -62,9 +62,9 @@ stateDiagram-v2
 
 **On vacation.** Today falls within the volunteer's vacation window. Their route(s) are Suspended (see the route flow): not delivered for the affected issues, and not reassigned. The volunteer returns to Active automatically when the window ends. Vacation is the one piece of date-driven automation kept in this flow.
 
-**Retired.** Set by a manual Retire action (soft; the record and history are preserved). There is no automatic retirement: an end date passing never moves a volunteer here.
+**Retired.** Set by a manual Retire action (soft; the record and history are preserved). There is no automatic retirement: an end date passing never moves a volunteer here. Retiring detaches the volunteer from their routes, which become Vacant (see 4f).
 
-**End date is a planning flag, not a trigger.** A volunteer may carry an optional end date set ahead of time. If it passes while the volunteer is still active, the system raises a "needs attention" flag prompting the manager to retire them; it does not change status on its own. This mirrors the route flow's attention flag.
+**End date is a planning flag, not a trigger.** A volunteer may carry an optional end date set ahead of time. If it passes while the volunteer is still active, the system raises a "needs attention" flag prompting the manager to retire them; it does not change status or touch routes on its own. This mirrors the route flow's attention flag.
 
 ### 3b. Captain status
 
@@ -75,7 +75,7 @@ stateDiagram-v2
     Retired --> Active: Reactivate (clear retirement)
 ```
 
-Captains have no vacation state. Retirement is manual; an end date passing only raises a "needs attention" flag, never an auto-retire. Retiring a captain leaves their territory captain-less and prompts a reassignment (see 4k).
+Captains have no vacation state today (see the note in 8 on planned captain vacation and substitution). Retirement is manual; an end date passing only raises a "needs attention" flag, never an auto-retire. Retiring a captain leaves their territory captain-less and prompts a reassignment (see 4k).
 
 ---
 
@@ -85,7 +85,7 @@ Captains have no vacation state. Retirement is manual; an end date passing only 
 
 ```mermaid
 flowchart TD
-    Start([Add volunteer button]) --> Name[Enter name]
+    Start([Add volunteer button]) --> Name[Enter first name and last name]
     Name --> Addr[Enter address]
     Addr --> Valid{Address validates?}
     Valid -->|No| Addr
@@ -97,7 +97,9 @@ flowchart TD
     Save --> Active[(Volunteer - Active)]
 ```
 
-Entry: Add volunteer button on the volunteers list. The address runs through Address Validation, the same as routes; the form holds the manager on the field until it validates. Assigning a captain is optional and places the volunteer in that captain's territory; leaving it empty creates an unassigned volunteer who can be assigned later. Routes are not assigned here; a new volunteer usually starts with none and is matched to nearby vacant routes in the route flow. The volunteer is Active on save.
+Entry: Add volunteer button on the volunteers list. First name and last name are separate fields. The address runs through Address Validation, the same as routes; the form holds the manager on the field until it validates. Assigning a captain is optional and places the volunteer in that captain's territory; leaving it empty creates an unassigned volunteer who can be assigned later.
+
+Routes are not assigned here. A new volunteer usually starts with none; they are later matched to nearby vacant routes and assigned **manually** in the route flow. There is no automatic assignment, the manager picks the route there. The volunteer is Active on save.
 
 ### 4b. View the volunteers list
 
@@ -107,21 +109,21 @@ Columns: name, route(s) carried, assigned captain (and that captain's territory)
 
 ### 4c. View volunteer detail
 
-Data view, shown in a right-hand panel. Shows contact info (name, address, email, phone), start date and optional end date, the assigned captain and that captain's territory, the routes carried (read-only, linking into route detail), the vacation window if any, notes, status, and a "needs attention" flag if the end date has passed. Actions: Edit, Put on vacation, Retire.
+Data view, shown in a right-hand panel. Shows first and last name, contact info (address, email, phone), start date and optional end date, the assigned captain and that captain's territory, the routes carried (read-only, linking into route detail), the vacation window if any, notes, status, and a "needs attention" flag if the end date has passed. Actions: Edit, Put on vacation, Retire.
 
 ### 4d. Edit a volunteer
 
 ```mermaid
 flowchart TD
     Start([Edit on volunteer detail]) --> Field{What changed?}
-    Field -->|Profile, captain, notes, dates| Save[Save]
+    Field -->|Name, captain, notes, dates| Save[Save]
     Field -->|Address| Revalidate{Address validates?}
     Revalidate -->|No| Start
     Revalidate -->|Yes| Save
     Save --> Done[(Volunteer updated)]
 ```
 
-Editable: name, address (re-validates on change), email, phone, notes, assigned captain, start and end dates. Changing the assigned captain moves the volunteer into the new captain's territory immediately (and out of the old one). Clearing the captain leaves the volunteer unassigned. Route assignments are not edited here; they live in the route flow.
+Editable: first name, last name, address (re-validates on change), email, phone, notes, assigned captain, start and end dates. Changing the assigned captain moves the volunteer into the new captain's territory immediately (and out of the old one). Clearing the captain leaves the volunteer unassigned. Route assignments are not edited here; they live in the route flow.
 
 ### 4e. Put a volunteer on vacation
 
@@ -146,34 +148,28 @@ flowchart TD
     Start([Retire on volunteer detail]) --> Confirm[Confirm]
     Confirm --> Process[Process retirement, soft]
     Process --> Retired[(Volunteer - Retired)]
-    Process --> FlagRoutes[Carried routes flagged - carrier inactive]
-    FlagRoutes --> Handle[Manager unassigns or reassigns each in the route flow]
+    Process --> Detach[Detach volunteer from each carried route]
+    Detach --> Vacant[(Each carried route becomes Vacant)]
 ```
 
-Retirement is a manual action only; there is no automatic retirement when an end date passes. Retiring is soft: the record and all past delivery history are preserved. The carried routes are not auto-vacated; each is flagged "needs attention" (carrier inactive) for the manager to unassign or reassign in the route flow, consistent with that flow's rule that a route only becomes vacant through a deliberate action.
+Retirement is a manual action only; there is no automatic retirement when an end date passes. Retiring is soft: the record and all past delivery history are preserved. On retirement the volunteer is detached from every route they carried, and each of those routes becomes Vacant in the route flow.
 
-Separately, if a volunteer has a future end date and it passes while they are still active, the system raises the same "needs attention" flag on the volunteer, prompting a manual retire. It does not retire them automatically.
+Separately, if a volunteer has a future end date and it passes while they are still active, the system raises a "needs attention" flag on the volunteer, prompting a manual retire. It does not retire them or touch their routes automatically.
 
 ### 4g. Add a captain
 
 ```mermaid
 flowchart TD
-    Start([Add captain button]) --> Name[Enter name and contact]
-    Name --> Addr[Enter address]
-    Addr --> Valid{Address validates?}
-    Valid -->|No| Addr
-    Valid -->|Yes| ExtBranch{Invoices externally?}
-    ExtBranch -->|Yes| ExtFlag[Mark invoices externally]
-    ExtBranch -->|No| Pay[Set pay type, rate, cadence]
-    ExtFlag --> Terr[Establish the owned territory]
-    Pay --> Terr
-    Terr --> Notes[Optional - notes]
+    Start([Add captain button]) --> Name[Enter first name and last name]
+    Name --> Contact[Enter phone and email]
+    Contact --> Pay[Set pay type, rate, cadence]
+    Pay --> Notes[Optional - notes]
     Notes --> Dates[Set start date, optional end date]
     Dates --> Save[Save]
     Save --> Active[(Captain - Active)]
 ```
 
-Entry: Add captain button on the captains list. The pay structure (pay type, rate, and cadence) is stored on the captain, so a captain carries one structure across their work. A captain who self-calculates is marked as invoicing externally, and the pay-structure inputs are skipped; the system stores their payouts but does not compute the amounts. Creating a captain establishes the one territory they own; it starts empty and is then filled with assigned volunteers (via captain assignment, 4a and 4d) and commercial drop addresses (4l).
+Entry: Add captain button on the captains list. First and last name are separate fields; contact is a phone number and an email. Every captain gets a pay structure set: pay type (per bundle / per paper / per drop), a rate, and a pay cadence. There is no captain address. There is no separate "establish a territory" step: a captain is one-to-one with a territory, which is reached in operation via volunteer -> captain -> territory, and a territory's contents are filled in afterward (assigned volunteers via captain assignment in 4a and 4d, and commercial drops in 4l).
 
 ### 4h. View the captains list
 
@@ -183,7 +179,7 @@ Columns: name, territory, pay type, rate, and cadence, plus status. Controls: se
 
 ### 4i. View captain detail
 
-Data view, right-hand panel. Shows contact info, start date and optional end date, the owned territory with its assigned-volunteer list and its commercial drop addresses, the editable pay structure (pay type, rate, cadence, invoices-externally), the reimbursement history (read-only, sourced from the finances flow), notes, status, and a "needs attention" flag if the end date has passed. Actions: Edit, Retire, and Manage commercial drops (4l).
+Data view, right-hand panel. Shows first and last name, contact info (phone and email), start date and optional end date, the owned territory with its assigned-volunteer list and its commercial drop addresses, the editable pay structure (pay type, rate, cadence), the reimbursement history (read-only, sourced from the finances flow), notes, status, and a "needs attention" flag if the end date has passed. Actions: Edit, Retire, and Manage commercial drops (4l).
 
 Routes are not shown here as territory contents (routes are not part of a territory); a captain's delivery scope is the volunteers and commercial drops in their territory.
 
@@ -192,16 +188,13 @@ Routes are not shown here as territory contents (routes are not part of a territ
 ```mermaid
 flowchart TD
     Start([Edit on captain detail]) --> Field{What changed?}
-    Field -->|Contact, notes, dates| Save[Save]
-    Field -->|Address| Revalidate{Address validates?}
-    Revalidate -->|No| Start
-    Revalidate -->|Yes| Save
-    Field -->|Pay type, rate, cadence, ext flag| SavePay[Save]
+    Field -->|Name, contact, notes, dates| Save[Save]
+    Field -->|Pay type, rate, cadence| SavePay[Save]
     Save --> Done[(Captain updated)]
     SavePay --> NoRetro[(Closed payouts unchanged)]
 ```
 
-Editable: contact, address (re-validates), pay type, rate, cadence, the invoices-externally flag, and the start and end dates. Changing the pay structure does not change any already-closed payout: closed payouts are frozen snapshots, owned by the finances flow. The territory's contents are managed elsewhere: its volunteer list through volunteer-to-captain assignment (4a, 4d), and its commercial drops through 4l.
+Editable: first name, last name, contact (phone and email), pay type, rate, cadence, and start and end dates. There is no captain address. Changing the pay structure does not change any already-closed payout: closed payouts are frozen snapshots, owned by the finances flow. The territory's contents are managed elsewhere: its volunteer list through volunteer-to-captain assignment (4a, 4d), and its commercial drops through 4l.
 
 ### 4k. Retire a captain (manual)
 
@@ -241,7 +234,7 @@ Commercial drops are the non-residential addresses where a captain drops bundles
 
 ## 5. CSV export
 
-Both lists export to CSV for offline use and parity with the spreadsheet. The export reflects the current filters and the visible columns: for volunteers, name, address, email, phone, assigned captain, territory, status; for captains, name, contact, territory, pay type, rate, cadence, status. Export is read-only and changes nothing.
+Both lists export to CSV for offline use and parity with the spreadsheet. The export reflects the current filters and the visible columns: for volunteers, first name, last name, address, email, phone, assigned captain, territory, status; for captains, first name, last name, phone, email, territory, pay type, rate, cadence, status. Export is read-only and changes nothing.
 
 ---
 
@@ -270,7 +263,7 @@ Highest-value bulk actions for later: bulk retire at a season changeover, and bu
 - (none) -> Active: created
 - Active -> On vacation: vacation window begins (auto); carried routes show Suspended
 - On vacation -> Active: vacation window ends (auto); routes resume
-- Active or On vacation -> Retired: manual retire only; carried routes are flagged (carrier inactive), not auto-vacated
+- Active or On vacation -> Retired: manual retire only; the volunteer is detached from their carried routes, which become Vacant
 - Retired -> Active: clear the retirement
 
 **Captain.**
@@ -284,12 +277,13 @@ Flags (not state changes): a person whose end date has passed while still active
 
 ## 8. Edge cases and open questions
 
-- **Address validation fails.** Save is blocked and the manager is held on the address field; no partial record is persisted. Applies to volunteer, captain, and commercial drop addresses.
-- **End date passes.** Never auto-retires. It raises a "needs attention" flag on the person; the manager retires manually.
-- **Manual retire and routes.** Retiring a volunteer does not auto-vacate their routes; the routes are flagged (carrier inactive) for the manager to unassign or reassign in the route flow. (Confirm this matches the intended route handling.)
+- **Address validation fails.** Save is blocked and the manager is held on the address field; no partial record is persisted. Applies to volunteer and commercial drop addresses (captains have no address).
+- **End date passes.** Never auto-retires and never touches routes. It raises a "needs attention" flag on the person; the manager retires manually.
+- **Retiring a volunteer.** Detaches the volunteer from every route they carried; each of those routes becomes Vacant in the route flow.
 - **Captain-less territory.** Allowed as a transient state after a captain retires. The territory keeps its volunteers and commercial drops until a new captain is assigned.
 - **Unassigned volunteer.** A volunteer can have no captain, and therefore be in no territory, until the manager assigns one.
 - **Vacation.** The one retained date automation: a vacation window auto-suspends the route and auto-resumes after.
+- **Captain vacation and substitution (planned).** Not built yet. Some form of captain vacation, plus a captain substitution flow where a temporary stand-in covers the territory's drops while the captain is away, will be added later.
 - **A person who is both volunteer and captain.** Modeled as two separate records; there is no shared person entity in MVP.
 - **No unscoped messaging.** The confirmations, the reassignment prompt, and the "needs attention" flag in these flows are explicit, scoped indicators requested here. Per the product rule, do not add other notifications, badges, or banners unless a spec calls for one.
-- **Substitution and volunteer credit.** Substitution is captured on the delivery record (finances and delivery flow), not on the volunteer. The per-volunteer advertising credit is post-MVP and not part of this flow.
+- **Substitution and volunteer credit.** Volunteer-level substitution (someone other than the assigned carrier delivers a route) is captured on the delivery record (finances and delivery flow), not on the volunteer. The per-volunteer advertising credit is post-MVP and not part of this flow.
