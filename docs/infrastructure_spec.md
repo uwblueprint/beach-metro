@@ -1,8 +1,6 @@
-# Infrastructure Spec (v1, draft)
+# Infrastructure Spec
 
-A starting draft of the technical foundation for the Beach Metro distribution system: the stack, architecture, repo layout, environments, and the conventions a contributor or Claude Code session needs to start building. This is a draft for review, not a locked decision record. Open questions are listed at the end.
-
-Related: product requirements in `beach_metro_PRD.md` (branch `prd-md`); the route, people, and finances flow specs on their own branches. Claude Code conventions live on the `claude-code-setup` branch.
+The technical foundation for the Beach Metro distribution system: the stack, architecture, repo layout, environments, and the conventions a contributor needs to start building.
 
 ---
 
@@ -136,8 +134,8 @@ If a Python job is added later (for example Toronto Open Data ingestion), it get
 
 ## 10. CI/CD
 
-- Recommended: **GitHub Actions** running lint, typecheck, Vitest, and build on every PR (and Playwright where feasible). Vercel handles preview and production deploys.
-- Branch protection on the default branch (require a PR and green checks), per the conventions in CLAUDE.md.
+- **GitHub Actions** running lint, typecheck, Vitest, and build on every PR (and Playwright where feasible). Vercel handles preview and production deploys.
+- Branch protection on the default branch (require a PR and green checks).
 
 ---
 
