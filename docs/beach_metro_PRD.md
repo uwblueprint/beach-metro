@@ -2,7 +2,7 @@
 
 ## 🧠 Context
 
-Beach Metro is a newspaper NPO that delivers newspapers to the Beaches neighbourhood via a network of volunteer carriers and captain drivers. These newspapers are delivered to residential homes, but also commercial locations like churches and stores.
+Beach Metro is a long-standing community newspaper dedicated to providing accessible local journalism. A network of 200+ volunteer carriers and captain drivers distribute their papers to both residential homes and commercial locations in the Beach, East York, and Southwest Scarborough.
 
 Volunteer carriers are assigned routes, which is a group of houses on a street, and they walk these routes every time a new issue is printed (typically bi-weekly). Volunteers are typically high school students, so there is a revolving door of incoming and outgoing volunteers.
 
@@ -38,6 +38,8 @@ Captains use cars, and they drop off bundles of newspapers at the volunteer carr
     1. Having pay checks for Captains be automatically calculated from Territory + Route data
         1. Having this calculation be communicated clearly, and also easy to manually adjust
     2. Accounting for Captain pay substitutions
+        1. Temporarily reassigning different Volunteer addresses to another Captain’s territory
+        2. Temporarily reassigning different Volunteer addresses to a brand new Captain’s territory
     3. Seeing historic annual financial data
     4. Marking pay checks as paid or unpaid
     5. Easily adjusting Captain pay structure (rate, unit of pay)
