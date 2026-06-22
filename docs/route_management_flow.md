@@ -1,8 +1,4 @@
-# Route Management Flow (v2)
-
-A prose-and-diagram walkthrough of how Melinda manages routes, for the design kickoff. Diagrams are Mermaid so they render directly in Notion, GitHub, and most modern markdown viewers, and stay editable as text.
-
-Scope: route lifecycle and assignment only. The interactive map for finding vacant routes by proximity is a separate flow, mentioned here only as an entry point.
+# Route Management Flow
 
 ---
 
@@ -33,8 +29,6 @@ The diagrams below use these conventions:
 - **Rectangle** = an action or system step
 - **Diamond** = a decision or branch
 - **Bracketed rectangle** = a resulting state of the entity (e.g. `(Route - Vacant)`)
-
-State diagrams use Mermaid\'s stateDiagram-v2 syntax; flow diagrams use flowchart TD.
 
 ---
 
@@ -124,11 +118,7 @@ There is no captain or territory picker in route creation. A route's captain is 
 
 On save, the route appears in the list and on the map immediately with a spinner or "Calculating..." indicator on the house count column until the Open Data lookup returns. The lookup is async; the rest of the route is fully usable in the meantime.
 
-Out of scope for now: drawing a route on the map. Address-first creation only.
-
 ### 4b. View the routes list
-
-No flow diagram here; this is a data view rather than a state-changing flow.
 
 Entry: top-level nav, default landing for Melinda.
 
@@ -141,8 +131,6 @@ Filters: vacancy, captain (via the volunteer), side, street, needs-attention. So
 Multi-select column reserved for bulk operations (see section 5), even if the bulk actions ship later.
 
 ### 4c. View route detail
-
-No flow diagram; data view.
 
 Information shown:
 - Street description, start address, end address, side, and the volunteer's captain (derived, read-only)
@@ -268,7 +256,7 @@ The background refresh runs monthly. House counts change slowly in practice, so 
 
 ---
 
-## 5. Side feature: bulk operations (post-MVP)
+## 5. Bulk operations
 
 ```mermaid
 flowchart TD
