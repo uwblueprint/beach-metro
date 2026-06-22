@@ -1,6 +1,6 @@
 # Finances Flow (v1)
 
-> Status: SKELETON. Structure only; full draft to follow. Format mirrors `route_management_flow_v2.md` (BM-12).
+> Status: SKELETON. Structure only; full draft to follow. Format mirrors `route_management_flow.md` (BM-12).
 
 Ticket: BM-25. Scope: issues (publication runs), per-issue delivery recording, captain payout calculation and adjustment, marking payouts paid/unpaid, closing an issue (locks payouts as snapshots), and historic financial data. Out of scope here: people profiles (people management flow, BM-24) and route definition (route management flow, BM-12).
 
