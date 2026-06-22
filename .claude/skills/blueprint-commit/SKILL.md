@@ -9,7 +9,7 @@ allowed-tools: Bash(git add *) Bash(git status *) Bash(git diff *) Bash(git comm
 **Never commit directly to `main`.** If on `main`, create a branch first.
 
 ## Branch names
-`<type>/<TICKET>-<short-kebab-description>` — e.g. `feat/BM-42-vacant-route-filter`.
+`<type>/<TICKET>/<short-kebab-description>` — e.g. `feat/BM-42/vacant-route-filter`.
 - Types: `feat`, `fix`, `hotfix`, `chore`, `refactor`, `docs`, `test`.
 - Include the Linear ticket ID (e.g. `BM-42`) so PRs auto-link. Omit only for
   repo bootstrap, where `chore/<description>` is fine.
