@@ -25,7 +25,7 @@ Calculations that are not yet confirmed are marked `[OPEN]` and left blank for i
 
 **Delivery inputs (RouteDelivery, consumed; see section 6).** Per route per issue: paper count, bundle count, drop count, and a missed count. These feed the payout math. Bundle counts come from paper counts via the bundle auto-calc (section 5).
 
-**Substitute captain.** A stand-in who receives a captain's payout for an issue. Modeled as a regular captain created on the spot via the people add-captain flow (zero rate, empty territory by default). Finance-only for now: the substitute is paid for the issue and the original captain is zeroed for that issue; routes and territory are untouched. (Subject to change.)
+**Substitute captain.** A stand-in who receives a captain's payout for an issue. Modeled as a regular captain created on the spot via the people add-captain flow (zero rate, empty territory by default). Finance-only: the substitute is paid for the issue and the original captain is zeroed for that issue; routes and territory are untouched.
 
 **Key relationships.**
 - A table contains many issues (rows) and a column per captain; each (issue, captain) pair is one CaptainPayout cell.
@@ -169,7 +169,7 @@ flowchart TD
 
 Once the issue is closed, each payout can be marked paid or unpaid. This is a pure status marker tracked per captain per issue — it records whether the captain has been paid and changes nothing about the amount (the value is already locked by the close). Paid/unpaid cannot be toggled while an issue is Draft or Open.
 
-### 4h. Captain substitution (finance-only, subject to change)
+### 4h. Captain substitution (finance-only)
 
 ```mermaid
 flowchart TD
@@ -182,7 +182,7 @@ flowchart TD
     ZeroOriginal --> Done[(Issue payout reassigned)]
 ```
 
-For a given issue, the manager assigns a substitute who receives that issue's payout while the original captain is zeroed for that issue only. The substitute is either an existing captain or a temporary one created on the spot through the people add-captain flow (zero rate, empty territory by default). A substitution can span multiple issues (for example surgery recovery); reverting to the original captain is handled manually for now. Routes and territory are not changed by a substitution. This placement is finance-only and `[OPEN] / subject to change` (it may later also touch routes).
+For a given issue, the manager assigns a substitute who receives that issue's payout while the original captain is zeroed for that issue only. The substitute is either an existing captain or a temporary one created on the spot through the people add-captain flow (zero rate, empty territory by default). A substitution can span multiple issues (for example surgery recovery); reverting to the original captain is handled manually for now. Routes and territory are not changed by a substitution. This placement is finance-only.
 
 ### 4i. Filter, compact, and export
 
