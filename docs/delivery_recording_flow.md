@@ -68,8 +68,8 @@ just the editable starting value, not a retained baseline.
   issue when it was not the assigned volunteer (for example a neighbour covering).
   This is a delivery-side note only: it does not change payout attribution (pay
   follows the captain, not the route's deliverer) and is separate from the finance
-  captain substitution. `[OPEN]` whether this links to a person record or is
-  free-text; informal coverers are not necessarily in the system.
+  captain substitution. Stored as a free-text note, since informal coverers (a
+  neighbour) are not necessarily in the system.
 
 **Standing route counts (referenced, owned by route management).** Per route:
 house count (auto-calculated with a manual override) and the derived paper and
@@ -158,16 +158,17 @@ the value no longer auto-updates, but an admin can reopen the issue to correct i
 
 ```mermaid
 flowchart TD
-    Start([Open a draft issue]) --> Populate[Create a delivery row per active route]
+    Start([Open a draft issue]) --> Populate[Create a delivery row per carried route]
     Populate --> Seed[Auto-populate each row from the route's standing counts]
     Seed --> Open[(Issue - Open)]
 ```
 
 Opening a draft issue starts recording. The system creates a RouteDelivery for
-every active route and seeds each with the route's standing paper count (and the
-bundle auto-calc from it). Suspended and vacant routes are handled as in section 8.
-This is the same open action as the finance flow — it also starts live payout
-calculation there.
+every route currently being carried — Active-Assigned with the assigned volunteer
+not on vacation — and seeds each with the route's standing paper count (and the
+bundle auto-calc from it). Vacant routes and suspended routes are skipped (no row;
+they contribute nothing to the issue). This is the same open action as the finance
+flow — it also starts live payout calculation there.
 
 ### 4b. Record and adjust route deliveries
 
@@ -198,8 +199,8 @@ flowchart TD
 When someone other than the route's assigned volunteer delivered it for this issue,
 the manager records that on the route's delivery row. It is a record of what
 happened on the ground; it does not reassign the captain payout (that is the
-finance captain substitution, a separate action). `[OPEN]` whether the deliverer is
-a free-text note or a reference to a person record.
+finance captain substitution, a separate action). The deliverer is stored as a
+free-text note, since informal coverers are not necessarily in the system.
 
 ### 4d. Review the papers-to-order total
 
@@ -272,15 +273,15 @@ Papers to order (per issue):
 - **Actuals only.** No planned/assigned figure is stored. The auto-populated
   standing count is the editable starting value, not a retained baseline, so v1
   does not surface planned-vs-actual variance.
-- **Suspended routes (volunteer on vacation).** The route is not delivered for the
-  affected issues (people flow 4e; route flow suspension) and its labels are
-  suppressed. `[OPEN]` exactly how this appears in RouteDelivery — a skipped row
-  versus a zero-count row.
-- **Vacant routes.** A route with no assigned volunteer is not delivered. `[OPEN]`
-  whether it gets a zero RouteDelivery row or none.
-- **Substitute deliverer.** A delivery-side note only; does not change payout
-  attribution and is separate from the finance captain substitution. `[OPEN]`
-  free-text versus a person reference.
+- **Suspended routes (volunteer on vacation).** Suspension is a derived indicator
+  on the route (its assigned volunteer is On-vacation), not a route state. A
+  suppressed route is skipped: no delivery row is created, it is not delivered, its
+  labels are suppressed, and it contributes nothing to the issue's totals or any
+  payout. It resumes automatically when the vacation window ends.
+- **Vacant routes.** A route with no assigned volunteer is not delivered and is
+  likewise skipped (no delivery row).
+- **Substitute deliverer.** A delivery-side free-text note only; does not change
+  payout attribution and is separate from the finance captain substitution.
 - **Routes added or retired mid-year.** New active routes appear in the recording
   for subsequent issues; retired routes drop out of new issues. Already-closed
   issues are unaffected.
