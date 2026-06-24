@@ -1,6 +1,6 @@
 # Finance Management Flow
 
-A prose-and-diagram walkthrough of how the accounts manager runs captain payments: organizing issues into yearly tables, computing per-captain payouts, overriding and marking them paid, and handling captain substitutions. Diagrams are Mermaid so they render in Notion, GitHub, and most markdown viewers, and stay editable as text. This reuses the conventions established by `route_management_flow.md` (BM-12); read that and `people_management_flow_v1.md` (BM-24) first.
+A prose-and-diagram walkthrough of how the accounts manager runs captain payments: organizing issues into yearly tables, computing per-captain payouts, overriding and marking them paid, and handling captain substitutions. Diagrams are Mermaid so they render in Notion, GitHub, and most markdown viewers, and stay editable as text. This reuses the conventions established by `route_management_flow.md` (BM-12); read that and `people_management_flow.md` (BM-24) first.
 
 Ticket: BM-25. Scope: the financial year "tables", issues, captain payouts (calculation, override, paid/unpaid), captain substitution for payment, and the per-issue delivery inputs the payout math consumes.
 

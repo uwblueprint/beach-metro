@@ -1,4 +1,4 @@
-# People Management Flow (v1)
+# People Management Flow
 
 A prose-and-diagram walkthrough of how the distribution manager manages the people in the system: volunteer carriers and captains. Diagrams are Mermaid so they render in Notion, GitHub, and most markdown viewers, and stay editable as text. This reuses the conventions established by `route_management_flow.md` (BM-12); read that first for the diagram legend rationale.
 
