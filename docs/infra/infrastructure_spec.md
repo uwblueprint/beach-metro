@@ -65,7 +65,7 @@ Single Next.js app (not a monorepo for now).
 │   ├── api/                  # typed fetchers used by TanStack Query
 │   └── validation/           # shared request/response schemas (see open questions)
 ├── stores/                   # Zustand stores (client/global state)
-├── types/                    # shared TS types (from docs/schema.ts when it lands)
+├── types/                    # shared TS types (from docs/schema/data_model.md)
 ├── supabase/                 # migrations, seed, config (Supabase CLI)
 ├── tests/                    # Vitest unit/integration
 ├── e2e/                      # Playwright
@@ -98,7 +98,7 @@ If a Python job is added later (for example Toronto Open Data ingestion), it get
 
 ## 6. Database (Supabase / Postgres)
 
-- Supabase-hosted Postgres. The schema source of truth is `docs/schema.ts` (typed interfaces), translated into SQL migrations.
+- Supabase-hosted Postgres. The schema source of truth is `docs/schema/data_model.md` (typed interfaces), translated into SQL migrations.
 - Migrations managed with the Supabase CLI under `supabase/migrations`, committed to the repo and applied per environment.
 - Row Level Security: because app access goes through server-side route handlers using a privileged key, the RLS strategy needs a decision (lock tables and authorize in handlers, vs. RLS policies as the primary gate). See open questions.
 - PostGIS: the route house-count feature (per the PRD) needs spatial queries; Supabase supports the PostGIS extension, to be enabled when that feature is built.

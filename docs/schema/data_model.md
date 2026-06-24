@@ -14,6 +14,11 @@ research in [`docs/integrations/google_maps_research.md`](../integrations/google
   Google's `place_id` (see the Google research doc, section 7).
 - Foreign keys reference another interface via `Entity["id"]` (e.g. `Volunteer["id"]`)
   rather than embedding the object.
+- **One-to-many is stored on the child** (the "many" side holds the FK); parents do
+  not carry id arrays. This matches the Postgres target (a column with a foreign key,
+  not a `uuid[]`) and keeps a single source of truth. The inverse is derived (e.g. a
+  captain's territory's volunteers = the Volunteers whose `captainTerritoryId` points
+  to it).
 - **Optional FK** (`?: ... | null`) means the relationship can be absent (e.g. a
   vacant route has no assigned volunteer).
 - **Derived** fields are computed at runtime and not stored; they are described in
@@ -30,12 +35,14 @@ research in [`docs/integrations/google_maps_research.md`](../integrations/google
 - `PayCadence`: `"biweekly" | "monthly"` → **`"weekly" | "biweekly"`**.
 - `Captain.address` **removed** (captains have no address); pay config (type, rate,
   cadence) **moved onto the captain** (was split across territory/captain).
-- `Captain.territoryIds[]` → **1:1** `territoryId`; `Captain.reimbursementIds[]` dropped.
+- `Captain.territoryIds[]` → **1:1** (the FK lives on `CaptainTerritory.assignedCaptainId`);
+  `Captain.reimbursementIds[]` dropped.
 - `VolunteerRoute.territoryId` **removed** — the captain link is indirect
   (route → volunteer → captain → territory); `assignedVolunteerId` made optional;
   `streetName` and `houseCount` added.
-- `CaptainTerritory`: holds **commercial drop addresses**; volunteers attach via the
-  inverse FK; `payType`/`payRate` moved to `Captain`.
+- `CaptainTerritory`: `payType`/`payRate` moved to `Captain`. Its volunteers and
+  commercial drops attach via inverse FKs (`Volunteer.captainTerritoryId` and
+  `Address.territoryId`), not id arrays on the territory.
 - `Volunteer.LuckyVolunteerDate` dropped (post-MVP volunteer credit); vacation-window
   fields added; retirement modeled as a stored timestamp.
 - `GoogleMapsLocation` PLACEHOLDER **filled in** (place_id durable, lat/lng 30-day cache).
@@ -117,6 +124,9 @@ export interface Address {
   id: UUID
   googleMapsId: GoogleMapsLocation["id"] // a place_id
   type: "residential" | "commercial"
+  // Commercial drops belong to one territory; set only when type === "commercial".
+  // (This is the inverse FK that makes a territory's commercial drops queryable.)
+  territoryId?: CaptainTerritory["id"] | null
   // (ideation's `bundleCount` removed — per-issue bundle counts live on RouteDelivery)
   // SUBJECT TO CHANGE: standing per-drop expectations for commercial drops may need a home.
 }
@@ -166,8 +176,8 @@ export interface Volunteer {
   phone: Phone
   addressId: Address["id"]                 // volunteer's own (residential) address
   notesId?: Note["id"] | null
-  volunteerRouteIds: VolunteerRoute["id"][] // routes they carry (assigned in route flow, read-only here)
   captainTerritoryId?: CaptainTerritory["id"] | null // direct assignment; may be unassigned
+  // Routes carried = VolunteerRoutes whose assignedVolunteerId points here (inverse FK).
   startDate: DateOnly
   endDate?: DateOnly | null
   // Vacation window — the one date-driven automation (auto-suspends routes, auto-resumes).
@@ -199,24 +209,25 @@ export interface Captain {
   startDate: DateOnly
   endDate?: DateOnly | null
   retiredAt?: DateOnly | null
-  territoryId?: CaptainTerritory["id"] | null // 1:1; captain-less/territory-less transient allowed
   notesId?: Note["id"] | null
+  // 1:1 territory: the CaptainTerritory whose assignedCaptainId points here (inverse FK).
+  // Territory-less captain = no territory points here; captain-less territory is also allowed.
 }
 ```
 
 ### CaptainTerritory
 
 A captain's territory = its assigned volunteers + its commercial drop addresses.
-Volunteers attach via the inverse FK (`Volunteer.captainTerritoryId`), so they are
-not duplicated here; commercial drops live here.
+Both attach via inverse FKs, so neither is duplicated as an array here: volunteers
+via `Volunteer.captainTerritoryId`, commercial drops via `Address.territoryId`.
 
 ```ts
 export interface CaptainTerritory {
   id: UUID
-  assignedCaptainId?: Captain["id"] | null   // captain-less transient allowed (after retire)
-  commercialDropAddressIds: Address["id"][]  // Address.type === "commercial"
-  color?: string | null // SUBJECT TO CHANGE — map colour assignment
-  // Volunteers in this territory = Volunteers whose captainTerritoryId points here (inverse FK).
+  assignedCaptainId?: Captain["id"] | null // captain-less transient allowed (after retire)
+  color?: string | null                    // SUBJECT TO CHANGE — map colour assignment
+  // Volunteers = Volunteers whose captainTerritoryId points here.
+  // Commercial drops = Addresses (type "commercial") whose territoryId points here.
 }
 ```
 
@@ -275,7 +286,7 @@ export interface FinancialYear {
   id: UUID
   name: string          // e.g. "2026–2027" (runs ~March–Feb, not calendar-locked)
   archived: boolean     // archived tables stay fully accessible
-  issueIds: Issue["id"][] // rows of the table
+  // Issues (rows) = Issues whose financialYearId points here (inverse FK).
   // Columns auto-populate for captains active at creation.
   // SUBJECT TO CHANGE: whether the captain column set is snapshotted or derived live.
 }
@@ -355,7 +366,7 @@ erDiagram
   AdminUser ||--o{ Note : authors
   Address ||--o{ Volunteer : "home address"
   Address ||--o{ VolunteerRoute : "start/end"
-  Address ||--o{ CaptainTerritory : "commercial drops"
+  CaptainTerritory ||--o{ Address : "commercial drops"
   Captain ||--|| CaptainTerritory : owns
   CaptainTerritory ||--o{ Volunteer : "contains"
   Volunteer ||--o{ VolunteerRoute : carries

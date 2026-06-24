@@ -230,7 +230,7 @@ Content-Type: application/json
 
 - `verdict.addressComplete`: a boolean. Quick yes/no for "is this address good to ship to."
 - `verdict.has*Components`: tells us if the API inferred, replaced, or could not confirm parts of the address.
-- `metadata.residential` vs `metadata.business` vs `metadata.poBox`: useful for our `Address.type` field (the schema currently has `"residential" | "commercial"`).
+- `metadata.residential` vs `metadata.business` vs `metadata.poBox`: useful for our `Address.type` field (the schema currently has `"residential" | "commercial"`). Verified June 2026: residential/commercial metadata is only populated for six countries — **Canada is one of them** (alongside AU, MX, NZ, ES, US) — so deriving `Address.type` from validation works for our coverage area. Pass `regionCode: "CA"`.
 - `geocode.placeId`: same `place_id` you would get from Geocoding. Storable indefinitely.
 
 ### 4.4 Recommended flow at volunteer signup
