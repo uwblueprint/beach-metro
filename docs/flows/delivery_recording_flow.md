@@ -6,8 +6,8 @@ drop, and missed counts, plus any substitute deliverer. This is the data that th
 finance payout math (BM-25) consumes and that the reporting dashboard reads
 ("papers to order"). Diagrams are Mermaid so they render in Notion, GitHub, and
 most markdown viewers, and stay editable as text. This reuses the conventions
-established by `route_management_flow.md` (BM-12); read that, `people_management_flow_v1.md`
-(BM-24), and `finances_flow_v1.md` (BM-25) first.
+established by `route_management_flow.md` (BM-12); read that, `people_management_flow.md`
+(BM-24), and `finances_flow.md` (BM-25) first.
 
 Ticket: TBD (PRD Flow 5 — Issue Lifecycle & Delivery Recording). Scope: the shared
 Issue lifecycle (draft / open / closed), the per-route-per-issue delivery actuals
@@ -41,7 +41,7 @@ times per month, about 23 per year). This is the *same* Issue entity used by the
 finance flow, not a copy: an issue is created once and appears in both the finance
 yearly table and the delivery recording view, and both read and write the same
 record. It moves through Draft, Open, and Closed (canonical state machine in
-`finances_flow_v1.md` section 3a; restated in section 3 here for standalone
+`finances_flow.md` section 3a; restated in section 3 here for standalone
 readability). Opening an issue begins delivery recording and auto-populates a
 delivery row for every active route; closing it locks both the delivery actuals
 and the finance payouts together. Name and date are set manually.
@@ -78,7 +78,7 @@ bundle counts. These seed each RouteDelivery when an issue opens. See
 
 **Captain pay config (referenced, owned by people management).** Pay type and rate
 on the captain. Determines the unit the missed count is recorded in and how the
-route's delivery rolls up into pay. See `people_management_flow_v1.md`.
+route's delivery rolls up into pay. See `people_management_flow.md`.
 
 **Papers to order (derived, per issue).** The total papers needed for the issue,
 summed from the route paper counts. Feeds the reporting dashboard. `[OPEN]` whether
@@ -231,7 +231,7 @@ Bundle auto-calc (paper count to bundles):
 - Greedy: take 50s first, then 25s, then the remainder as a final tied bundle.
   Bundle paper counts are stored individually and never assumed to be 25 or 50.
   Manual entry of bundle counts is available as a fallback. This is the same
-  auto-calc as the finance flow (`finances_flow_v1.md` section 5); it lives on the
+  auto-calc as the finance flow (`finances_flow.md` section 5); it lives on the
   delivery input and the finance payout reads the result.
 
 Missed deduction:
