@@ -12,7 +12,7 @@ now resolved (see section 16).
 | Layer | Choice |
 |---|---|
 | Language | TypeScript (end to end), strict mode |
-| Runtime | Node.js 22 LTS |
+| Runtime | Node.js 24 LTS |
 | Framework | Next.js (React), App Router |
 | Build / dev | Turbopack |
 | Package manager | pnpm |
@@ -132,7 +132,7 @@ If a Python job is added later (for example Toronto Open Data ingestion), it get
 
 Goal: one clone, a few commands, a full local stack that mirrors production.
 
-**Prerequisites:** Node 22 LTS, pnpm, Docker (for the Supabase CLI's local stack), the Supabase CLI.
+**Prerequisites:** Node 24 LTS, pnpm, Docker (for the Supabase CLI's local stack), the Supabase CLI.
 
 **First run:**
 
@@ -213,7 +213,7 @@ Notes:
 
 ## 15. Conventions and tooling
 
-- TypeScript strict mode; Node 22 LTS.
+- TypeScript strict mode; Node 24 LTS.
 - pnpm for package management; ESLint (eslint-config-next) + Prettier for lint/format (the format-on-write hook runs the formatter).
 - Commit, branch, and PR conventions, plus the LEARNINGS loop, live with the Claude Code setup (CLAUDE.md and the `blueprint-*` skills).
 
@@ -230,7 +230,7 @@ These were open questions in earlier drafts; now decided:
 - **Roles:** both admins have full access for MVP; the route-vs-finance split is UI-only.
 - **Local dev:** Supabase CLI local stack (Docker-backed); add a docker-compose only for future non-Supabase services.
 - **Staging:** Supabase branching (per-PR), not a separate standing project.
-- **Node runtime:** Node 22 LTS.
+- **Node runtime:** Node 24 LTS.
 - **Observability & rate limiting:** deferred to post-MVP; for now, only per-day quota caps on the Google API keys in Cloud Console.
 
 Remaining genuine unknowns (decide when relevant, not blocking):
