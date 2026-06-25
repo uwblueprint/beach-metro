@@ -14,10 +14,10 @@
 - Is not assigned a captain or territory here. The captain link is indirect: a route is carried by a Volunteer, and that Volunteer is connected to a Captain in the people management flow. Captains are associated with volunteers, never with routes directly.
 - May or may not have an assigned Volunteer.
 - Start and end are Address records, each linked to a Google Maps place_id via Address Validation.
-- Has zero or one Note attached.
-- Carries a list of RouteBundles (the standard bundle make-up) and a computed house count derived from Toronto Open Data.
+- Has free-form notes (a plain text field).
+- Has a standing paper count (the bundle count is derived from it) and a house count: manual entry for MVP, with auto-calc from Toronto Open Data planned post-MVP.
 
-**Two state machines run on every route:** a lifecycle machine (Active-Vacant, Active-Assigned) and a house-count freshness machine (Pending, Ready, Stale, Manual). They are independent and need to be surfaced separately in the UI.
+**Two state machines run on every route:** a lifecycle machine (Active-Vacant, Active-Assigned) and a house-count freshness machine (Pending, Ready, Stale, Manual). For MVP, house counts are entered manually (the Manual state); the Pending/Ready/Stale auto-calc states arrive with the post-MVP Toronto Open Data integration. They are independent and surfaced separately in the UI.
 
 ---
 
@@ -44,15 +44,15 @@ stateDiagram-v2
     ActiveAssigned --> ActiveVacant: Unassign (manual), or assigned volunteer retired
     ActiveAssigned --> ActiveAssigned: Reassign (new volunteer)
     ActiveAssigned --> ActiveAssigned: Assigned volunteer end date passes (attention flag, stays Assigned)
-    ActiveVacant --> [*]: Delete
-    ActiveAssigned --> [*]: Delete
+    ActiveVacant --> [*]: Soft delete
+    ActiveAssigned --> [*]: Soft delete
 ```
 
 **Active, Vacant.** Route exists in operations but has no carrier. This is the state Melinda spends the most time triaging. A route is born here when created without an assigned volunteer.
 
 **Active, Assigned.** Route has a volunteer carrying it. Steady state for the majority of routes. A route can also be born here if Melinda assigns a volunteer during route creation.
 
-Routes are deleted (removed from the system entirely) rather than retired. There is no archived or hidden state.
+Routes are soft-deleted (the row is retained and flagged with `deletedAt`, hidden from every operational view) rather than hard-removed, so historical RouteDelivery and payment records still resolve. There is no separate archived state; a deleted route simply disappears from active views. See section 7.
 
 **Assigned volunteer end date passes (attention flag, not a state).** When the assigned volunteer's end date passes but they have not been retired, the route does not become vacant. It stays Active-Assigned and the system raises an explicit "needs attention" flag in the UI, prompting Melinda to unassign or reassign it. This is a derived indicator, not a separate lifecycle state. (Retiring the volunteer in the people management flow is different: it detaches them and the route becomes Vacant.) See 4f.
 
@@ -101,7 +101,7 @@ flowchart TD
     Save --> VolBranch{Volunteer picked?}
     VolBranch -->|Yes| Assigned[(Route - Active-Assigned)]
     VolBranch -->|No| Vacant[(Route - Active-Vacant)]
-    Assigned --> VolUpdate[Volunteer.volunteerRouteIds updates]
+    Assigned --> VolUpdate[Route.assignedVolunteerId set, carried routes derived]
     VolUpdate --> Calc[House count - Pending then calculating]
     Vacant --> Calc
     Calc --> CalcResult{Open Data lookup OK?}
@@ -114,7 +114,7 @@ Entry: "New route" button from the routes list or the map view.
 
 Both addresses run through Address Validation API on entry; the form holds Melinda on the offending field until validation passes. The route is not persisted until the entire form validates and Save is clicked. If Melinda navigates away before saving, the in-progress form is discarded; nothing is stored.
 
-The volunteer picker is optional. If Melinda picks one, the route is born Active-Assigned and the chosen volunteer\'s `volunteerRouteIds` updates immediately. If she leaves it empty, the route is born Active-Vacant and can be assigned later via the standalone Assign flow. This means the Assign flow is effectively integrated into route creation as an opt-in shortcut.
+The volunteer picker is optional. If Melinda picks one, the route is born Active-Assigned and the chosen volunteer\'s carried-routes list reflects it immediately, since that list is derived from the route's `assignedVolunteerId`. If she leaves it empty, the route is born Active-Vacant and can be assigned later via the standalone Assign flow. This means the Assign flow is effectively integrated into route creation as an opt-in shortcut.
 
 There is no captain or territory picker in route creation. A route's captain is determined indirectly by the volunteer who carries it, and the volunteer-to-captain connection is made in the people management flow. Creating or assigning a route never assigns a captain.
 
@@ -124,7 +124,7 @@ On save, the route appears in the list and on the map immediately with a spinner
 
 Entry: top-level nav, default landing for Melinda.
 
-Default content: every Active route (Vacant or Assigned). Deleted routes are gone entirely; there is no "show deleted" toggle.
+Default content: every Active route (Vacant or Assigned). Deleted routes are hidden from all lists (soft delete; the row is retained for history); there is no "show deleted" toggle.
 
 Per row, designers should expose enough to triage at a glance: street description, current volunteer (or a clear "Vacant" badge), the volunteer's captain (derived via the volunteer, read-only), house count with freshness indicator, a "needs attention" flag when the assigned volunteer has gone inactive, and a last-modified date.
 
@@ -182,12 +182,12 @@ flowchart TD
     Search --> Pick[Select volunteer]
     Pick --> Confirm[Confirm]
     Confirm --> Updates[(Route - Vacant then Assigned)]
-    Updates --> VolUpdate[Volunteer.volunteerRouteIds updates]
+    Updates --> VolUpdate[Route.assignedVolunteerId set, carried routes derived]
 ```
 
 Entry: "Assign volunteer" on a vacant route\'s detail view, or from the vacant-route panel on the map. This same logic is also available as an optional step during route creation (see 4a).
 
-Picker shows active volunteers (status derived from startDate/endDate). Default sort is alphabetical. The picker is the natural home for the future "recommended by proximity" tab that uses the Routes API Compute Route Matrix.
+Picker shows active volunteers (active = not retired and not on vacation). Default sort is alphabetical. The picker is the natural home for the future "recommended by proximity" tab that uses the Routes API Compute Route Matrix.
 
 ### 4f. Unassign or reassign
 
@@ -200,7 +200,7 @@ flowchart TD
     Start([Assigned route detail view]) --> Manual[Click Unassign]
     Manual --> Confirm[Confirm]
     Confirm --> Process[Process unassignment]
-    Process --> VolUpdate[Volunteer.volunteerRouteIds removes route]
+    Process --> VolUpdate[Route.assignedVolunteerId cleared, carried routes derived]
     VolUpdate --> Vacated[(Route - Assigned then Vacant)]
 ```
 
@@ -226,10 +226,9 @@ flowchart TD
     Click --> Picker[Volunteer picker opens]
     Picker --> Pick[Select new volunteer]
     Pick --> Confirm[Confirm swap]
-    Confirm --> OldOff[Old volunteer.volunteerRouteIds removes route]
-    OldOff --> NewOn[New volunteer.volunteerRouteIds gains route]
-    NewOn --> RouteUpdate[Route.assignedVolunteerId updates to new volunteer]
-    RouteUpdate --> StillAssigned[(Route - stays Active-Assigned)]
+    Confirm --> RouteUpdate[Route.assignedVolunteerId set to new volunteer]
+    RouteUpdate --> Derived[Both volunteers carried routes update, derived]
+    Derived --> StillAssigned[(Route - stays Active-Assigned)]
 ```
 
 Reassign is an atomic volunteer swap. The route never passes through Vacant; its lifecycle state stays Active-Assigned throughout. The only data that changes is the two volunteers\' route lists and the route\'s `assignedVolunteerId`.
@@ -320,7 +319,7 @@ Every legal transition, so the state machine is unambiguous.
 
 **Volunteer\'s endDate passes (including set retroactively).** The route is not auto-vacated. On save, the system flags each of the volunteer\'s routes as needing attention and leaves them Active-Assigned, so Melinda resolves each one manually (unassign or reassign). This keeps "vacant" meaning a deliberate decision, not an automatic side effect. When the assigned volunteer is retired in the people management flow, by contrast, the volunteer is detached and the route becomes Vacant directly.
 
-**Deleting a route.** Soft delete: the route row stays in the database with a `deletedAt` timestamp (or equivalent flag) and is hidden from all UI lists, the map, and operational views. The assigned volunteer\'s `volunteerRouteIds` removes the deleted route. Confirmation modal required because the route disappears from active workflows.
+**Deleting a route.** Soft delete: the route row stays in the database with a `deletedAt` timestamp (or equivalent flag) and is hidden from all UI lists, the map, and operational views. The assigned volunteer\'s carried routes are derived from `assignedVolunteerId`, which no longer points at this route. Confirmation modal required because the route disappears from active workflows.
 
 **Past data after delete.** Because delete is soft, all historical references continue to resolve normally. RouteDelivery records from past closed issues still link to the route row. Hope\'s payment audit data and the history of past route combinations are preserved untouched. Captain payouts are independently safe (amounts are snapshotted on `CaptainPayout` regardless).
 

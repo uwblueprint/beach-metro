@@ -47,6 +47,10 @@ research in [`docs/integrations/google_maps_research.md`](../integrations/google
   fields added; retirement modeled as a stored timestamp.
 - `GoogleMapsLocation` PLACEHOLDER **filled in** (place_id durable, lat/lng 30-day cache).
 - `RouteSide` gains `"BOTH"`.
+- **`Note` entity removed** in favour of a plain `notes?: string` field on Volunteer / Captain / VolunteerRoute (the flows only need free-form notes).
+- **`RouteBundle` / `RouteDelivery.bundles[]` dropped** — persist `bundleCount` only; the greedy split is computed, not stored, in MVP.
+- **`VolunteerRoute.deletedAt`** added — routes are **soft-deleted** (hidden, row retained) so historical `RouteDelivery` records still resolve.
+- **House count** is manual for MVP (`houseCount`); auto-calc via Toronto Open Data + PostGIS is post-MVP.
 
 ---
 
@@ -149,17 +153,10 @@ export interface AdminUser {
 }
 ```
 
-### Note
-
-```ts
-export interface Note {
-  id: UUID
-  authorId: AdminUser["id"]
-  body: string          // no length limit; grows vertically in the UI
-  createdAt: Timestamp
-  category?: string | null // SUBJECT TO CHANGE
-}
-```
+> Notes are a plain free-form `notes?: string` field on the entities that have them
+> (Volunteer, Captain, VolunteerRoute) — not a separate entity. The flows only ask
+> for free-form notes with no length limit; author/timestamp tracking was dropped as
+> unneeded for MVP.
 
 ### Volunteer
 
@@ -175,7 +172,7 @@ export interface Volunteer {
   email: Email
   phone: Phone
   addressId: Address["id"]                 // volunteer's own (residential) address
-  notesId?: Note["id"] | null
+  notes?: string | null
   captainTerritoryId?: CaptainTerritory["id"] | null // direct assignment; may be unassigned
   // Routes carried = VolunteerRoutes whose assignedVolunteerId points here (inverse FK).
   startDate: DateOnly
@@ -209,7 +206,7 @@ export interface Captain {
   startDate: DateOnly
   endDate?: DateOnly | null
   retiredAt?: DateOnly | null
-  notesId?: Note["id"] | null
+  notes?: string | null
   // 1:1 territory: the CaptainTerritory whose assignedCaptainId points here (inverse FK).
   // Territory-less captain = no territory points here; captain-less territory is also allowed.
 }
@@ -235,17 +232,6 @@ export interface CaptainTerritory {
 
 ## 4. Routes domain
 
-### RouteBundle (value type)
-
-A single bundle within a delivery, identified only by its paper count. Bundle paper
-counts are stored individually and never assumed to be 25 or 50 (finance flow §5).
-
-```ts
-export interface RouteBundle {
-  papers: number
-}
-```
-
 ### VolunteerRoute
 
 The street segment a volunteer walks. The captain link is **indirect** (through the
@@ -264,10 +250,11 @@ export interface VolunteerRoute {
   // Assignment — optional; a vacant route has no volunteer.
   assignedVolunteerId?: Volunteer["id"] | null
   // Counts
-  houseCount: number                  // auto-calculated; feeds paper/bundle sizing
-  houseCountOverride?: number | null  // SUBJECT TO CHANGE: how the manual override is modeled
+  houseCount: number                  // manual entry for MVP (auto-calc via Toronto Open Data is post-MVP)
+  houseCountOverride?: number | null  // SUBJECT TO CHANGE: only relevant once auto-calc exists
   papers: number                      // standing paper count; drives the bundle auto-calc
-  notesId?: Note["id"] | null
+  notes?: string | null
+  deletedAt?: Timestamp | null        // soft delete: hidden from views, row retained so past RouteDelivery still resolves
   // No territoryId: territory/captain derive via assignedVolunteerId -> captainTerritoryId.
 }
 ```
@@ -348,8 +335,7 @@ export interface RouteDelivery {
   issueId: Issue["id"]
   routeId: VolunteerRoute["id"]
   paperCount: number
-  bundleCount: number               // from the bundle auto-calc on paperCount, or manual
-  bundles?: RouteBundle[]           // SUBJECT TO CHANGE: storing individual bundle paper counts
+  bundleCount: number               // from the bundle auto-calc on paperCount, or manual (the split itself is not persisted in MVP)
   dropCount: number
   missedCount: number               // in the unit matching the route's captain pay type
   substituteDeliverer?: string | null // free-text note; does not affect payout attribution
@@ -363,7 +349,6 @@ export interface RouteDelivery {
 ```mermaid
 erDiagram
   GoogleMapsLocation ||--o{ Address : "place_id"
-  AdminUser ||--o{ Note : authors
   Address ||--o{ Volunteer : "home address"
   Address ||--o{ VolunteerRoute : "start/end"
   CaptainTerritory ||--o{ Address : "commercial drops"
@@ -397,9 +382,8 @@ Key chains:
   stored shape and the role model are SUBJECT TO CHANGE.
 - **Commercial-drop standing counts.** Per-drop expectations for commercial drops
   may need a field or a small per-drop record; not modeled yet.
-- **House-count override.** `houseCountOverride` representation SUBJECT TO CHANGE.
-- **Bundle storage.** Whether `RouteDelivery.bundles[]` stores individual paper
-  counts or just a `bundleCount` SUBJECT TO CHANGE.
+- **House count.** Manual entry for MVP; auto-calc (Toronto Open Data + PostGIS) and
+  the `houseCountOverride` it implies are post-MVP.
 - **Territory column snapshotting.** Whether a `FinancialYear`'s captain columns are
   snapshotted at creation or derived live.
 - **Substitution representation.** The `CaptainPayout.substituteForCaptainId`

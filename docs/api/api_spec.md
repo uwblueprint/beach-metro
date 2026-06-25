@@ -56,9 +56,8 @@ resource-specific filters (documented per resource).
 `:action` syntax). They exist precisely so invariants stay server-side rather than
 being assembled from raw field writes.
 
-**Notes.** A `Note` is created/updated through its parent entity's write (the
-handler upserts the `Note` and sets `authorId` from the session); there is no
-standalone notes API in MVP.
+**Notes.** Notes are a plain free-form `notes` string on the parent entity, set
+through its create/update; there is no separate notes resource or entity.
 
 ---
 
@@ -150,7 +149,7 @@ two memberships (volunteers, commercial drops) and the map colour.
 | POST | `/api/routes` | Create (start/end address, street, side; volunteer optional) | 4a |
 | GET | `/api/routes/{id}` | Detail (derived lifecycle + suspended flag, house count, counts) | 4c |
 | PATCH | `/api/routes/{id}` | Edit definition (addresses, street, side, `houseCountOverride`, note) | 4d |
-| DELETE | `/api/routes/{id}` | **Hard delete** (route flow deletes rather than retires; addresses reusable) | route flow |
+| DELETE | `/api/routes/{id}` | **Soft delete** (sets `deletedAt`, hidden from all views; the row is retained so past `RouteDelivery` records still resolve; addresses reusable) | route flow |
 | POST | `/api/routes/{id}/assign` | Assign a volunteer (`{ volunteerId }`) → Active-Assigned | 4e |
 | POST | `/api/routes/{id}/unassign` | Unassign → Active-Vacant | 4f |
 | POST | `/api/routes/{id}/reassign` | Swap carrier (`{ volunteerId }`) | 4f |
@@ -291,8 +290,8 @@ re-resolves `cached*` coordinates older than ~25 days and evicts anything past 3
   `financial-years`, `issues` (under a year), `payouts` (under an issue),
   `deliveries` (under an issue).
 - **Standard methods:** List/Create on the collection; Get/Update on the item;
-  Delete only on `routes` (hard) — people are soft-retired, finance/delivery rows are
-  lifecycle-bound.
+  Delete only on `routes` (soft — sets `deletedAt`, row retained) — people are
+  soft-retired, finance/delivery rows are lifecycle-bound.
 - **Custom actions:** volunteer `vacation`/`retire`; captain `retire`; route
   `assign`/`unassign`/`reassign`/`refresh-house-count` + `nearest-vacant`; year
   `archive`/`export`; issue `open`/`close`/`reopen`; payout

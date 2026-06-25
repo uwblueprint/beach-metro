@@ -205,7 +205,7 @@ Confirmed math:
 - **Zero-rate captains:** counts are tracked, amount is zero.
 
 Bundle auto-calc (paper count to bundles):
-- Greedy: take 50s first, then 25s, then the remainder as a final tied bundle. Bundle paper counts are stored individually and never assumed to be 25 or 50 (some 25/50 bundles are labeled, some are not). Manual entry of bundle counts is available as a fallback, but the client leans toward auto-calculation so counts cascade when paper counts change.
+- Greedy: take 50s first, then 25s, then the remainder as a final tied bundle. Bundle sizes are computed individually and never assumed to be 25 or 50 (some 25/50 bundles are labeled, some are not); MVP persists the resulting bundle count rather than each bundle's paper count. Manual entry of the bundle count is available as a fallback, but the client leans toward auto-calculation so counts cascade when paper counts change.
 
 Irregular cases (entered directly via override, 4e):
 - Captains who calculate their own amount, donate-back arrangements, and legacy mixed rates are all handled by editing the cell directly rather than by a special formula or flag. There is no separate external / self-invoiced model.
