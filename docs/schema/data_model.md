@@ -1,17 +1,16 @@
 # Data Model (Schema) — Source of Truth
 
 Consolidated TypeScript interfaces for every backend entity, reconciled against the
-five flow specs in `docs/flows/`. This supersedes the early ideation board: many
-fields were added, removed, or reshaped to match the locked product decisions. It
-is the current agreed shape (not final); fields we have not finalized are flagged.
+five flow specs in `docs/flows/`.
 
-Read alongside: the flow specs in [`docs/flows/`](../flows/) and the Google Maps
-research in [`docs/integrations/google_maps_research.md`](../integrations/google_maps_research.md).
+Read alongside: the flow specs in [`docs/flows/`](../flows/), the Google Maps
+research in [`docs/integrations/google_maps_research.md`](../integrations/google_maps_research.md),
+and the living decision log in [`../design_decisions.md`](../design_decisions.md).
 
 ## Conventions
 
 - Every entity primary key is a **UUID**, except `GoogleMapsLocation`, whose key is
-  Google's `place_id` (see the Google research doc, section 7).
+  Google's `place_id` (see the Google research doc, §1.3–1.4).
 - Foreign keys reference another interface via `Entity["id"]` (e.g. `Volunteer["id"]`)
   rather than embedding the object.
 - **One-to-many is stored on the child** (the "many" side holds the FK); parents do
@@ -27,61 +26,40 @@ research in [`docs/integrations/google_maps_research.md`](../integrations/google
 - `PLACEHOLDER` marks shapes we have not figured out yet.
 - Status enums match the state machines in the flow docs.
 
-## What changed from the ideation board (summary)
-
-- `Reimbursement` (flat amount/paid) **replaced** by `FinancialYear` → `Issue` →
-  `CaptainPayout`, matching the finance flow.
-- Added `RouteDelivery` (per route per issue actuals) — the core of the delivery flow.
-- `PayCadence`: `"biweekly" | "monthly"` → **`"weekly" | "biweekly"`**.
-- `Captain.address` **removed** (captains have no address); pay config (type, rate,
-  cadence) **moved onto the captain** (was split across territory/captain).
-- `Captain.territoryIds[]` → **1:1** (the FK lives on `CaptainTerritory.assignedCaptainId`);
-  `Captain.reimbursementIds[]` dropped.
-- `VolunteerRoute.territoryId` **removed** — the captain link is indirect
-  (route → volunteer → captain → territory); `assignedVolunteerId` made optional;
-  `streetName` and `houseCount` added.
-- `CaptainTerritory`: `payType`/`payRate` moved to `Captain`. Its volunteers and
-  commercial drops attach via inverse FKs (`Volunteer.captainTerritoryId` and
-  `Address.territoryId`), not id arrays on the territory.
-- `Volunteer.LuckyVolunteerDate` dropped (post-MVP volunteer credit); vacation-window
-  fields added; retirement modeled as a stored timestamp.
-- `GoogleMapsLocation` PLACEHOLDER **filled in** (place_id durable, lat/lng 30-day cache).
-- `RouteSide` gains `"BOTH"`.
-
 ---
 
 ## 1. Shared primitives & value types
 
 ```ts
-export type UUID = string
-export type Timestamp = string // ISO-8601 datetime, e.g. "2026-05-28T04:28:41.329Z"
-export type DateOnly = string  // ISO-8601 date, e.g. "2026-05-28"
-export type Email = string
-export type Url = string
-export type Phone = string
+export type UUID = string;
+export type Timestamp = string; // ISO-8601 datetime, e.g. "2026-05-28T04:28:41.329Z"
+export type DateOnly = string; // ISO-8601 date, e.g. "2026-05-28"
+export type Email = string;
+export type Url = string;
+export type Phone = string;
 
-// Google place_id (durable identifier; see Google research doc §7).
-export type PlaceId = string
+// Google place_id (durable identifier; see Google research doc §1.3).
+export type PlaceId = string;
 
 // Spelled-out compass sides; "BOTH" added per the PRD (N / S / E / W / Both).
-export type RouteSide = "NORTH" | "SOUTH" | "EAST" | "WEST" | "BOTH"
+export type RouteSide = "NORTH" | "SOUTH" | "EAST" | "WEST" | "BOTH";
 
 // Captain pay configuration.
-export type PayType = "bundle" | "paper" | "drop"
-export type PayCadence = "weekly" | "biweekly" // informational; payouts not aggregated
+export type PayType = "bundle" | "paper" | "drop";
+export type PayCadence = "weekly" | "biweekly"; // informational; payouts not aggregated
 
 // AdminUser role. SUBJECT TO CHANGE (the whole role concept is not finalized).
-export type AdminRole = "distribution manager" | "accounts manager"
+export type AdminRole = "distribution manager" | "accounts manager";
 
 // Issue lifecycle (shared by finance + delivery). See finance flow §3a.
-export type IssueStatus = "draft" | "open" | "closed"
+export type IssueStatus = "open" | "closed";
 
 // Geocode confidence, from Geocoding geometry.location_type.
 export type LocationType =
   | "ROOFTOP"
   | "RANGE_INTERPOLATED"
   | "GEOMETRIC_CENTER"
-  | "APPROXIMATE"
+  | "APPROXIMATE";
 ```
 
 ---
@@ -92,25 +70,25 @@ export type LocationType =
 
 The cached result of geocoding an address. The `id` is Google's `place_id`
 (storable indefinitely); the `cached*` lat/lng fields are a 30-day TTL cache per
-Google's ToS. Full rationale in the Google research doc, section 7.
+Google's ToS. Full rationale in the Google research doc, §1.3–1.4.
 
 ```ts
 export interface GoogleMapsLocation {
-  id: PlaceId // Google place_id — durable, our join key from Address.googleMapsId
+  id: PlaceId; // Google place_id — durable, our join key from Address.googleMapsId
   // Short-term cache (refresh within 30 days; re-resolve via Geocoding when stale).
-  cachedLatitude?: number | null
-  cachedLongitude?: number | null
-  cachedFormattedAddress?: string | null
-  cachedAt?: Timestamp | null
+  cachedLatitude?: number | null;
+  cachedLongitude?: number | null;
+  cachedFormattedAddress?: string | null;
+  cachedAt?: Timestamp | null;
   // Structured components extracted from address_components at fetch time.
-  streetNumber?: string | null
-  streetName?: string | null         // the "route" component
-  locality?: string | null           // city
-  sublocality?: string | null        // neighbourhood
-  administrativeArea?: string | null // province
-  postalCode?: string | null
-  countryCode?: string | null
-  locationType?: LocationType | null
+  streetNumber?: string | null;
+  streetName?: string | null; // the "route" component
+  locality?: string | null; // city
+  sublocality?: string | null; // neighbourhood
+  administrativeArea?: string | null; // province
+  postalCode?: string | null;
+  countryCode?: string | null;
+  locationType?: LocationType | null;
 }
 ```
 
@@ -121,12 +99,12 @@ commercial drops. Links to its Google record by `place_id`.
 
 ```ts
 export interface Address {
-  id: UUID
-  googleMapsId: GoogleMapsLocation["id"] // a place_id
-  type: "residential" | "commercial"
+  id: UUID;
+  googleMapsId: GoogleMapsLocation["id"]; // a place_id
+  type: "residential" | "commercial";
   // Commercial drops belong to one territory; set only when type === "commercial".
   // (This is the inverse FK that makes a territory's commercial drops queryable.)
-  territoryId?: CaptainTerritory["id"] | null
+  territoryId?: CaptainTerritory["id"] | null;
   // (ideation's `bundleCount` removed — per-issue bundle counts live on RouteDelivery)
   // SUBJECT TO CHANGE: standing per-drop expectations for commercial drops may need a home.
 }
@@ -140,12 +118,12 @@ export interface Address {
 
 ```ts
 export interface AdminUser {
-  id: UUID
-  firstName: string
-  lastName: string
-  email: Email
-  passwordHash: string // SUBJECT TO CHANGE — auth likely handled by Supabase Auth, not stored here
-  role: AdminRole      // SUBJECT TO CHANGE
+  id: UUID;
+  firstName: string;
+  lastName: string;
+  email: Email;
+  passwordHash: string; // SUBJECT TO CHANGE — auth likely handled by Supabase Auth, not stored here
+  role: AdminRole; // SUBJECT TO CHANGE
 }
 ```
 
@@ -153,11 +131,11 @@ export interface AdminUser {
 
 ```ts
 export interface Note {
-  id: UUID
-  authorId: AdminUser["id"]
-  body: string          // no length limit; grows vertically in the UI
-  createdAt: Timestamp
-  category?: string | null // SUBJECT TO CHANGE
+  id: UUID;
+  authorId: AdminUser["id"];
+  body: string; // no length limit; grows vertically in the UI
+  createdAt: Timestamp;
+  category?: string | null; // SUBJECT TO CHANGE
 }
 ```
 
@@ -169,22 +147,22 @@ otherwise Active. An end date passing never retires — it only raises an attent
 
 ```ts
 export interface Volunteer {
-  id: UUID
-  firstName: string
-  lastName: string
-  email: Email
-  phone: Phone
-  addressId: Address["id"]                 // volunteer's own (residential) address
-  notesId?: Note["id"] | null
-  captainTerritoryId?: CaptainTerritory["id"] | null // direct assignment; may be unassigned
+  id: UUID;
+  firstName: string;
+  lastName: string;
+  email: Email;
+  phone: Phone;
+  addressId: Address["id"]; // volunteer's own (residential) address
+  noteId?: Note["id"] | null;
+  captainTerritoryId?: CaptainTerritory["id"] | null; // direct assignment; may be unassigned
   // Routes carried = VolunteerRoutes whose assignedVolunteerId points here (inverse FK).
-  startDate: DateOnly
-  endDate?: DateOnly | null
+  startDate: DateOnly;
+  endDate?: DateOnly | null;
   // Vacation window — the one date-driven automation (auto-suspends routes, auto-resumes).
-  vacationStart?: DateOnly | null
-  vacationEnd?: DateOnly | null
+  vacationStart?: DateOnly | null;
+  vacationEnd?: DateOnly | null;
   // Manual (soft) retirement; retiring detaches routes (they become vacant).
-  retiredAt?: DateOnly | null
+  retiredAt?: DateOnly | null;
   // (ideation's `LuckyVolunteerDate` dropped — post-MVP volunteer advertising credit.)
 }
 ```
@@ -192,24 +170,24 @@ export interface Volunteer {
 ### Captain
 
 No address. Pay config lives here. Status (Active / Retired) is derived from
-`retiredAt`; captains have no vacation state — absences are handled by finance-only
-substitution (see `CaptainPayout`).
+`retiredAt`; captains have no vacation state — absences are handled by reallocating
+the issue's payout to another captain (finance flow §4g).
 
 ```ts
 export interface Captain {
-  id: UUID
-  firstName: string
-  lastName: string
-  email: Email
-  phone: Phone
+  id: UUID;
+  firstName: string;
+  lastName: string;
+  email: Email;
+  phone: Phone;
   // Pay config (on the captain, not the route/territory):
-  payType: PayType
-  payRate: number      // a zero rate is valid; counts still tracked, payout is zero
-  payCadence: PayCadence
-  startDate: DateOnly
-  endDate?: DateOnly | null
-  retiredAt?: DateOnly | null
-  notesId?: Note["id"] | null
+  payType: PayType;
+  payRate: number; // a zero rate is valid; counts still tracked, payout is zero
+  payCadence: PayCadence;
+  startDate: DateOnly;
+  endDate?: DateOnly | null;
+  retiredAt?: DateOnly | null;
+  noteId?: Note["id"] | null;
   // 1:1 territory: the CaptainTerritory whose assignedCaptainId points here (inverse FK).
   // Territory-less captain = no territory points here; captain-less territory is also allowed.
 }
@@ -223,9 +201,9 @@ via `Volunteer.captainTerritoryId`, commercial drops via `Address.territoryId`.
 
 ```ts
 export interface CaptainTerritory {
-  id: UUID
-  assignedCaptainId?: Captain["id"] | null // captain-less transient allowed (after retire)
-  color?: string | null                    // SUBJECT TO CHANGE — map colour assignment
+  id: UUID;
+  assignedCaptainId?: Captain["id"] | null; // captain-less transient allowed (after retire)
+  color?: string | null; // SUBJECT TO CHANGE — map colour assignment
   // Volunteers = Volunteers whose captainTerritoryId points here.
   // Commercial drops = Addresses (type "commercial") whose territoryId points here.
 }
@@ -242,7 +220,7 @@ counts are stored individually and never assumed to be 25 or 50 (finance flow §
 
 ```ts
 export interface RouteBundle {
-  papers: number
+  papers: number;
 }
 ```
 
@@ -255,19 +233,19 @@ is a derived flag when the assigned volunteer is on vacation (route flow §3a).
 
 ```ts
 export interface VolunteerRoute {
-  id: UUID
+  id: UUID;
   // Geography
-  startAddressId: Address["id"]
-  endAddressId: Address["id"]
-  streetName: string
-  side?: RouteSide
+  startAddressId: Address["id"];
+  endAddressId: Address["id"];
+  streetName: string;
+  side?: RouteSide;
   // Assignment — optional; a vacant route has no volunteer.
-  assignedVolunteerId?: Volunteer["id"] | null
+  assignedVolunteerId?: Volunteer["id"] | null;
   // Counts
-  houseCount: number                  // auto-calculated; feeds paper/bundle sizing
-  houseCountOverride?: number | null  // SUBJECT TO CHANGE: how the manual override is modeled
-  papers: number                      // standing paper count; drives the bundle auto-calc
-  notesId?: Note["id"] | null
+  houseCount: number; // auto-calculated; feeds paper/bundle sizing
+  houseCountOverride?: number | null; // SUBJECT TO CHANGE: how the manual override is modeled
+  papers: number; // standing paper count; drives the bundle auto-calc
+  noteId?: Note["id"] | null;
   // No territoryId: territory/captain derive via assignedVolunteerId -> captainTerritoryId.
 }
 ```
@@ -283,9 +261,9 @@ machines and calculations.
 
 ```ts
 export interface FinancialYear {
-  id: UUID
-  name: string          // e.g. "2026–2027" (runs ~March–Feb, not calendar-locked)
-  archived: boolean     // archived tables stay fully accessible
+  id: UUID;
+  name: string; // e.g. "2026–2027" (runs ~March–Feb, not calendar-locked)
+  archived: boolean; // archived tables stay fully accessible
   // Issues (rows) = Issues whose financialYearId points here (inverse FK).
   // Columns auto-populate for captains active at creation.
   // SUBJECT TO CHANGE: whether the captain column set is snapshotted or derived live.
@@ -294,16 +272,16 @@ export interface FinancialYear {
 
 ### Issue
 
-One publication run; shared with the delivery flow. Draft → Open → Closed; closing
+One publication run; shared with the delivery flow. Open → Closed; closing
 freezes payout values and delivery actuals together.
 
 ```ts
 export interface Issue {
-  id: UUID
-  financialYearId: FinancialYear["id"]
-  name: string        // manual label, e.g. "June 9" or "I01-26"
-  date: DateOnly      // manual
-  status: IssueStatus // shared open/close governs finance + delivery
+  id: UUID;
+  financialYearId: FinancialYear["id"];
+  name: string; // manual label, e.g. "June 9" or "I01-26"
+  date: DateOnly; // manual
+  status: IssueStatus; // shared open/close governs finance + delivery
 }
 ```
 
@@ -315,19 +293,16 @@ separate marker, only toggleable once the issue is closed.
 
 ```ts
 export interface CaptainPayout {
-  id: UUID
-  issueId: Issue["id"]
-  captainId: Captain["id"]            // the captain (or substitute) receiving this payout
+  id: UUID;
+  issueId: Issue["id"];
+  captainId: Captain["id"]; // the captain receiving this payout
   // Calculation status is derived: overrideAmount present => "overridden", else "calculated".
-  calculatedAmount: number            // auto from pay config + delivery rollup (while open)
-  overrideAmount?: number | null      // manual override
-  overrideReason?: string | null      // required when overridden; no audit of prior values
+  calculatedAmount: number; // auto from pay config + delivery rollup (while open)
+  overrideAmount?: number | null; // manual override
+  overrideReason?: string | null; // required when overridden; no audit of prior values
   // Payment (separate from calculation; only toggleable once the issue is Closed).
-  paid: boolean
-  paidAt?: DateOnly | null
-  // Substitution (finance-only): the substitute's payout sets substituteForCaptainId to
-  // the original; the original captain's payout for the issue is zeroed.
-  substituteForCaptainId?: Captain["id"] | null // SUBJECT TO CHANGE: exact representation
+  paid: boolean;
+  paidAt?: DateOnly | null;
 }
 ```
 
@@ -338,21 +313,20 @@ export interface CaptainPayout {
 ### RouteDelivery
 
 One record per route per issue, the input the payout math consumes. Auto-seeded
-from the route's standing counts when the issue opens; **actuals only** (no stored
-planned baseline). Editability is derived from the issue status (Pending → Editable
-→ Locked). Vacant and suspended routes are skipped (no row). See the delivery flow.
+from the route's standing counts when the issue is created; **actuals only** (no
+stored planned baseline). Editability is derived from the issue status (Editable →
+Locked). Vacant and suspended routes are skipped (no row). See the delivery flow.
 
 ```ts
 export interface RouteDelivery {
-  id: UUID
-  issueId: Issue["id"]
-  routeId: VolunteerRoute["id"]
-  paperCount: number
-  bundleCount: number               // from the bundle auto-calc on paperCount, or manual
-  bundles?: RouteBundle[]           // SUBJECT TO CHANGE: storing individual bundle paper counts
-  dropCount: number
-  missedCount: number               // in the unit matching the route's captain pay type
-  substituteDeliverer?: string | null // free-text note; does not affect payout attribution
+  id: UUID;
+  issueId: Issue["id"];
+  routeId: VolunteerRoute["id"];
+  paperCount: number;
+  bundleCount: number; // from the bundle auto-calc on paperCount, or manual
+  bundles?: RouteBundle[]; // SUBJECT TO CHANGE: storing individual bundle paper counts
+  dropCount: number;
+  missedCount: number; // in the unit matching the route's captain pay type
 }
 ```
 
@@ -378,6 +352,7 @@ erDiagram
 ```
 
 Key chains:
+
 - **Pay attribution:** `RouteDelivery` → `VolunteerRoute` → `Volunteer` →
   `CaptainTerritory` → `Captain` → `CaptainPayout`. The captain link is always
   indirect through the volunteer.
@@ -402,7 +377,5 @@ Key chains:
   counts or just a `bundleCount` SUBJECT TO CHANGE.
 - **Territory column snapshotting.** Whether a `FinancialYear`'s captain columns are
   snapshotted at creation or derived live.
-- **Substitution representation.** The `CaptainPayout.substituteForCaptainId`
-  approach is one option; SUBJECT TO CHANGE.
 - **Post-MVP:** volunteer advertising credit ("lucky volunteer"), the reporting
   dashboard's derived aggregates, and the papers-to-order spare allowance.
