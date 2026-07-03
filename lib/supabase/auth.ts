@@ -9,6 +9,12 @@ import { createClient } from "@/lib/supabase/server";
  * user's identity (e.g. to show who is signed in, or to return 401).
  */
 export async function getClaims() {
+  // Mirrors the middleware guard: if Supabase isn't configured (local/CI without
+  // secrets), treat the request as unauthenticated instead of throwing.
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+    return null;
+  }
+
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
   return data?.claims ?? null;
