@@ -11,50 +11,50 @@ Captains use cars, and they drop off bundles of newspapers at the volunteer carr
 ### ✏️ Helpful Vocabulary:
 
 - Route: the path that a volunteer walks to make paper deliveries at houses
-    - described with a start and end address, and a street name
+  - described with a start and end address, and a street name
 - Territory: a Captain’s assigned volunteer drops plus their commercial drop addresses
-    - each Captain “owns” one territory
+  - each Captain “owns” one territory
 - Bundle: a tied up collection of newspapers
-    - by default, bundles come in packs of 25 or 50, but they are often unbundled and tied up with a custom number of papers
+  - by default, bundles come in packs of 25 or 50, but they are often unbundled and tied up with a custom number of papers
 - Issue: the release of a newspaper
-    - typically a bi-weekly cadence (but tri-weekly during summer)
-    - Captains are paid on a weekly or biweekly cadence, but the drops a Captain gets paid for are calculated on a per-issue basis; the per-issue payout is the unit of record and is not aggregated into a single disbursement
-    - for every issue, papers need to be ordered and bundles need to be put together and labelled
+  - typically a bi-weekly cadence (but tri-weekly during summer)
+  - Captains are paid on a weekly or biweekly cadence, but the drops a Captain gets paid for are calculated on a per-issue basis; the per-issue payout is the unit of record and is not aggregated into a single disbursement
+  - for every issue, papers need to be ordered and bundles need to be put together and labelled
 - Labels: a sticker that is attached to some bundles, which specifies the paper count, the volunteer name, volunteer address, and territory
-    - labels are used so that captains know which bundles to grab and which bundles to drop off where
-    - not all bundles need to be labelled
+  - labels are used so that captains know which bundles to grab and which bundles to drop off where
+  - not all bundles need to be labelled
 - Volunteer Drop: a volunteer’s house that would receive bundle drops for delivery
 - Commercial Drop: an address that collects bundles from Captains, to be stored in a pile
-    - some examples are Residential buildings, schools, churches, food and beverage institutions
+  - some examples are Residential buildings, schools, churches, food and beverage institutions
 - Vacant Route: a route with no assigned volunteer carrier
-    - the state the admin spends the most time managing
-- Substitution: when someone other than a route’s assigned volunteer actually delivers that route for an issue
+  - the state the admin spends the most time managing
+- Payout transfer: redirecting a Captain’s payout for a given issue to another Captain (finance-only; the original is zeroed for that issue)
 - House Count: the number of houses on a route, used to size routes and estimate paper/bundle needs
-    - calculated automatically, with a manual override
+  - manual entry for MVP; auto-calculation (Toronto Open Data) is post-MVP
 
 ## 📌 Goals for Different Pain Points
 
 1. Captain Drop-Off Reimbursement
-    1. Having pay checks for Captains be automatically calculated from Territory + Route data
-        1. Having this calculation be communicated clearly, and also easy to manually adjust
-    2. Accounting for Captain pay substitutions (finance-only)
-        1. For a given issue, redirecting a Captain’s payout to a stand-in and zeroing the original
-        2. The stand-in can be an existing Captain or a newly created temporary one; routes and territory are unchanged
-    3. Seeing historic annual financial data
-    4. Marking pay checks as paid or unpaid
-    5. Easily adjusting Captain pay structure (rate, unit of pay)
+   1. Having pay checks for Captains be automatically calculated from Territory + Route data
+      1. Having this calculation be communicated clearly, and also easy to manually adjust
+   2. Transferring a Captain’s payout when someone covers (finance-only)
+      1. For a given issue, the payout can be transferred to another Captain, zeroing the original
+      2. Routes and territory are unchanged by a transfer
+   3. Seeing historic annual financial data
+   4. Marking pay checks as paid or unpaid
+   5. Easily adjusting Captain pay structure (rate, unit of pay)
 2. Route Management
-    1. Assign routes to volunteers
-    2. Edit routes (splitting into multiple routes, or extending a route)
-    3. Easily see which routes are vacant
-        1. And seeing the nearest vacant route to a new volunteer’s address
-    4. Track paper + bundle count for a route
+   1. Assign routes to volunteers
+   2. Edit routes (splitting into multiple routes, or extending a route)
+   3. Easily see which routes are vacant
+      1. And seeing the nearest vacant route to a new volunteer’s address
+   4. Track paper + bundle count for a route
 3. Volunteer Management
-    1. Store all relevant Volunteer info in a profile (contact info, route info)
-    2. Retire Volunteers
-    3. Assign volunteers to be part of a Captain’s territory
+   1. Store all relevant Volunteer info in a profile (contact info, route info)
+   2. Retire Volunteers
+   3. Assign volunteers to be part of a Captain’s territory
 4. Label Printing
-    1. Bulk-print labels for a specific subset of bundles for each new issue
+   1. Bulk-print labels for a specific subset of bundles for each new issue
 
 ## 🌊 Flows / Features
 
@@ -106,7 +106,7 @@ Captains use cars, and they drop off bundles of newspapers at the volunteer carr
 
 - Pay is auto-calculated from territory + route/drop data; the calculation is shown transparently and can be manually overridden.
 - Each Captain has an editable pay structure: a rate and a unit of pay (per bundle, per paper, or per drop).
-- Substitutions are accounted for so pay is attributed correctly when someone covers a drop.
+- A payout can be transferred to another Captain for a given issue so pay is attributed correctly when someone covers.
 - Each per-issue payout can be marked paid or unpaid (a status marker; closing the issue locks the amount). Payouts are tracked per issue, not aggregated into a single disbursement.
 - Historic annual financial data is viewable for accounting.
 
@@ -118,7 +118,7 @@ Captains use cars, and they drop off bundles of newspapers at the volunteer carr
 **What it does:** Tracks each publication run (issue) and the drops actually made, which is the data Captain reimbursement is calculated from.
 **Key behavior:**
 
-- Open an issue for each publication run; record per-route and per-drop actuals (assigned vs. delivered bundles, paper count, drop count, missed drops, and the substitute deliverer if any).
+- Create an issue for each publication run (issues are created Open, with delivery rows auto-populated); record per-route and per-drop actuals (paper count, bundle count, drop count, missed drops).
 - Closing an issue locks its numbers so the pay math is frozen and historical records stay immutable.
 - Per-issue drop data drives Captain pay; the per-issue payout is the unit of record. Captains are paid weekly or biweekly, but payouts are not aggregated.
 

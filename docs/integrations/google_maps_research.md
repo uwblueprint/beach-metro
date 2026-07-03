@@ -1,39 +1,37 @@
 # Google Maps Platform Research
 
-**Context:** what the Beach Metro app can pull from Google Maps, what we are allowed to keep, what the responses look like, what it will cost, and how this should shape our `GoogleMapsLocation` placeholder in the schema.
+**Context:** what the Beach Metro app can pull from Google Maps, what we are allowed to keep, what the responses look like, what it will cost, and how this shapes our `GoogleMapsLocation` schema.
 
 **As of:** June 2026. Google Maps pricing and product structure shifted significantly in March 2025 (per-SKU free tier replaced the old universal $200 credit), and the legacy Places, Directions, and Distance Matrix APIs are being phased out in favour of the "New" Places API and Routes API. Anything in this doc that touches pricing or product status should be verified against [the official pricing page](https://mapsplatform.google.com/pricing/) before launch.
 
-**Integration strategy in one line:** keep everything inside the free tiers. We geocode the ~200 routes/addresses once, store the durable `place_id`, and refresh the cached lat/lng on a ~30-day cycle to satisfy the caching policy. Addresses change rarely, so steady-state API volume is tiny.
+**How to read this doc:** [Section 1](#1-beach-metro-integration-decisions) records the integration **decisions** we are making for Beach Metro. Everything after it is **research** — facts about the platform as documented by Google, with sources linked in-text where each claim is made.
 
 ---
 
-## 1. TL;DR
+## 1. Beach Metro integration decisions
 
-For Beach Metro, the relevant subset of Google Maps Platform is small:
+### 1.1 Strategy in one line
 
-- **Geocoding API** turns a volunteer or captain address into a `place_id` plus latitude and longitude. This is the primary integration.
-- **Address Validation API** standardizes and corrects user-entered Canadian addresses at signup. Optional but useful.
-- **Maps JavaScript API** renders the interactive map of territories and routes (the nice-to-have feature replacing Melinda's three colour-coded Google MyMaps).
-- **Maps Static API** can render small thumbnail maps cheaply (for example, a preview on a volunteer's profile).
-- **Routes API: Compute Route Matrix** is the right tool for the "recommend nearby vacant routes by proximity to volunteer home" feature.
-- We almost certainly do **not** need the Places API (Search/Details/Autocomplete) because we are not letting users look up businesses or POIs. The exception is if we use Places Autocomplete in address input fields, which has its own session billing model.
+Keep everything inside the free tiers: geocode the ~200 routes/addresses once, store the durable `place_id`, and refresh the cached lat/lng on a ~30-day cycle to satisfy the caching policy. Addresses change rarely, so steady-state API volume is tiny.
 
-The single most important non-obvious constraint: **per Google's Terms of Service, only `place_id` may be stored indefinitely. Latitude and longitude from the Geocoding API may be cached for at most 30 days, after which the cache must be deleted.** This dictates how our `GoogleMapsLocation` table should be shaped (see [Section 7](#7-what-this-means-for-our-schema)).
+### 1.2 APIs we use
 
----
+- **Geocoding API** turns a volunteer address into a `place_id` plus latitude and longitude. This is the primary integration. ([Section 2](#2-research-geocoding-api))
+- **Address Validation API** standardizes and corrects user-entered Canadian addresses at signup. Optional but useful. ([Section 3](#3-research-address-validation-api))
+- **Maps JavaScript API** renders the interactive map of territories and routes (the nice-to-have feature replacing Melinda's three colour-coded Google MyMaps). ([Section 4](#4-research-maps-javascript-api))
+- **Maps Static API** can render small thumbnail maps cheaply (for example, a preview on a volunteer's profile). ([Section 5](#5-research-maps-static-api-and-routes-api))
+- **Routes API: Compute Route Matrix** is the right tool for the "recommend nearby vacant routes by proximity to volunteer home" feature. ([Section 5.2](#52-routes-api-compute-route-matrix))
+- We almost certainly do **not** need the [Places API](https://developers.google.com/maps/documentation/places/web-service/op-overview) (Search/Details/Autocomplete) because we are not letting users look up businesses or POIs. The exception is if we use Places Autocomplete in address input fields, which has its own session billing model.
 
-## 2. Beach Metro feature to API mapping
-
-| Beach Metro feature | API to use | Notes |
-|---|---|---|
-| Convert volunteer/captain address to coordinates for map display | Geocoding API | Store the returned `place_id`; re-resolve coordinates on demand or cache up to 30 days |
-| Validate and standardize a Canadian address at signup | Address Validation API | Returns formatted postal address, granularity, and a geocode in one call |
-| Render interactive map with territories, routes, vacant routes | Maps JavaScript API | Polygons for territories, polylines for route segments, markers for endpoints |
-| Render small static map (e.g. profile thumbnail or printable run sheet) | Maps Static API | Cheaper per call than dynamic maps |
-| Recommend the closest vacant routes to a new volunteer | Routes API: Compute Route Matrix | One call returns N origins by M destinations of duration/distance |
-| Autocomplete address typing in forms (nice-to-have) | Places Autocomplete (New) | Session-based billing; pairs with Place Details or Address Validation |
-| Drag-and-drop route editing on the map | Custom polygon editing on Maps JavaScript API | Note: the bundled Drawing Library is deprecated; see [Section 5](#5-maps-javascript-api) |
+| Beach Metro feature                                                     | API to use                                    | Notes                                                                                  |
+| ----------------------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Convert volunteer address to coordinates for map display                | Geocoding API                                 | Store the returned `place_id`; re-resolve coordinates on demand or cache up to 30 days |
+| Validate and standardize a Canadian address at signup                   | Address Validation API                        | Returns formatted postal address, granularity, and a geocode in one call               |
+| Render interactive map with territories, routes, vacant routes          | Maps JavaScript API                           | Polygons for territories, polylines for route segments, markers for endpoints          |
+| Render small static map (e.g. profile thumbnail or printable run sheet) | Maps Static API                               | Cheaper per call than dynamic maps                                                     |
+| Recommend the closest vacant routes to a new volunteer                  | Routes API: Compute Route Matrix              | One call returns N origins by M destinations of duration/distance                      |
+| Autocomplete address typing in forms (nice-to-have)                     | Places Autocomplete (New)                     | Session-based billing; pairs with Place Details or Address Validation                  |
+| Drag-and-drop route editing on the map                                  | Custom polygon editing on Maps JavaScript API | The bundled Drawing Library is deprecated; see [1.6](#16-map-rendering-and-editing)    |
 
 What we are **not** using:
 
@@ -41,15 +39,108 @@ What we are **not** using:
 - Roads API (snap-to-road etc. is unnecessary; our routes are street segments described by intersections).
 - Street View, Aerial View, Elevation, Pollen, Weather, Solar APIs.
 
+### 1.3 Data retention: `place_id` is durable, lat/lng is a 30-day cache
+
+The single most important non-obvious constraint. From the [Google Maps Platform Service Specific Terms](https://cloud.google.com/maps-platform/terms/maps-service-terms):
+
+> Customer may temporarily cache latitude and longitude values from the Geocoding API for up to 30 consecutive calendar days, after which Customer must delete the cached latitude and longitude values.
+
+And from the [Geocoding API policies page](https://developers.google.com/maps/documentation/geocoding/policies):
+
+> Note that the place ID, used to uniquely identify a place, is exempt from the caching restrictions. You can therefore store place ID values indefinitely.
+
+Net effect — our decision: **`place_id` is our durable identifier; lat/lng is a refreshable cache with a 30-day TTL.** A background refresh updates any record older than ~25 days; anything past 30 days must be evicted.
+
+### 1.4 Our `GoogleMapsLocation` shape
+
+The shape in [`docs/schema/data_model.md`](../schema/data_model.md), driven by the retention rule above:
+
+```ts
+export interface GoogleMapsLocation {
+  // The Google Place ID. Storable indefinitely per Google ToS.
+  // This is our durable foreign-key target from Address.googleMapsId.
+  id: string;
+  // Short-term cache fields. Must be refreshed within 30 days of fetch.
+  // Treat them as nullable and re-resolve via the Geocoding API when stale or missing.
+  cachedLatitude?: number | null;
+  cachedLongitude?: number | null;
+  cachedFormattedAddress?: string | null;
+  cachedAt?: Timestamp | null; // when these cache fields were last fetched
+  // Optional structured fields we extract from address_components at fetch time.
+  // These are derived and similarly refreshable, but practically very stable.
+  streetNumber?: string | null;
+  streetName?: string | null; // the "route" component
+  locality?: string | null; // city
+  sublocality?: string | null; // neighbourhood
+  administrativeArea?: string | null; // province
+  postalCode?: string | null;
+  countryCode?: string | null;
+  // Confidence indicator from geometry.location_type.
+  // ROOFTOP | RANGE_INTERPOLATED | GEOMETRIC_CENTER | APPROXIMATE
+  locationType?:
+    | "ROOFTOP"
+    | "RANGE_INTERPOLATED"
+    | "GEOMETRIC_CENTER"
+    | "APPROXIMATE"
+    | null;
+}
+```
+
+Notes on this shape:
+
+- The `id` field is the Google `place_id` string (something like `ChIJRxcAvRO7j4AR6hm6tys8yA8`), not a UUID we generate. This is a deliberate departure from our usual UUID convention because the place_id is Google's identifier and we want to use it directly as the join key.
+- All the `cached*` fields are denormalized for query speed and to avoid hitting the API for every map render.
+- The structured address components (`streetNumber`, `streetName`, etc.) are extracted at the time of geocoding so we can query and display them without re-parsing the `address_components[]` array.
+- `locationType` lets the UI flag low-confidence geocodes so an admin can review.
+
+**Knock-on effect on `Address`:** `Address.googleMapsId` is typed as `GoogleMapsLocation["id"]`. With the shape above that resolves to `string` (a Google place_id), which is exactly what we want. No change required to `Address`.
+
+One potential future enhancement: pull `Address.type` (residential vs commercial) from `AddressValidation.metadata.residential` at validation time, rather than asking the user to pick it (see [3.3](#33-what-we-get-that-geocoding-alone-does-not)).
+
+### 1.5 Address entry and validation at volunteer signup
+
+1. User types address into the form (optionally with Places Autocomplete suggestions to reduce typos).
+2. On submit, call Address Validation ([Section 3](#3-research-address-validation-api)).
+3. If `verdict.addressComplete === true` and no replaced or unconfirmed components, save the `place_id`, the canonical `formattedAddress` for short-term cache (refreshed at most every 30 days), and `metadata.residential` into our `Address` record.
+4. If validation flags inferred or replaced components, present the corrected version to the user for confirmation before saving.
+
+### 1.6 Map rendering and editing
+
+- Render maps with the **Maps JavaScript API**, loaded via the [`@vis.gl/react-google-maps`](https://visgl.github.io/react-google-maps/) wrapper rather than hand-rolling the script loader.
+- MVP map features are **read-only display** (territory polygons, route polylines, markers), which is unaffected by the Drawing Library deprecation.
+- If we ever build drag-and-drop route/territory editing, plan to integrate **Terra Draw** rather than `google.maps.drawing` (deprecated; see [4.2](#42-drawing-libraries)).
+
+### 1.7 Proximity recommendations
+
+Use **Compute Route Matrix** ([Section 5.2](#52-routes-api-compute-route-matrix)) for "closest vacant routes to this volunteer": one origin (the volunteer's home), N destinations (vacant route endpoints), sort by `duration` or `distanceMeters`, and present the top few. `travelMode: "DRIVE"` matches how the captains and most volunteers get around.
+
+### 1.8 API keys and cost guardrails
+
+All API keys are restricted both by referrer (frontend keys, restricted to our domain) and by enabled API (backend keys, restricted to only the APIs we actually use), per [Google's API security best practices](https://developers.google.com/maps/api-security-best-practices). Quotas are also capped per-day in the Cloud Console to prevent runaway billing from key leakage. Keys live server-side; the app proxies Google calls through our own API (see the API spec §6).
+
+### 1.9 Expected cost: $0/month at our volume
+
+Back-of-envelope against the pricing facts in [Section 6](#6-research-pricing). Assume ~200 volunteers, 4 captains, monthly turnover of a handful of people, daily admin use of the map by Melinda and Hope:
+
+- Geocoding: maybe 50 calls/month (new signups, address edits). Free tier easily.
+- Address Validation: similar. Within free or just over.
+- Maps JS dynamic map loads: assume Melinda and Hope each load the map page 5x/day, plus volunteers/captains view it a few times per cycle. Order of 500 to 2,000 loads/month. Free tier easily.
+- Compute Route Matrix: only triggered when assigning vacant routes, maybe 20 per month. Free tier easily.
+- Static Maps: if used on run sheets, scale with number of issues per month. Probably a few hundred per month. Free tier easily.
+
+Expected monthly cost: **\$0** under expected volume, assuming we keep field masks tight and do not request expensive Places SKUs. This is the whole strategy: the data set is ~200 addresses that rarely change, so a one-time geocode plus a ~30-day refresh cycle stays comfortably inside every free tier.
+
+**Subscriptions:** there are now Essentials/Pro/Enterprise [subscription plans](https://developers.google.com/maps/billing-and-pricing/overview) that bundle predictable monthly call counts at a fixed price, sitting alongside pay-as-you-go. Almost certainly not worth it for Beach Metro at the volumes above; pay-as-you-go with free tiers will be cheaper and simpler. Worth revisiting only if the app ever scales beyond the current operation.
+
 ---
 
-## 3. Geocoding API
+## 2. Research: Geocoding API
 
-The workhorse of our integration. Converts a free-text address into a structured response containing the canonical address, latitude and longitude, a `place_id`, and a confidence indicator.
+Primary API used by the application. Converts a free-text address into a structured response containing the canonical address, latitude and longitude, a `place_id`, and a confidence indicator.
 
 **Reference:** [Geocoding API request and response](https://developers.google.com/maps/documentation/geocoding/requests-geocoding)
 
-### 3.1 Request
+### 2.1 Request
 
 ```
 GET https://maps.googleapis.com/maps/api/geocode/json
@@ -67,20 +158,48 @@ Required: `key`, plus either `address` or `components` (or both). Useful optiona
 
 There is also a newer **Geocoding API v4** with a slightly different shape (uses `X-Goog-FieldMask` headers and `https://geocode.googleapis.com/v4/...`). The v3 endpoint above is still fully supported and is the one almost all documentation and examples use; v4 is opt-in.
 
-### 3.2 Response (v3, JSON)
+### 2.2 Response (v3, JSON)
 
 ```json
 {
   "results": [
     {
       "address_components": [
-        { "long_name": "1600", "short_name": "1600", "types": ["street_number"] },
-        { "long_name": "Amphitheatre Parkway", "short_name": "Amphitheatre Pkwy", "types": ["route"] },
-        { "long_name": "Mountain View", "short_name": "Mountain View", "types": ["locality", "political"] },
-        { "long_name": "Santa Clara County", "short_name": "Santa Clara County", "types": ["administrative_area_level_2", "political"] },
-        { "long_name": "California", "short_name": "CA", "types": ["administrative_area_level_1", "political"] },
-        { "long_name": "United States", "short_name": "US", "types": ["country", "political"] },
-        { "long_name": "94043", "short_name": "94043", "types": ["postal_code"] }
+        {
+          "long_name": "1600",
+          "short_name": "1600",
+          "types": ["street_number"]
+        },
+        {
+          "long_name": "Amphitheatre Parkway",
+          "short_name": "Amphitheatre Pkwy",
+          "types": ["route"]
+        },
+        {
+          "long_name": "Mountain View",
+          "short_name": "Mountain View",
+          "types": ["locality", "political"]
+        },
+        {
+          "long_name": "Santa Clara County",
+          "short_name": "Santa Clara County",
+          "types": ["administrative_area_level_2", "political"]
+        },
+        {
+          "long_name": "California",
+          "short_name": "CA",
+          "types": ["administrative_area_level_1", "political"]
+        },
+        {
+          "long_name": "United States",
+          "short_name": "US",
+          "types": ["country", "political"]
+        },
+        {
+          "long_name": "94043",
+          "short_name": "94043",
+          "types": ["postal_code"]
+        }
       ],
       "formatted_address": "1600 Amphitheatre Pkwy, Mountain View, CA 94043, USA",
       "geometry": {
@@ -103,22 +222,22 @@ There is also a newer **Geocoding API v4** with a slightly different shape (uses
 }
 ```
 
-### 3.3 Field-by-field, what we can derive and use
+### 2.3 Field-by-field, what we can derive and use
 
-| Field | What it is | Useful to Beach Metro for |
-|---|---|---|
-| `place_id` | Stable, opaque, globally unique identifier for the location | **The only field we are allowed to store indefinitely.** Use this as the `id` on our `GoogleMapsLocation` table. |
-| `formatted_address` | Postal-style human-readable address | Display on volunteer/captain profile, printable run sheets. **Subject to caching restrictions: not storable beyond 30 days.** |
-| `address_components[]` | Structured pieces with `types[]` tags | Pulling out street number, street name, postal code, locality (city), administrative_area_level_1 (province). For route definitions, the `route` component is the street name. |
-| `geometry.location.lat` / `lng` | Decimal degrees, WGS84 | Map pin placement, distance computations. **Cache for up to 30 days only.** |
-| `geometry.location_type` | One of `ROOFTOP`, `RANGE_INTERPOLATED`, `GEOMETRIC_CENTER`, `APPROXIMATE` | Confidence indicator. `ROOFTOP` means precise rooftop coordinate; `RANGE_INTERPOLATED` means interpolated between two precise points (acceptable for routes but flag it); `APPROXIMATE` should probably trigger a manual review. |
-| `geometry.viewport` | Bounding box suggested for displaying this result | Use directly when zooming the map to a single result. |
-| `geometry.bounds` | Optional full bounding box | Present when result is a region (street segment, neighbourhood). For route endpoint intersections we will usually only see `viewport`. |
-| `plus_code` | Open Location Code (e.g. `849VCWC8+W7`) | Useful in rural areas where addresses are unreliable; probably irrelevant for Beach Metro's urban coverage. |
-| `partial_match: true` | Set when the geocoder fuzzy-matched | Treat as a warning; flag to an admin for manual review. |
-| `types[]` | Categorization of the result | `street_address`, `route`, `intersection`, `premise`, `subpremise`, `locality`, etc. For Beach Metro, route start/end points should be `intersection` results when possible. |
+| Field                           | What it is                                                                | Useful to Beach Metro for                                                                                                                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `place_id`                      | Stable, opaque, globally unique identifier for the location               | **The only field we are allowed to store indefinitely.** Use this as the `id` on our `GoogleMapsLocation` table ([1.4](#14-our-googlemapslocation-shape)).                                                                       |
+| `formatted_address`             | Postal-style human-readable address                                       | Display on volunteer profile, printable run sheets. **Subject to caching restrictions: not storable beyond 30 days.**                                                                                                            |
+| `address_components[]`          | Structured pieces with `types[]` tags                                     | Pulling out street number, street name, postal code, locality (city), administrative_area_level_1 (province). For route definitions, the `route` component is the street name.                                                   |
+| `geometry.location.lat` / `lng` | Decimal degrees, WGS84                                                    | Map pin placement, distance computations. **Cache for up to 30 days only.**                                                                                                                                                      |
+| `geometry.location_type`        | One of `ROOFTOP`, `RANGE_INTERPOLATED`, `GEOMETRIC_CENTER`, `APPROXIMATE` | Confidence indicator. `ROOFTOP` means precise rooftop coordinate; `RANGE_INTERPOLATED` means interpolated between two precise points (acceptable for routes but flag it); `APPROXIMATE` should probably trigger a manual review. |
+| `geometry.viewport`             | Bounding box suggested for displaying this result                         | Use directly when zooming the map to a single result.                                                                                                                                                                            |
+| `geometry.bounds`               | Optional full bounding box                                                | Present when result is a region (street segment, neighbourhood). For route endpoint intersections we will usually only see `viewport`.                                                                                           |
+| `plus_code`                     | Open Location Code (e.g. `849VCWC8+W7`)                                   | Useful in rural areas where addresses are unreliable; probably irrelevant for Beach Metro's urban coverage.                                                                                                                      |
+| `partial_match: true`           | Set when the geocoder fuzzy-matched                                       | Treat as a warning; flag to an admin for manual review.                                                                                                                                                                          |
+| `types[]`                       | Categorization of the result                                              | `street_address`, `route`, `intersection`, `premise`, `subpremise`, `locality`, etc. For Beach Metro, route start/end points should be `intersection` results when possible.                                                     |
 
-### 3.4 `address_components[]` types worth pulling out
+### 2.4 `address_components[]` types worth pulling out
 
 The full reference is at [Address types and address component types](https://developers.google.com/maps/documentation/geocoding/requests-geocoding#Types). The ones we will care about:
 
@@ -131,7 +250,7 @@ The full reference is at [Address types and address component types](https://dev
 - `administrative_area_level_1`: province (Ontario)
 - `postal_code`: full Canadian postal code
 
-### 3.5 Status codes
+### 2.5 Status codes
 
 `status` is one of:
 
@@ -143,7 +262,7 @@ The full reference is at [Address types and address component types](https://dev
 
 A non-OK status may also include `error_message` with diagnostic detail.
 
-### 3.6 Reverse geocoding
+### 2.6 Reverse geocoding
 
 Same API, different parameter. Pass `latlng=43.6532,-79.3832&key=...` instead of `address=...`. Returns the same response shape but resolving a coordinate to its nearest address. Probably not needed for Beach Metro day-to-day, but useful if we ever let admins drop a pin on the map to define a route endpoint.
 
@@ -151,13 +270,13 @@ Same API, different parameter. Pass `latlng=43.6532,-79.3832&key=...` instead of
 
 ---
 
-## 4. Address Validation API
+## 3. Research: Address Validation API
 
-A separate, more thorough endpoint than Geocoding. Designed for checkout flows and address-collection forms. Worth using on volunteer and captain signup because Beach Metro's data is collected from many people over time and address typos are common.
+A separate, more thorough endpoint than Geocoding. Designed for checkout flows and address-collection forms. Worth using on volunteer signup because Beach Metro's data is collected from many people over time and address typos are common.
 
-**Reference:** [Address Validation API overview](https://developers.google.com/maps/documentation/address-validation/overview)
+**References:** [Address Validation API overview](https://developers.google.com/maps/documentation/address-validation/overview), [validateAddress reference](https://developers.google.com/maps/documentation/address-validation/reference/rest/v1/TopLevel/validateAddress), [understand the response](https://developers.google.com/maps/documentation/address-validation/understand-response)
 
-### 4.1 Request
+### 3.1 Request
 
 ```
 POST https://addressvalidation.googleapis.com/v1:validateAddress?key=YOUR_API_KEY
@@ -176,7 +295,7 @@ Content-Type: application/json
 
 `enableUspsCass` is for US addresses only; do not set it for Canadian addresses.
 
-### 4.2 Response (shape)
+### 3.2 Response (shape)
 
 ```json
 {
@@ -211,9 +330,9 @@ Content-Type: application/json
       "unconfirmedComponentTypes": []
     },
     "geocode": {
-      "location": { "latitude": 45.5160, "longitude": -73.6082 },
+      "location": { "latitude": 45.516, "longitude": -73.6082 },
       "plusCode": { "globalCode": "...", "compoundCode": "..." },
-      "bounds": { },
+      "bounds": {},
       "placeId": "ChIJ..."
     },
     "metadata": {
@@ -226,55 +345,46 @@ Content-Type: application/json
 }
 ```
 
-### 4.3 What we get that Geocoding alone does not
+### 3.3 What we get that Geocoding alone does not
 
 - `verdict.addressComplete`: a boolean. Quick yes/no for "is this address good to ship to."
 - `verdict.has*Components`: tells us if the API inferred, replaced, or could not confirm parts of the address.
 - `metadata.residential` vs `metadata.business` vs `metadata.poBox`: useful for our `Address.type` field (the schema currently has `"residential" | "commercial"`). Verified June 2026: residential/commercial metadata is only populated for six countries — **Canada is one of them** (alongside AU, MX, NZ, ES, US) — so deriving `Address.type` from validation works for our coverage area. Pass `regionCode: "CA"`.
 - `geocode.placeId`: same `place_id` you would get from Geocoding. Storable indefinitely.
 
-### 4.4 Recommended flow at volunteer signup
-
-1. User types address into the form (optionally with Places Autocomplete suggestions to reduce typos).
-2. On submit, call Address Validation.
-3. If `verdict.addressComplete === true` and no replaced or unconfirmed components, save the `place_id`, the canonical `formattedAddress` for short-term cache (refreshed at most every 30 days), and `metadata.residential` into our `Address` record.
-4. If validation flags inferred or replaced components, present the corrected version to the user for confirmation before saving.
-
 ---
 
-## 5. Maps JavaScript API
+## 4. Research: Maps JavaScript API
 
 The runtime that renders the interactive map. This is what powers the nice-to-have feature of showing territories, routes, and vacant routes on a single colour-coded map (replacing Melinda's three Google MyMaps).
 
 **Reference:** [Maps JavaScript API](https://developers.google.com/maps/documentation/javascript)
 
-### 5.1 What it gives us
+### 4.1 What it gives us
 
 - Base map tiles (streets, satellite, hybrid) with pan, zoom, and rotation.
 - **Markers** for point features (route endpoints, volunteer homes).
-- **Polylines** for line features (a route as a street segment).
-- **Polygons** with fill colour and stroke for area features (a captain's territory).
-- **Data layer** for GeoJSON, which is the cleanest way to load and style many features at once.
+- **Polylines** for line features (a route as a street segment) — see [shapes and lines](https://developers.google.com/maps/documentation/javascript/shapes).
+- **Polygons** with fill colour and stroke for area features (a captain's territory) — see [drawing on the map](https://developers.google.com/maps/documentation/javascript/overlays).
+- **Data layer** for GeoJSON, which is the cleanest way to load and style many features at once — see [the Data layer](https://developers.google.com/maps/documentation/javascript/datalayer).
 - Click and hover handlers on every feature, so clicking a route can open a side panel with the assigned volunteer, bundle count, etc.
 - A built-in `LatLngBounds` helper to auto-fit the viewport to a set of features.
 
-In a Next.js app, load it via the `@vis.gl/react-google-maps` wrapper rather than hand-rolling the script loader.
+### 4.2 Drawing libraries
 
-### 5.2 Drawing and editing
+We had originally considered drag-and-drop route editing. Note: **the bundled `google.maps.drawing` Drawing Library was deprecated in August 2025 and is scheduled for removal in May 2026** (per Spatialized's [Drawing Library guide](https://spatialized.io/insights/google-maps/interactivity-and-events/drawing)). For any feature requiring users to draw or edit polygons/polylines on the map directly, the recommended replacement is **Terra Draw**, an open-source library that runs on top of the Maps JS API.
 
-We had originally considered drag-and-drop route editing. Heads up: **the bundled `google.maps.drawing` Drawing Library was deprecated in August 2025 and is scheduled for removal in May 2026** (per Spatialized's [Drawing Library guide](https://spatialized.io/insights/google-maps/interactivity-and-events/drawing)). For any feature requiring users to draw or edit polygons/polylines on the map directly, the recommended replacement is **Terra Draw**, an open-source library that runs on top of the Maps JS API.
+For Beach Metro this matters only if we build drag-and-drop route editing (see [1.6](#16-map-rendering-and-editing)). Read-only display of existing routes is unaffected.
 
-For Beach Metro this matters only if we build drag-and-drop route editing. Read-only display of existing routes is unaffected.
-
-### 5.3 Billing trigger
+### 4.3 Billing trigger
 
 Each successful map load triggers the **Dynamic Maps** SKU. User interactions (pan, zoom, layer switch) do **not** generate additional map loads. Loading the same page twice does generate two map loads.
 
 ---
 
-## 6. Maps Static API and Routes API
+## 5. Research: Maps Static API and Routes API
 
-### 6.1 Maps Static API
+### 5.1 Maps Static API
 
 Returns a PNG of a map at the requested centre/zoom/size, with optional markers and paths drawn on it. No JavaScript, no interactivity. Roughly one-third the cost of a Dynamic Maps load.
 
@@ -286,7 +396,7 @@ Useful for:
 
 **Reference:** [Maps Static API](https://developers.google.com/maps/documentation/maps-static)
 
-### 6.2 Routes API: Compute Route Matrix
+### 5.2 Routes API: Compute Route Matrix
 
 The proximity-recommendation feature wants something like: "given this new volunteer's home address, what are the closest vacant routes?" That is a many-to-many problem (one origin, N possible destinations) that Compute Route Matrix solves in one call.
 
@@ -312,7 +422,7 @@ Content-Type: application/json
 }
 ```
 
-Field mask is **required**; you have to opt in to every field you want back, which keeps both latency and cost down.
+The field mask is **required**; you have to opt in to every field you want back, which keeps both latency and cost down (see [choose fields](https://developers.google.com/maps/documentation/routes/choose_fields)).
 
 #### Response (one element per origin-destination pair)
 
@@ -337,76 +447,17 @@ Field mask is **required**; you have to opt in to every field you want back, whi
 ]
 ```
 
-Sort by `duration` or `distanceMeters` and present the top few to Melinda as "recommended vacant routes for this volunteer." `travelMode` can be `DRIVE`, `WALK`, `BICYCLE`, or `TRANSIT`; `DRIVE` matches how the captains and most volunteers get around.
-
-There are request limits documented here: number of origins times number of destinations cannot exceed 625 in a single call when using address or place ID waypoints. For Beach Metro that ceiling is comfortably high.
+`travelMode` can be `DRIVE`, `WALK`, `BICYCLE`, or `TRANSIT`. Request limits: the number of origins times the number of destinations cannot exceed 625 in a single call when using address or place ID waypoints. For Beach Metro that ceiling is comfortably high.
 
 ---
 
-## 7. What this means for our schema
+## 6. Research: Pricing
 
-Right now `GoogleMapsLocation` in the data model (`docs/schema/data_model.md`) is a placeholder. Here is what we should put in it, plus the constraints driving those decisions.
+**Caveat:** Google's pricing structure changed substantially in March 2025 and continues to evolve. Treat the numbers below as ballpark. Always re-check at [https://mapsplatform.google.com/pricing/](https://mapsplatform.google.com/pricing/) before any go-live decision. (Useful third-party breakdowns: [MapAtlas](https://mapatlas.eu/blog/google-maps-api-pricing-2026), [Nicola Lazzari](https://nicolalazzari.ai/articles/understanding-google-maps-apis-a-comprehensive-guide-to-uses-and-costs), [Woosmap](https://www.woosmap.com/blog/google-maps-api-pricing-breakdown), [Coordable](https://coordable.co/provider/google-maps-geocoding-api/).)
 
-### 7.1 The non-negotiable constraint
+### 6.1 How billing works in 2026
 
-From [Google Maps Platform Service Specific Terms](https://cloud.google.com/maps-platform/terms/maps-service-terms):
-
-> Customer may temporarily cache latitude and longitude values from the Geocoding API for up to 30 consecutive calendar days, after which Customer must delete the cached latitude and longitude values.
-
-And from the [Geocoding API policies page](https://developers.google.com/maps/documentation/geocoding/policies):
-
-> Note that the place ID, used to uniquely identify a place, is exempt from the caching restrictions. You can therefore store place ID values indefinitely.
-
-Net effect: **`place_id` is our durable identifier; lat/lng must be treated as a refreshable cache with a 30-day TTL.**
-
-### 7.2 Recommended shape
-
-```ts
-export interface GoogleMapsLocation {
-  // The Google Place ID. Storable indefinitely per Google ToS.
-  // This is our durable foreign-key target from Address.googleMapsId.
-  id: string
-  // Short-term cache fields. Must be refreshed within 30 days of fetch.
-  // Treat them as nullable and re-resolve via the Geocoding API when stale or missing.
-  cachedLatitude?: number | null
-  cachedLongitude?: number | null
-  cachedFormattedAddress?: string | null
-  cachedAt?: Timestamp | null // when these cache fields were last fetched
-  // Optional structured fields we extract from address_components at fetch time.
-  // These are derived and similarly refreshable, but practically very stable.
-  streetNumber?: string | null
-  streetName?: string | null   // the "route" component
-  locality?: string | null     // city
-  sublocality?: string | null  // neighbourhood
-  administrativeArea?: string | null // province
-  postalCode?: string | null
-  countryCode?: string | null
-  // Confidence indicator from geometry.location_type.
-  // ROOFTOP | RANGE_INTERPOLATED | GEOMETRIC_CENTER | APPROXIMATE
-  locationType?: "ROOFTOP" | "RANGE_INTERPOLATED" | "GEOMETRIC_CENTER" | "APPROXIMATE" | null
-}
-```
-
-Notes on this shape:
-
-- The `id` field is the Google `place_id` string (something like `ChIJRxcAvRO7j4AR6hm6tys8yA8`), not a UUID we generate. This is a deliberate departure from our usual UUID convention because the place_id is Google's identifier and we want to use it directly as the join key.
-- All the `cached*` fields are denormalized for query speed and to avoid hitting the API for every map render. A background refresh updates any record older than ~25 days; anything past 30 days must be evicted.
-- The structured address components (`streetNumber`, `streetName`, etc.) are extracted at the time of geocoding so we can query and display them without re-parsing the `address_components[]` array.
-- `locationType` lets the UI flag low-confidence geocodes so an admin can review.
-
-### 7.3 Knock-on effect on `Address`
-
-Our `Address.googleMapsId` is typed as `GoogleMapsLocation["id"]`. With the shape above that resolves to `string` (a Google place_id), which is exactly what we want. No change required to `Address`.
-
-One small refinement worth considering: pull `Address.type` (residential vs commercial) from `AddressValidation.metadata.residential` at validation time, rather than asking the user to pick it.
-
----
-
-## 8. Pricing snapshot
-
-**Caveat:** Google's pricing structure changed substantially in March 2025 and continues to evolve. Treat the numbers below as ballpark. Always re-check at [https://mapsplatform.google.com/pricing/](https://mapsplatform.google.com/pricing/) before any go-live decision.
-
-### 8.1 How billing works in 2026
+Per the [pricing overview](https://developers.google.com/maps/billing-and-pricing/overview) and the [March 2025 changes FAQ](https://developers.google.com/maps/billing-and-pricing/faq):
 
 - Pricing is per-SKU; each API call maps to one or more SKUs.
 - Each SKU has its own per-month free tier (no longer pooled across SKUs as it was under the old $200 credit model).
@@ -417,52 +468,33 @@ One small refinement worth considering: pull `Address.type` (residential vs comm
 - Above the free tier, per-1000-event prices step down by volume.
 - Maps Embed API and Maps SDKs for Android and iOS are completely free with unlimited usage.
 
-### 8.2 SKUs relevant to Beach Metro (USD, per 1,000 billable events)
+### 6.2 SKUs relevant to Beach Metro (USD, per 1,000 billable events)
 
-| SKU | Tier | Free per month | Price after free (cap to 100K) | Notes |
-|---|---|---|---|---|
-| Dynamic Maps (Maps JS API map load) | Essentials | 10,000 | $7.00 | Pan/zoom does not add charges |
-| Static Maps | Essentials | 10,000 | $2.00 | Cheapest map render |
-| Geocoding | Essentials | 10,000 | $5.00 | One call per address resolve |
-| Address Validation | Essentials | varies | ~$17.00 | Higher cost reflects the richer response |
-| Place Details Essentials (IDs Only) | Essentials | 10,000 | $5.00 | If we ever use Places |
-| Place Details Pro | Pro | 5,000 | $17.00 | Atmosphere fields trigger Pro/Enterprise |
-| Place Details Enterprise + Atmosphere | Enterprise | 1,000 | $20.00 | Most expensive Places tier |
-| Autocomplete Session | Essentials | 10,000 | ~$17.00 per session | Session bundles many keystrokes into one charge |
-| Routes: Compute Routes Essentials | Essentials | 10,000 | $5.00 | |
-| Routes: Compute Route Matrix Essentials | Essentials | 10,000 | $5.00 | One event per origin-destination pair |
-| Roads: Snap to Roads / Nearest Road | Pro | 5,000 | $10.00 | Not needed for Beach Metro |
+From the [pricing list](https://developers.google.com/maps/billing-and-pricing/pricing):
 
-Volume discounts kick in above 100K monthly events, dropping to roughly 20% to 70% of the cap rate at 5M+ events. Beach Metro's expected volume is far below any of those tiers.
+| SKU                                     | Tier       | Free per month | Price after free (cap to 100K) | Notes                                           |
+| --------------------------------------- | ---------- | -------------- | ------------------------------ | ----------------------------------------------- |
+| Dynamic Maps (Maps JS API map load)     | Essentials | 10,000         | $7.00                          | Pan/zoom does not add charges                   |
+| Static Maps                             | Essentials | 10,000         | $2.00                          | Cheapest map render                             |
+| Geocoding                               | Essentials | 10,000         | $5.00                          | One call per address resolve                    |
+| Address Validation                      | Essentials | varies         | ~$17.00                        | Higher cost reflects the richer response        |
+| Place Details Essentials (IDs Only)     | Essentials | 10,000         | $5.00                          | If we ever use Places                           |
+| Place Details Pro                       | Pro        | 5,000          | $17.00                         | Atmosphere fields trigger Pro/Enterprise        |
+| Place Details Enterprise + Atmosphere   | Enterprise | 1,000          | $20.00                         | Most expensive Places tier                      |
+| Autocomplete Session                    | Essentials | 10,000         | ~$17.00 per session            | Session bundles many keystrokes into one charge |
+| Routes: Compute Routes Essentials       | Essentials | 10,000         | $5.00                          |                                                 |
+| Routes: Compute Route Matrix Essentials | Essentials | 10,000         | $5.00                          | One event per origin-destination pair           |
+| Roads: Snap to Roads / Nearest Road     | Pro        | 5,000          | $10.00                         | Not needed for Beach Metro                      |
 
-### 8.3 Beach Metro back-of-envelope
-
-Assume ~200 volunteers, 4 captains, monthly turnover of a handful of people, daily admin use of the map by Melinda and Hope:
-
-- Geocoding: maybe 50 calls/month (new signups, address edits). Free tier easily.
-- Address Validation: similar. Within free or just over.
-- Maps JS dynamic map loads: assume Melinda and Hope each load the map page 5x/day, plus volunteers/captains view it a few times per cycle. Order of 500 to 2,000 loads/month. Free tier easily.
-- Compute Route Matrix: only triggered when assigning vacant routes, maybe 20 per month. Free tier easily.
-- Static Maps: if used on run sheets, scale with number of issues per month. Probably a few hundred per month. Free tier easily.
-
-Expected monthly cost: **\$0** under expected volume, assuming we keep field masks tight and do not request expensive Places SKUs. This is the whole strategy: the data set is ~200 addresses that rarely change, so a one-time geocode plus a ~30-day refresh cycle stays comfortably inside every free tier.
-
-### 8.4 Subscriptions
-
-There are now Essentials/Pro/Enterprise **subscription plans** that bundle predictable monthly call counts at a fixed price, sitting alongside pay-as-you-go. Almost certainly not worth it for Beach Metro at the volumes above; pay-as-you-go with free tiers will be cheaper and simpler. Worth revisiting only if the app ever scales beyond the current operation.
-
-**References:**
-- [Google Maps Platform pricing overview](https://developers.google.com/maps/billing-and-pricing/overview)
-- [Pricing list (global)](https://developers.google.com/maps/billing-and-pricing/pricing)
-- [Pricing changes FAQ (March 2025)](https://developers.google.com/maps/billing-and-pricing/faq)
+Volume discounts kick in above 100K monthly events, dropping to roughly 20% to 70% of the cap rate at 5M+ events. Beach Metro's expected volume is far below any of those tiers (see [1.9](#19-expected-cost-0month-at-our-volume)).
 
 ---
 
-## 9. Terms of Service, attribution, and other constraints
+## 7. Research: Terms of Service, attribution, and other constraints
 
-Beyond the 30-day caching rule covered in [Section 7](#7-what-this-means-for-our-schema), a few other ToS items to track.
+Beyond the 30-day caching rule covered in [1.3](#13-data-retention-place_id-is-durable-latlng-is-a-30-day-cache), a few other items from the [Google Maps Platform Terms of Service](https://cloud.google.com/maps-platform/terms) and [Service Specific Terms](https://cloud.google.com/maps-platform/terms/maps-service-terms) to track.
 
-### 9.1 No use with a non-Google map
+### 7.1 No use with a non-Google map
 
 From the [Service Specific Terms](https://cloud.google.com/maps-platform/terms/maps-service-terms):
 
@@ -470,72 +502,29 @@ From the [Service Specific Terms](https://cloud.google.com/maps-platform/terms/m
 
 In practice: if we display Geocoding results visually on a map, that map must be a Google Map (rendered via Maps JS or Maps Static). We cannot use Geocoding output to plot points on Leaflet or Mapbox. This is fine for us; we are using Google end-to-end.
 
-### 9.2 No scraping or bulk export
+### 7.2 No scraping or bulk export
 
 Google explicitly prohibits pre-fetching, indexing, storing, resharing, or rehosting Google Maps content outside the service. Pulling all of the Beach territory's addresses ahead of time and saving them locally is not allowed; we have to geocode at the point of use.
 
-### 9.3 Attribution
+### 7.3 Attribution
 
 When showing Google Maps content (including embedded maps and Place data), we must show the Google logo and any third-party attributions returned in the response. The Maps JS API does this automatically; for any custom display we need to render it ourselves.
 
-### 9.4 PII and privacy
+### 7.4 PII and privacy
 
-We will be sending volunteer and captain addresses to Google. This is third-party data processing and should be disclosed in our privacy policy. Beach Metro's SOW already lists PII protection as a non-functional requirement; we should make sure the privacy notice covers Google Maps as a processor.
+We will be sending volunteer addresses to Google. This is third-party data processing and should be disclosed in our privacy policy. Beach Metro's SOW already lists PII protection as a non-functional requirement; we should make sure the privacy notice covers Google Maps as a processor.
 
-### 9.5 Restricted API keys
+### 7.5 Restricted API keys
 
-All API keys should be restricted both by referrer (frontend keys, restricted to our domain) and by enabled API (backend keys, restricted to only the APIs we actually use). Quotas should also be capped per-day in the Cloud Console to prevent runaway billing from key leakage.
-
-**Reference:** [API Security Best Practices](https://developers.google.com/maps/api-security-best-practices)
+Google's [API security best practices](https://developers.google.com/maps/api-security-best-practices) recommend restricting keys by referrer and by enabled API, and capping quotas per-day in the Cloud Console. (Our stance: [1.8](#18-api-keys-and-cost-guardrails).)
 
 ---
 
-## 10. Open questions and follow-ups
+## 8. Open questions and follow-ups
 
 1. **Refresh strategy for cached lat/lng.** Do we refresh lazily (on read, if older than 25 days) or proactively (a nightly batch)? Lazy is simpler; proactive is more predictable. Given the data set is ~200 stable addresses, either is cheap.
 2. **Do we need Places Autocomplete?** It improves data quality at input but adds a billed SKU. Decision could go either way; Melinda probably enters most addresses, and she is unlikely to make many typos for streets she knows.
 3. **Route endpoint storage.** Routes are described by intersections. Geocoding intersections sometimes returns `RANGE_INTERPOLATED` rather than `ROOFTOP`. Acceptable for display, but worth flagging in the UI when route endpoints are interpolated.
-4. **Drawing Library deprecation.** If we build drag-and-drop route editing, plan to integrate Terra Draw rather than `google.maps.drawing`.
-5. **Confirm Beach Metro is okay with Google as a sub-processor.** Susan and Melinda may want a line in the privacy policy and/or volunteer-facing comms about this.
+4. **Drawing Library deprecation.** If we build drag-and-drop route editing, plan to integrate Terra Draw rather than `google.maps.drawing` ([4.2](#42-drawing-libraries)).
+5. **Confirm Beach Metro is okay with Google as a sub-processor.** Susan and Melinda may want a line in the privacy policy and/or volunteer-facing comms about this ([7.4](#74-pii-and-privacy)).
 6. **Map embedding option.** For purely read-only maps (e.g. a public "see our coverage area" page), the Maps **Embed** API is completely free with unlimited usage. Worth considering for any non-admin views.
-
----
-
-## 11. Sources
-
-Primary Google documentation:
-
-- [Google Maps Platform overview](https://mapsplatform.google.com/)
-- [APIs by platform](https://developers.google.com/maps/apis-by-platform)
-- [Geocoding API request and response](https://developers.google.com/maps/documentation/geocoding/requests-geocoding)
-- [Geocoding API policies](https://developers.google.com/maps/documentation/geocoding/policies)
-- [Reverse geocoding](https://developers.google.com/maps/documentation/geocoding/requests-reverse-geocoding)
-- [Address Validation API overview](https://developers.google.com/maps/documentation/address-validation/overview)
-- [Address Validation: validateAddress reference](https://developers.google.com/maps/documentation/address-validation/reference/rest/v1/TopLevel/validateAddress)
-- [Address Validation: understand response](https://developers.google.com/maps/documentation/address-validation/understand-response)
-- [Maps JavaScript API](https://developers.google.com/maps/documentation/javascript)
-- [Maps JavaScript: drawing on the map](https://developers.google.com/maps/documentation/javascript/overlays)
-- [Maps JavaScript: shapes and lines](https://developers.google.com/maps/documentation/javascript/shapes)
-- [Maps JavaScript: Data layer (GeoJSON)](https://developers.google.com/maps/documentation/javascript/datalayer)
-- [Maps Static API](https://developers.google.com/maps/documentation/maps-static)
-- [Routes API: Compute Route Matrix](https://developers.google.com/maps/documentation/routes/compute_route_matrix)
-- [Routes API: choose fields (field masks)](https://developers.google.com/maps/documentation/routes/choose_fields)
-- [Places API (New) overview](https://developers.google.com/maps/documentation/places/web-service/op-overview)
-- [Places API: choose fields](https://developers.google.com/maps/documentation/places/web-service/choose-fields)
-
-Billing and Terms of Service:
-
-- [Pricing overview](https://developers.google.com/maps/billing-and-pricing/overview)
-- [Pricing list](https://mapsplatform.google.com/pricing/)
-- [March 2025 billing changes FAQ](https://developers.google.com/maps/billing-and-pricing/faq)
-- [Google Maps Platform Terms of Service](https://cloud.google.com/maps-platform/terms)
-- [Maps Platform Service Specific Terms](https://cloud.google.com/maps-platform/terms/maps-service-terms)
-- [API Security Best Practices](https://developers.google.com/maps/api-security-best-practices)
-
-Third-party context (pricing comparisons, deprecation notes):
-
-- [MapAtlas: Google Maps API Pricing 2026](https://mapatlas.eu/blog/google-maps-api-pricing-2026)
-- [Nicola Lazzari: Google Maps APIs SKU breakdown 2026](https://nicolalazzari.ai/articles/understanding-google-maps-apis-a-comprehensive-guide-to-uses-and-costs)
-- [Woosmap: Pricing breakdown 2026](https://www.woosmap.com/blog/google-maps-api-pricing-breakdown)
-- [Spatialized: Drawing Library deprecation and migration to Terra Draw](https://spatialized.io/insights/google-maps/interactivity-and-events/drawing)
-- [Coordable: Geocoding API pricing and rate limits](https://coordable.co/provider/google-maps-geocoding-api/)

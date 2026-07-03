@@ -35,6 +35,7 @@ accounts-manager distinction is a UI/navigation concern only, not enforced at th
 API. (If that changes, role checks slot in as a `403` gate; out of scope now.)
 
 **Response envelope.**
+
 - Success: `{ "data": <payload> }` (lists: `{ "data": T[], "nextCursor"?: string }`).
 - Error: `{ "error": { "code": string, "message": string, "details"?: unknown } }`.
 
@@ -65,77 +66,90 @@ through its create/update; there is no separate notes resource or entity.
 
 ### Volunteers — `/api/volunteers`
 
-| Method | Path | Purpose | Flow |
-|---|---|---|---|
-| GET | `/api/volunteers` | List. Filters: `status` (active/on-vacation/retired), `territoryId`, `hasRoute`, `needsAttention`, `q` | people 4b |
-| POST | `/api/volunteers` | Create (validates address, creates `Address` + `GoogleMapsLocation`) | 4a |
-| GET | `/api/volunteers/{id}` | Detail (includes derived status, routes carried, territory) | 4c |
-| PATCH | `/api/volunteers/{id}` | Edit fields / note / territory assignment | 4d |
-| POST | `/api/volunteers/{id}/vacation` | Set or clear the vacation window (suspends/auto-resumes routes) | 4e |
-| POST | `/api/volunteers/{id}/retire` | Soft retire (`retiredAt`); detaches routes → they become vacant | 4f |
+| Method | Path                            | Purpose                                                                                                | Flow      |
+| ------ | ------------------------------- | ------------------------------------------------------------------------------------------------------ | --------- |
+| GET    | `/api/volunteers`               | List. Filters: `status` (active/on-vacation/retired), `territoryId`, `hasRoute`, `needsAttention`, `q` | people 4b |
+| POST   | `/api/volunteers`               | Create (validates address, creates `Address` + `GoogleMapsLocation`)                                   | 4a        |
+| GET    | `/api/volunteers/{id}`          | Detail (includes derived status, routes carried, territory)                                            | 4c        |
+| PATCH  | `/api/volunteers/{id}`          | Edit fields / note / territory assignment                                                              | 4d        |
+| POST   | `/api/volunteers/{id}/vacation` | Set or clear the vacation window (suspends/auto-resumes routes)                                        | 4e        |
+| POST   | `/api/volunteers/{id}/retire`   | Soft retire (`retiredAt`); detaches routes → they become vacant                                        | 4f        |
 
 No `DELETE` — volunteers are soft-retired, never deleted.
 
 ```ts
 // POST /api/volunteers
 type CreateVolunteer = {
-  firstName: string; lastName: string; email: string; phone: string
-  address: AddressInput            // raw address OR { placeId } from autocomplete
-  captainTerritoryId?: string | null
-  startDate: string; endDate?: string | null
-  note?: string
-}
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: AddressInput; // raw address OR { placeId } from autocomplete
+  captainTerritoryId?: string | null;
+  startDate: string;
+  endDate?: string | null;
+  note?: string;
+};
 // 201 -> { data: Volunteer }
 
 // POST /api/volunteers/{id}/vacation
-type SetVacation = { vacationStart: string; vacationEnd: string } | { clear: true }
+type SetVacation =
+  | { vacationStart: string; vacationEnd: string }
+  | { clear: true };
 
 // AddressInput is validated via /api/addresses/validate (see §6) before persistence.
 type AddressInput =
-  | { addressLines: string[]; locality?: string; administrativeArea?: string; postalCode?: string; regionCode?: "CA" }
-  | { placeId: string }
+  | {
+      addressLines: string[];
+      locality?: string;
+      administrativeArea?: string;
+      postalCode?: string;
+      regionCode?: "CA";
+    }
+  | { placeId: string };
 ```
 
 ### Captains — `/api/captains`
 
-| Method | Path | Purpose | Flow |
-|---|---|---|---|
-| GET | `/api/captains` | List. Filters: `status`, `q` | people 4h |
-| POST | `/api/captains` | Create (no address; pay config required; **also creates the 1:1 empty territory**) | 4g |
-| GET | `/api/captains/{id}` | Detail (includes territory) | 4i |
-| PATCH | `/api/captains/{id}` | Edit fields / pay config (type, rate, cadence) / note | 4j |
-| POST | `/api/captains/{id}/retire` | Soft retire; leaves the territory captain-less and prompts reassignment | 4k |
+| Method | Path                        | Purpose                                                                            | Flow      |
+| ------ | --------------------------- | ---------------------------------------------------------------------------------- | --------- |
+| GET    | `/api/captains`             | List. Filters: `status`, `q`                                                       | people 4h |
+| POST   | `/api/captains`             | Create (no address; pay config required; **also creates the 1:1 empty territory**) | 4g        |
+| GET    | `/api/captains/{id}`        | Detail (includes territory)                                                        | 4i        |
+| PATCH  | `/api/captains/{id}`        | Edit fields / pay config (type, rate, cadence) / note                              | 4j        |
+| POST   | `/api/captains/{id}/retire` | Soft retire; leaves the territory captain-less and prompts reassignment            | 4k        |
 
 ```ts
 // POST /api/captains
 type CreateCaptain = {
-  firstName: string; lastName: string; email: string; phone: string
-  payType: "bundle" | "paper" | "drop"
-  payRate: number            // 0 is valid (temp/substitute captains, donate-back)
-  payCadence: "weekly" | "biweekly"
-  startDate: string; endDate?: string | null
-  note?: string
-}
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  payType: "bundle" | "paper" | "drop";
+  payRate: number; // 0 is valid (donate-back arrangements)
+  payCadence: "weekly" | "biweekly";
+  startDate: string;
+  endDate?: string | null;
+  note?: string;
+};
 // 201 -> { data: { captain: Captain, territory: CaptainTerritory } }
 ```
-
-A **substitute/temporary captain** uses this same endpoint with `payRate: 0`; no
-special type. See the finance substitution action (§4).
 
 ### Territories — `/api/territories`
 
 Territories are created implicitly with their captain. This resource manages the
 two memberships (volunteers, commercial drops) and the map colour.
 
-| Method | Path | Purpose | Flow |
-|---|---|---|---|
-| GET | `/api/territories` | List (filters: `hasCaptain`, `q`) | people |
-| GET | `/api/territories/{id}` | Detail (captain, volunteers, commercial drops) | people |
-| PATCH | `/api/territories/{id}` | Edit colour (and reassign captain) | people |
-| POST | `/api/territories/{id}/volunteers` | Assign a volunteer (`{ volunteerId }`) | 4l-style |
-| DELETE | `/api/territories/{id}/volunteers/{volunteerId}` | Unassign a volunteer | |
-| POST | `/api/territories/{id}/commercial-drops` | Add a commercial drop (`{ address }`, validated) | 4l |
-| DELETE | `/api/territories/{id}/commercial-drops/{addressId}` | Remove a commercial drop | 4l |
+| Method | Path                                                 | Purpose                                          | Flow     |
+| ------ | ---------------------------------------------------- | ------------------------------------------------ | -------- |
+| GET    | `/api/territories`                                   | List (filters: `hasCaptain`, `q`)                | people   |
+| GET    | `/api/territories/{id}`                              | Detail (captain, volunteers, commercial drops)   | people   |
+| PATCH  | `/api/territories/{id}`                              | Edit colour (and reassign captain)               | people   |
+| POST   | `/api/territories/{id}/volunteers`                   | Assign a volunteer (`{ volunteerId }`)           | 4l-style |
+| DELETE | `/api/territories/{id}/volunteers/{volunteerId}`     | Unassign a volunteer                             |          |
+| POST   | `/api/territories/{id}/commercial-drops`             | Add a commercial drop (`{ address }`, validated) | 4l       |
+| DELETE | `/api/territories/{id}/commercial-drops/{addressId}` | Remove a commercial drop                         | 4l       |
 
 ---
 
@@ -143,17 +157,17 @@ two memberships (volunteers, commercial drops) and the map colour.
 
 ### Routes — `/api/routes`
 
-| Method | Path | Purpose | Flow |
-|---|---|---|---|
-| GET | `/api/routes` | List. Filters: `vacancy` (vacant/assigned), `territoryId`, `needsAttention`, `side`, `q` | route 4b |
-| POST | `/api/routes` | Create (start/end address, street, side; volunteer optional) | 4a |
-| GET | `/api/routes/{id}` | Detail (derived lifecycle + suspended flag, house count, counts) | 4c |
-| PATCH | `/api/routes/{id}` | Edit definition (addresses, street, side, `houseCountOverride`, note) | 4d |
-| DELETE | `/api/routes/{id}` | **Soft delete** (sets `deletedAt`, hidden from all views; the row is retained so past `RouteDelivery` records still resolve; addresses reusable) | route flow |
-| POST | `/api/routes/{id}/assign` | Assign a volunteer (`{ volunteerId }`) → Active-Assigned | 4e |
-| POST | `/api/routes/{id}/unassign` | Unassign → Active-Vacant | 4f |
-| POST | `/api/routes/{id}/reassign` | Swap carrier (`{ volunteerId }`) | 4f |
-| GET | `/api/routes/nearest-vacant` | Rank vacant routes by proximity to a volunteer home (`?volunteerId=` or `?placeId=`) — Routes Matrix | PRD Flow 2 |
+| Method | Path                         | Purpose                                                                                                                                          | Flow       |
+| ------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| GET    | `/api/routes`                | List. Filters: `vacancy` (vacant/assigned), `territoryId`, `needsAttention`, `side`, `q`                                                         | route 4b   |
+| POST   | `/api/routes`                | Create (start/end address, street, side; volunteer optional)                                                                                     | 4a         |
+| GET    | `/api/routes/{id}`           | Detail (derived lifecycle + suspended flag, house count, counts)                                                                                 | 4c         |
+| PATCH  | `/api/routes/{id}`           | Edit definition (addresses, street, side, `houseCountOverride`, note)                                                                            | 4d         |
+| DELETE | `/api/routes/{id}`           | **Soft delete** (sets `deletedAt`, hidden from all views; the row is retained so past `RouteDelivery` records still resolve; addresses reusable) | route flow |
+| POST   | `/api/routes/{id}/assign`    | Assign a volunteer (`{ volunteerId }`) → Active-Assigned                                                                                         | 4e         |
+| POST   | `/api/routes/{id}/unassign`  | Unassign → Active-Vacant                                                                                                                         | 4f         |
+| POST   | `/api/routes/{id}/reassign`  | Swap carrier (`{ volunteerId }`)                                                                                                                 | 4f         |
+| GET    | `/api/routes/nearest-vacant` | Rank vacant routes by proximity to a volunteer home (`?volunteerId=` or `?placeId=`) — Routes Matrix                                             | PRD Flow 2 |
 
 Splitting/extending is manual (PATCH the geography, then POST a new route) — no
 dedicated endpoint, per the route flow. House count is auto-calculated; a manual
@@ -171,59 +185,61 @@ CHANGE`: recompute trigger may be a background job instead.
 
 ### Financial years — `/api/financial-years`
 
-| Method | Path | Purpose | Flow |
-|---|---|---|---|
-| GET | `/api/financial-years` | List (filter: `archived`) | finance 4a |
-| POST | `/api/financial-years` | Create (names the year; snapshots active-captain columns) | 4a |
-| GET | `/api/financial-years/{id}` | Detail (the table: issues + payouts grid) | finance |
-| POST | `/api/financial-years/{id}/archive` | Archive (stays fully accessible) | 4i |
-| GET | `/api/financial-years/{id}/export?format=csv` | Read-only CSV export of the table or a filtered view | 4h |
+| Method | Path                                          | Purpose                                                   | Flow       |
+| ------ | --------------------------------------------- | --------------------------------------------------------- | ---------- |
+| GET    | `/api/financial-years`                        | List (filter: `archived`)                                 | finance 4a |
+| POST   | `/api/financial-years`                        | Create (names the year; snapshots active-captain columns) | 4a         |
+| GET    | `/api/financial-years/{id}`                   | Detail (the table: issues + payouts grid)                 | finance    |
+| POST   | `/api/financial-years/{id}/archive`           | Archive (stays fully accessible)                          | 4i         |
+| GET    | `/api/financial-years/{id}/export?format=csv` | Read-only CSV export of the table or a filtered view      | 4h         |
 
 ### Issues — `/api/issues`
 
-| Method | Path | Purpose | Flow |
-|---|---|---|---|
-| GET | `/api/financial-years/{yearId}/issues` | List rows | finance 4a |
-| POST | `/api/financial-years/{yearId}/issues` | Create one or many **Draft** issues (batch via array body — lay out the year) | 4b |
-| GET | `/api/issues/{id}` | Detail | |
-| PATCH | `/api/issues/{id}` | Edit name / date | 4b |
-| POST | `/api/issues/{id}/open` | Draft → Open; auto-populate payouts + delivery rows; start live calc | 4c / delivery 4a |
-| POST | `/api/issues/{id}/close` | Open → Closed; **lock payout values + delivery actuals together**; payouts default unpaid | 4f / delivery 4e |
-| POST | `/api/issues/{id}/reopen` | Closed → Open (guarded admin correction) | finance 3a |
+| Method | Path                                   | Purpose                                                                                                                                           | Flow             |
+| ------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| GET    | `/api/financial-years/{yearId}/issues` | List rows                                                                                                                                         | finance 4a       |
+| POST   | `/api/financial-years/{yearId}/issues` | Create one or many issues (batch via array body — lay out the year). Created **Open**: payouts + delivery rows auto-populate and live calc starts | 4b / delivery 4a |
+| GET    | `/api/issues/{id}`                     | Detail                                                                                                                                            |                  |
+| PATCH  | `/api/issues/{id}`                     | Edit name / date                                                                                                                                  | 4b               |
+| POST   | `/api/issues/{id}/close`               | Open → Closed; **lock payout values + delivery actuals together**; payouts default unpaid                                                         | 4e / delivery 4c |
+| POST   | `/api/issues/{id}/reopen`              | Closed → Open (guarded admin correction)                                                                                                          | finance 3a       |
 
 ```ts
 // POST /api/financial-years/{yearId}/issues
-type CreateIssues = { issues: Array<{ name: string; date: string }> } // 1..n, created Draft
+type CreateIssues = { issues: Array<{ name: string; date: string }> }; // 1..n, created Open
 ```
+
+Creating an issue never closes an existing one — multiple issues can be Open at
+the same time, and closing is always an explicit `close` call.
 
 ### Captain payouts — `/api/payouts`
 
-| Method | Path | Purpose | Flow |
-|---|---|---|---|
-| GET | `/api/issues/{id}/payouts` | List the issue's payout cells | finance 4c |
-| GET | `/api/payouts/{id}` | Detail + calculation breakdown | 4c |
-| POST | `/api/payouts/{id}/override` | Manual override (`{ amount, reason }`) → Overridden | 4d |
-| POST | `/api/payouts/{id}/clear-override` | Revert to auto-calculated | 4d |
-| POST | `/api/payouts/{id}/mark-paid` | Mark paid (**only if the issue is Closed**, else `409`) | 4e/4g |
-| POST | `/api/payouts/{id}/unmark-paid` | Clear paid marker | 4e/4g |
-| POST | `/api/payouts/{id}/substitute` | Finance-only substitution (see below) | 4h |
+| Method | Path                               | Purpose                                                                            | Flow       |
+| ------ | ---------------------------------- | ---------------------------------------------------------------------------------- | ---------- |
+| GET    | `/api/issues/{id}/payouts`         | List the issue's payout cells                                                      | finance 4c |
+| GET    | `/api/payouts/{id}`                | Detail + calculation breakdown                                                     | 4c         |
+| POST   | `/api/payouts/{id}/override`       | Manual override (`{ amount, reason }`) → Overridden                                | 4d         |
+| POST   | `/api/payouts/{id}/clear-override` | Revert to auto-calculated                                                          | 4d         |
+| POST   | `/api/payouts/{id}/mark-paid`      | Mark paid (**only if the issue is Closed**, else `409`); locks the cell from edits | 4f         |
+| POST   | `/api/payouts/{id}/unmark-paid`    | Clear paid marker (cell becomes editable again)                                    | 4f         |
+| POST   | `/api/payouts/{id}/transfer`       | Reallocate this cell's amount to another captain (see below)                       | 4g         |
 
-There is no create/delete for payouts — they are created by opening an issue and
-removed only with the issue.
+There are no create/delete endpoints for payouts — they are created with their
+issue and removed only with the issue.
 
 ```ts
 // POST /api/payouts/{id}/override
-type OverridePayout = { amount: number; reason: string } // reason required; no prior-value audit
+type OverridePayout = { amount: number; reason: string }; // reason required; no prior-value audit
 
-// POST /api/payouts/{id}/substitute
-// Redirects this issue's payout to a substitute and zeroes the original for the issue.
-type SubstitutePayout =
-  | { substituteCaptainId: string }   // an existing captain
-  | { newCaptain: CreateCaptain }     // create a temp captain (zero rate) on the spot
+// POST /api/payouts/{id}/transfer
+// Moves this issue's effective amount to another captain's cell and zeroes this one
+// (finance flow §4g). SUBJECT TO CHANGE: exact semantics of how the recipient cell
+// records the moved amount.
+type TransferPayout = { toCaptainId: string };
 ```
 
-Override / mark-paid / substitute all reject (`409`) when the issue state forbids
-them (e.g. editing a closed issue's calculation, or paying on an open issue).
+Override / mark-paid / transfer all reject (`409`) when the payout state forbids
+them (e.g. editing a paid cell, or paying on an open issue).
 
 ---
 
@@ -231,29 +247,27 @@ them (e.g. editing a closed issue's calculation, or paying on an open issue).
 
 ### Route deliveries — `/api/deliveries`
 
-| Method | Path | Purpose | Flow |
-|---|---|---|---|
-| GET | `/api/issues/{id}/deliveries` | List the issue's per-route delivery rows | delivery 4b |
-| GET | `/api/deliveries/{id}` | Detail | |
-| PATCH | `/api/deliveries/{id}` | Edit actuals (paper/bundle/drop/missed) + substitute deliverer | 4b/4c |
+| Method | Path                          | Purpose                                  | Flow        |
+| ------ | ----------------------------- | ---------------------------------------- | ----------- |
+| GET    | `/api/issues/{id}/deliveries` | List the issue's per-route delivery rows | delivery 4a |
+| GET    | `/api/deliveries/{id}`        | Detail                                   |             |
+| PATCH  | `/api/deliveries/{id}`        | Edit actuals (paper/bundle/drop/missed)  | 4a          |
 
-Rows are created automatically when the issue is opened (§4 `open`), for routes that
-are carried (Active-Assigned, volunteer not on vacation); vacant/suspended routes are
+Rows are created automatically when the issue is created (§4), for routes that are
+carried (Active-Assigned, volunteer not on vacation); vacant/suspended routes are
 skipped. Rows are **editable only while the issue is Open** — PATCH on a closed
 issue's delivery returns `409`. No create/delete endpoint.
 
-| GET | `/api/issues/{id}/papers-to-order` | Derived total papers to order for the issue (feeds reporting) | delivery 4d |
+| GET | `/api/issues/{id}/papers-to-order` | Derived total papers to order for the issue (feeds reporting) | delivery 4b |
 
 ```ts
 // PATCH /api/deliveries/{id}
 type UpdateDelivery = Partial<{
-  paperCount: number          // changing this re-derives bundleCount unless bundles set manually
-  bundleCount: number
-  bundles: { papers: number }[]
-  dropCount: number
-  missedCount: number         // in the unit matching the route's captain pay type
-  substituteDeliverer: string | null
-}>
+  paperCount: number; // changing this re-derives bundleCount unless bundleCount was entered manually
+  bundleCount: number; // the greedy split itself is computed, not persisted, in MVP
+  dropCount: number;
+  missedCount: number; // in the unit matching the route's captain pay type
+}>;
 ```
 
 ---
@@ -264,23 +278,23 @@ Server-side wrappers over Google Maps so keys stay off the client and results ar
 persisted under our caching rules (durable `place_id`; lat/lng on a 30-day refresh).
 See the [Google research doc](../integrations/google_maps_research.md).
 
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/api/addresses/validate` | Address Validation (Canada). Returns verdict + standardized address + `placeId` + `residential`/`commercial` metadata |
-| POST | `/api/addresses/geocode` | Geocoding. Resolve to `placeId` + cached coords + parsed components |
+| Method | Path                      | Purpose                                                                                                               |
+| ------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/api/addresses/validate` | Address Validation (Canada). Returns verdict + standardized address + `placeId` + `residential`/`commercial` metadata |
+| POST   | `/api/addresses/geocode`  | Geocoding. Resolve to `placeId` + cached coords + parsed components                                                   |
 
 ```ts
 // POST /api/addresses/validate
-type ValidateAddress = { address: AddressInput }
+type ValidateAddress = { address: AddressInput };
 // -> { data: { addressComplete: boolean, formattedAddress: string, placeId: string,
 //              type: "residential" | "commercial", needsConfirmation: boolean,
 //              suggested?: AddressInput } }
 ```
 
-These back the address fields in the volunteer/captain/commercial-drop forms: the
-client validates, the user confirms any corrections, then the create/assign call
-persists the resulting `Address` + `GoogleMapsLocation`. A scheduled refresh job
-re-resolves `cached*` coordinates older than ~25 days and evicts anything past 30.
+These back the address fields in the volunteer/commercial-drop forms: the client
+validates, the user confirms any corrections, then the create/assign call persists
+the resulting `Address` + `GoogleMapsLocation`. A scheduled refresh job re-resolves
+`cached*` coordinates older than ~25 days and evicts anything past 30.
 
 ---
 
@@ -294,8 +308,8 @@ re-resolves `cached*` coordinates older than ~25 days and evicts anything past 3
   soft-retired, finance/delivery rows are lifecycle-bound.
 - **Custom actions:** volunteer `vacation`/`retire`; captain `retire`; route
   `assign`/`unassign`/`reassign`/`refresh-house-count` + `nearest-vacant`; year
-  `archive`/`export`; issue `open`/`close`/`reopen`; payout
-  `override`/`clear-override`/`mark-paid`/`unmark-paid`/`substitute`; address
+  `archive`/`export`; issue `close`/`reopen`; payout
+  `override`/`clear-override`/`mark-paid`/`unmark-paid`/`transfer`; address
   `validate`/`geocode`.
 
 ---
@@ -303,8 +317,9 @@ re-resolves `cached*` coordinates older than ~25 days and evicts anything past 3
 ## 8. Open questions
 
 - **Pagination style.** Cursor (recommended) vs page/offset — pick one and apply uniformly.
-- **Batch issue creation.** Array body vs a dedicated `:batchCreate`; and whether
-  opening is always manual per issue (it is, per the finance decision).
+- **Batch issue creation.** Array body vs a dedicated `:batchCreate`.
+- **Transfer semantics.** How the recipient cell records a transferred amount
+  (override-style entry vs a dedicated field) — SUBJECT TO CHANGE.
 - **House-count recompute.** A manual endpoint vs a background job (Toronto Open Data
   ingestion) — tied to the infra spec's open question.
 - **Idempotency.** Whether `POST` creates accept an `Idempotency-Key` header.
