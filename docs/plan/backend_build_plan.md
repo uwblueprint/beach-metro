@@ -81,8 +81,8 @@ Each handler: Zod validation → `lib/services/` function → Supabase (service 
 
 The state transitions and invariants that aren't plain CRUD (in `lib/services/`):
 
-- **Issue lifecycle:** `open` (auto-populate payouts + delivery rows), `close` (lock payout values + delivery actuals together; default payouts unpaid), `reopen`. Writes to a closed issue's payouts/deliveries rejected (`409`).
-- **Payouts:** live calculation from pay config + delivery rollup (bundle auto-calc, missed deduction in the captain's pay unit); `override`/`clear-override` (reason kept, no prior-value audit); `mark-paid`/`unmark-paid` (only when closed); `substitute` (redirect payout, zero original).
+- **Issue lifecycle:** issues are created Open (creation auto-populates payouts + delivery rows and starts live calc); `close` (lock payout values + delivery actuals together; default payouts unpaid), `reopen`. Writes to a closed issue's deliveries rejected (`409`); payout edits are gated by paid status, not just issue state.
+- **Payouts:** live calculation from pay config + delivery rollup (bundle auto-calc, missed deduction in the captain's pay unit); `override`/`clear-override` (reason kept, no prior-value audit; only while unpaid); `mark-paid`/`unmark-paid` (only when closed; paid locks the cell); `transfer` (reallocate a cell's amount to another captain, zero original).
 - **Routes:** `assign`/`unassign`/`reassign`; suspended-as-derived-flag (assigned volunteer on vacation); hard `delete`.
 - **People:** volunteer `vacation` (suspends routes, auto-resume) and `retire` (detaches routes → vacant); captain `retire` (territory becomes captain-less).
 
@@ -117,7 +117,7 @@ Minimal, unstyled-beyond-shadcn screens so the backend is demonstrably usable en
 ## Phase 7 — Tests & hardening
 
 - Vitest endpoint/integration tests across the handlers and services (the transition invariants especially).
-- A few Playwright smoke flows (log in → create a volunteer → assign a route; open an issue → record a delivery → see the payout).
+- A few Playwright smoke flows (log in → create a volunteer → assign a route; create an issue → record a delivery → see the payout).
 - Confirm CI runs the full suite and coverage holds.
 
 **Done when:** the suite runs green in CI and the core flows have smoke coverage.
