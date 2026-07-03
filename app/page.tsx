@@ -7,7 +7,9 @@ export default function Home() {
       <p className="text-muted-foreground max-w-md text-lg">
         Internal distribution management. Backend scaffold is up; flows are on the way.
       </p>
-      <Button disabled>Coming soon</Button>
+      <form action="/auth/signout" method="post">
+        <Button type="submit">Sign out</Button>
+      </form>
     </main>
   );
 }
