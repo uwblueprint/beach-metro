@@ -180,8 +180,9 @@ requires a guarded admin reopen (which also reopens the finance side).
 Bundle auto-calc (paper count to bundles):
 
 - Greedy: take 50s first, then 25s, then the remainder as a final tied bundle.
-  Bundle paper counts are stored individually and never assumed to be 25 or 50.
-  Manual entry of bundle counts is available as a fallback. This is the same
+  Bundle sizes are computed individually and never assumed to be 25 or 50; MVP
+  persists the resulting bundle count rather than each bundle's paper count.
+  Manual entry of the bundle count is available as a fallback. This is the same
   auto-calc as the finance flow (`finances_flow.md` section 5); it lives on the
   delivery input and the finance payout reads the result.
 
