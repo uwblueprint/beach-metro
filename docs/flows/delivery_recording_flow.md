@@ -11,8 +11,8 @@ delivery actuals (paper, bundle, drop, and missed counts), and the derived
 
 Out of scope here and owned by other flows:
 
-- Payout calculation, overrides, paid/unpaid, yearly tables, and captain pay
-  substitution: finance flow. Delivery actuals are recorded here and
+- Payout calculation, overrides, paid/unpaid, yearly tables, and payout
+  transfers: finance flow. Delivery actuals are recorded here and
   consumed there.
 - Route, territory, and volunteer definitions, and the standing house/paper/bundle
   counts per route: route management and people management. Read
