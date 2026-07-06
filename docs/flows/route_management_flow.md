@@ -56,6 +56,8 @@ Routes are deleted (removed from the system entirely) rather than retired. There
 
 **Assigned volunteer end date passes (attention flag, not a state).** When the assigned volunteer's end date passes but they have not been retired, the route does not become vacant. It stays Active-Assigned and the system raises an explicit "needs attention" flag in the UI, prompting Melinda to unassign or reassign it. This is a derived indicator, not a separate lifecycle state. (Retiring the volunteer in the people management flow is different: it detaches them and the route becomes Vacant.) See 4f.
 
+**Suspended (derived flag, not a state).** When the assigned volunteer is On vacation (people management flow), the route is suspended: it stays Active-Assigned but is suppressed for the affected issues — not delivered, not reassigned, and its labels are suppressed. Suspension is a derived indicator computed from the assigned volunteer's On-vacation window, not a separate lifecycle state, and it clears automatically when the vacation window ends. During suspension the delivery flow skips the route (no delivery row; it contributes nothing to the issue). See the people management flow (volunteer vacation) and the delivery recording flow.
+
 ### 3b. House count state
 
 ```mermaid

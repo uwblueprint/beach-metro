@@ -1,4 +1,4 @@
-# People Management Flow (v1)
+# People Management Flow
 
 A prose-and-diagram walkthrough of how the distribution manager manages the people in the system: volunteer carriers and captains. Diagrams are Mermaid so they render in Notion, GitHub, and most markdown viewers, and stay editable as text. This reuses the conventions established by `route_management_flow.md` (BM-12); read that first for the diagram legend rationale.
 
@@ -283,7 +283,7 @@ Flags (not state changes): a person whose end date has passed while still active
 - **Captain-less territory.** Allowed as a transient state after a captain retires. The territory keeps its volunteers and commercial drops until a new captain is assigned.
 - **Unassigned volunteer.** A volunteer can have no captain, and therefore be in no territory, until the manager assigns one.
 - **Vacation.** The one retained date automation: a vacation window auto-suspends the route and auto-resumes after.
-- **Captain vacation and substitution (planned).** Not built yet. Some form of captain vacation, plus a captain substitution flow where a temporary stand-in covers the territory's drops while the captain is away, will be added later.
+- **Captain vacation and substitution (decided).** Captains have no vacation state — status stays Active / Retired. A captain being away is handled by substitution, which is finance-only: per issue, the payout is reassigned to a substitute (an existing captain or a temporary one created here with a zero rate and empty territory) and the original is zeroed for that issue. Routes and territory are not changed by a substitution. See the finance flow (captain substitution).
 - **A person who is both volunteer and captain.** Modeled as two separate records; there is no shared person entity in MVP.
 - **No unscoped messaging.** The confirmations, the reassignment prompt, and the "needs attention" flag in these flows are explicit, scoped indicators requested here. Per the product rule, do not add other notifications, badges, or banners unless a spec calls for one.
 - **Substitution and volunteer credit.** Volunteer-level substitution (someone other than the assigned carrier delivers a route) is captured on the delivery record (finances and delivery flow), not on the volunteer. The per-volunteer advertising credit is post-MVP and not part of this flow.

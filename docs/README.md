@@ -1,18 +1,30 @@
 # docs
 
-Source-of-truth design artifacts for Beach Metro: the PRD and the per-area flow
-specs. Each flow spec follows the prose + Mermaid format established by the route
-management flow (`route_management_flow.md`). Reuse that format for new specs.
+Source-of-truth design artifacts for Beach Metro, organized by document kind.
+
+## Layout
+
+```
+docs/
+  product/       — the PRD
+  flows/         — per-area flow specs (state machines + walkthroughs)
+  schema/        — the consolidated data model (source-of-truth backend shapes)
+  api/           — the REST endpoint / CRUD spec
+  integrations/  — external-service research and integration plans (Google Maps)
+  infra/         — infrastructure / tech-stack spec
+```
 
 ## Documents
 
-| Doc                            | Area                                      | Linear | Status       | Where it lives                             |
-| ------------------------------ | ----------------------------------------- | ------ | ------------ | ------------------------------------------ |
-| `beach_metro_PRD.md`           | Product requirements                      | —      | Drafted      | `docs/` on branch `prd-md`                 |
-| `route_management_flow.md`     | Route management                          | BM-12  | Under review | `docs/` on branch `route-management-md`    |
-| `people_management_flow_v1.md` | People management (volunteers + captains) | BM-24  | Draft        | `docs/` on branch `people-management-md`   |
-| `finances_flow.md`             | Finances (issues, deliveries, payouts)    | BM-25  | Skeleton     | `docs/` on branch `finances-md`            |
-| `infrastructure_spec.md`       | Infrastructure / tech stack               | —      | Draft        | `docs/` on branch `infrastructure-spec-md` |
-
-Until these branches merge into `main`, each doc lives in `docs/` on the branch
-noted above. As more specs are written, add a row here.
+| Doc                                                                            | Area                                        | Linear     | Status  |
+| ------------------------------------------------------------------------------ | ------------------------------------------- | ---------- | ------- |
+| [`product/beach_metro_PRD.md`](product/beach_metro_PRD.md)                     | Product requirements                        | —          | Drafted |
+| [`design_decisions.md`](design_decisions.md)                                   | Living log of locked design decisions       | —          | Living  |
+| [`flows/route_management_flow.md`](flows/route_management_flow.md)             | Route management                            | BM-12      | Merged  |
+| [`flows/people_management_flow.md`](flows/people_management_flow.md)           | People management (volunteers + captains)   | BM-24      | Merged  |
+| [`flows/finances_flow.md`](flows/finances_flow.md)                             | Finances (issues, payouts)                  | BM-25      | Draft   |
+| [`flows/delivery_recording_flow.md`](flows/delivery_recording_flow.md)         | Delivery recording (issue actuals)          | PRD Flow 5 | Draft   |
+| [`schema/data_model.md`](schema/data_model.md)                                 | Consolidated data model                     | —          | Draft   |
+| [`api/api_spec.md`](api/api_spec.md)                                           | REST endpoints / CRUD                       | —          | Draft   |
+| [`integrations/google_maps_research.md`](integrations/google_maps_research.md) | Google Maps Platform research + integration | —          | Draft   |
+| [`infra/infrastructure_spec.md`](infra/infrastructure_spec.md)                 | Infrastructure / tech stack                 | —          | Draft   |
