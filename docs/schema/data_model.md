@@ -127,17 +127,10 @@ export interface AdminUser {
 }
 ```
 
-### Note
-
-```ts
-export interface Note {
-  id: UUID;
-  authorId: AdminUser["id"];
-  body: string; // no length limit; grows vertically in the UI
-  createdAt: Timestamp;
-  category?: string | null; // SUBJECT TO CHANGE
-}
-```
+> Notes are a plain free-form `notes?: string` field on the entities that have them
+> (Volunteer, Captain, VolunteerRoute) — not a separate entity. The flows only ask
+> for free-form notes with no length limit; author/timestamp tracking was dropped as
+> unneeded for MVP.
 
 ### Volunteer
 
@@ -153,7 +146,7 @@ export interface Volunteer {
   email: Email;
   phone: Phone;
   addressId: Address["id"]; // volunteer's own (residential) address
-  noteId?: Note["id"] | null;
+  notes?: string | null;
   captainTerritoryId?: CaptainTerritory["id"] | null; // direct assignment; may be unassigned
   // Routes carried = VolunteerRoutes whose assignedVolunteerId points here (inverse FK).
   startDate: DateOnly;
@@ -187,7 +180,7 @@ export interface Captain {
   startDate: DateOnly;
   endDate?: DateOnly | null;
   retiredAt?: DateOnly | null;
-  noteId?: Note["id"] | null;
+  notes?: string | null;
   // 1:1 territory: the CaptainTerritory whose assignedCaptainId points here (inverse FK).
   // Territory-less captain = no territory points here; captain-less territory is also allowed.
 }
@@ -216,11 +209,12 @@ export interface CaptainTerritory {
 ### RouteBundle (value type)
 
 A single bundle within a delivery, identified only by its paper count. Bundle paper
-counts are stored individually and never assumed to be 25 or 50 (finance flow §5).
+counts are stored individually — **embedded** on the `RouteDelivery` (a JSONB array,
+not a separate child table) — and never assumed to be 25 or 50 (finance flow §5).
 
 ```ts
 export interface RouteBundle {
-  papers: number;
+  papers: number; // papers in this one bundle (e.g. 50, 25, or a remainder)
 }
 ```
 
@@ -242,10 +236,11 @@ export interface VolunteerRoute {
   // Assignment — optional; a vacant route has no volunteer.
   assignedVolunteerId?: Volunteer["id"] | null;
   // Counts
-  houseCount: number; // auto-calculated; feeds paper/bundle sizing
-  houseCountOverride?: number | null; // SUBJECT TO CHANGE: how the manual override is modeled
+  houseCount: number; // manual entry for MVP (auto-calc via Toronto Open Data is post-MVP)
+  houseCountOverride?: number | null; // SUBJECT TO CHANGE: only relevant once auto-calc exists
   papers: number; // standing paper count; drives the bundle auto-calc
-  noteId?: Note["id"] | null;
+  notes?: string | null;
+  deletedAt?: Timestamp | null; // soft delete: hidden from views, row retained so past RouteDelivery still resolves
   // No territoryId: territory/captain derive via assignedVolunteerId -> captainTerritoryId.
 }
 ```
@@ -323,8 +318,12 @@ export interface RouteDelivery {
   issueId: Issue["id"];
   routeId: VolunteerRoute["id"];
   paperCount: number;
-  bundleCount: number; // from the bundle auto-calc on paperCount, or manual
-  bundles?: RouteBundle[]; // SUBJECT TO CHANGE: storing individual bundle paper counts
+  // Per-bundle paper counts (embedded JSONB, not a child table). Seeded by the
+  // greedy split of paperCount and hand-editable; the source of truth for the
+  // breakdown. `bundleCount` is DERIVED = bundles.length (not stored separately).
+  // Invariant: sum(bundles[].papers) === paperCount. Editing paperCount reseeds the
+  // split unless the bundles were set manually.
+  bundles: RouteBundle[];
   dropCount: number;
   missedCount: number; // in the unit matching the route's captain pay type
 }
@@ -337,7 +336,6 @@ export interface RouteDelivery {
 ```mermaid
 erDiagram
   GoogleMapsLocation ||--o{ Address : "place_id"
-  AdminUser ||--o{ Note : authors
   Address ||--o{ Volunteer : "home address"
   Address ||--o{ VolunteerRoute : "start/end"
   CaptainTerritory ||--o{ Address : "commercial drops"
@@ -372,9 +370,8 @@ Key chains:
   stored shape and the role model are SUBJECT TO CHANGE.
 - **Commercial-drop standing counts.** Per-drop expectations for commercial drops
   may need a field or a small per-drop record; not modeled yet.
-- **House-count override.** `houseCountOverride` representation SUBJECT TO CHANGE.
-- **Bundle storage.** Whether `RouteDelivery.bundles[]` stores individual paper
-  counts or just a `bundleCount` SUBJECT TO CHANGE.
+- **House count.** Manual entry for MVP; auto-calc (Toronto Open Data + PostGIS) and
+  the `houseCountOverride` it implies are post-MVP.
 - **Territory column snapshotting.** Whether a `FinancialYear`'s captain columns are
   snapshotted at creation or derived live.
 - **Post-MVP:** volunteer advertising credit ("lucky volunteer"), the reporting

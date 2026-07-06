@@ -5,6 +5,7 @@ A prose-and-diagram walkthrough of how the distribution manager manages the peop
 Ticket: BM-24. Scope: volunteer and captain profiles, their lifecycle (add, edit, vacation, retire), and the territory model (a captain's territory = its assigned volunteers + its commercial drop addresses).
 
 Out of scope here and owned by other flows:
+
 - Route assignment and route definition: route flow (BM-12). A route's captain is reached through its assigned volunteer.
 - Payout calculation, the issue lifecycle, and reimbursement amounts: finances flow (BM-25). Reimbursements appear here read-only.
 - Admin/staff accounts (the distribution and accounts managers): authentication flow.
@@ -22,6 +23,7 @@ Out of scope here and owned by other flows:
 **Commercial drop.** A non-residential address that collects bundles from a captain (for example a building, school, church, or food-and-beverage spot), as opposed to a volunteer's home. Each commercial drop is a validated address belonging to one territory.
 
 **Key relationships.**
+
 - A captain is one-to-one with a territory. The territory has at most one captain; both can be temporarily unset during a handoff (see 4k).
 - A territory holds a list of assigned volunteers and a list of commercial drop addresses. No routes.
 - A volunteer is manually assigned to a captain. That assignment places the volunteer in the captain's territory: volunteer -> captain -> territory. A volunteer can be unassigned (no captain, and so in no territory) until the manager assigns one; reassigning them to a different captain moves them to that captain's territory.
@@ -35,6 +37,7 @@ Status: volunteers run Active / On vacation / Retired; captains run Active / Ret
 ## 2. Diagram legend
 
 Same conventions as the route management flow:
+
 - Round / stadium shape = start or end of a flow
 - Rectangle = an action or system step
 - Diamond = a decision or branch
@@ -75,7 +78,7 @@ stateDiagram-v2
     Retired --> Active: Reactivate (clear retirement)
 ```
 
-Captains have no vacation state today (see the note in 8 on planned captain vacation and substitution). Retirement is manual; an end date passing only raises a "needs attention" flag, never an auto-retire. Retiring a captain leaves their territory captain-less and prompts a reassignment (see 4k).
+Captains have no vacation state today (see the note in 8 on captain vacation and payout transfers). Retirement is manual; an end date passing only raises a "needs attention" flag, never an auto-retire. Retiring a captain leaves their territory captain-less and prompts a reassignment (see 4k).
 
 ---
 
@@ -260,6 +263,7 @@ Highest-value bulk actions for later: bulk retire at a season changeover, and bu
 ## 7. State transition quick reference
 
 **Volunteer.**
+
 - (none) -> Active: created
 - Active -> On vacation: vacation window begins (auto); carried routes show Suspended
 - On vacation -> Active: vacation window ends (auto); routes resume
@@ -267,6 +271,7 @@ Highest-value bulk actions for later: bulk retire at a season changeover, and bu
 - Retired -> Active: clear the retirement
 
 **Captain.**
+
 - (none) -> Active: created
 - Active -> Retired: manual retire only; owned territory becomes captain-less and prompts reassignment
 - Retired -> Active: clear the retirement
@@ -283,7 +288,7 @@ Flags (not state changes): a person whose end date has passed while still active
 - **Captain-less territory.** Allowed as a transient state after a captain retires. The territory keeps its volunteers and commercial drops until a new captain is assigned.
 - **Unassigned volunteer.** A volunteer can have no captain, and therefore be in no territory, until the manager assigns one.
 - **Vacation.** The one retained date automation: a vacation window auto-suspends the route and auto-resumes after.
-- **Captain vacation and substitution (decided).** Captains have no vacation state — status stays Active / Retired. A captain being away is handled by substitution, which is finance-only: per issue, the payout is reassigned to a substitute (an existing captain or a temporary one created here with a zero rate and empty territory) and the original is zeroed for that issue. Routes and territory are not changed by a substitution. See the finance flow (captain substitution).
+- **Captain vacation and payout transfer (decided).** Captains have no vacation state — status stays Active / Retired. A captain being away is handled by transferring the payout, which is finance-only: per issue, the payout is transferred to another captain and the original is zeroed for that issue. Routes and territory are not changed by a transfer. See the finance flow (transfer a payout).
 - **A person who is both volunteer and captain.** Modeled as two separate records; there is no shared person entity in MVP.
 - **No unscoped messaging.** The confirmations, the reassignment prompt, and the "needs attention" flag in these flows are explicit, scoped indicators requested here. Per the product rule, do not add other notifications, badges, or banners unless a spec calls for one.
-- **Substitution and volunteer credit.** Volunteer-level substitution (someone other than the assigned carrier delivers a route) is captured on the delivery record (finances and delivery flow), not on the volunteer. The per-volunteer advertising credit is post-MVP and not part of this flow.
+- **Informal route coverage and volunteer credit.** When someone other than the assigned carrier delivers a route (for example a neighbour covering), it is not recorded anywhere — pay follows the captain, not the route's deliverer. The per-volunteer advertising credit is post-MVP and not part of this flow.

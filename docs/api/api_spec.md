@@ -57,9 +57,8 @@ resource-specific filters (documented per resource).
 `:action` syntax). They exist precisely so invariants stay server-side rather than
 being assembled from raw field writes.
 
-**Notes.** A `Note` is created/updated through its parent entity's write (the
-handler upserts the `Note` and sets `authorId` from the session); there is no
-standalone notes API in MVP.
+**Notes.** Notes are a plain free-form `notes` string on the parent entity, set
+through its create/update; there is no separate notes resource or entity.
 
 ---
 
@@ -158,17 +157,17 @@ two memberships (volunteers, commercial drops) and the map colour.
 
 ### Routes — `/api/routes`
 
-| Method | Path                         | Purpose                                                                                              | Flow       |
-| ------ | ---------------------------- | ---------------------------------------------------------------------------------------------------- | ---------- |
-| GET    | `/api/routes`                | List. Filters: `vacancy` (vacant/assigned), `territoryId`, `needsAttention`, `side`, `q`             | route 4b   |
-| POST   | `/api/routes`                | Create (start/end address, street, side; volunteer optional)                                         | 4a         |
-| GET    | `/api/routes/{id}`           | Detail (derived lifecycle + suspended flag, house count, counts)                                     | 4c         |
-| PATCH  | `/api/routes/{id}`           | Edit definition (addresses, street, side, `houseCountOverride`, note)                                | 4d         |
-| DELETE | `/api/routes/{id}`           | **Hard delete** (route flow deletes rather than retires; addresses reusable)                         | route flow |
-| POST   | `/api/routes/{id}/assign`    | Assign a volunteer (`{ volunteerId }`) → Active-Assigned                                             | 4e         |
-| POST   | `/api/routes/{id}/unassign`  | Unassign → Active-Vacant                                                                             | 4f         |
-| POST   | `/api/routes/{id}/reassign`  | Swap carrier (`{ volunteerId }`)                                                                     | 4f         |
-| GET    | `/api/routes/nearest-vacant` | Rank vacant routes by proximity to a volunteer home (`?volunteerId=` or `?placeId=`) — Routes Matrix | PRD Flow 2 |
+| Method | Path                         | Purpose                                                                                                                                          | Flow       |
+| ------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| GET    | `/api/routes`                | List. Filters: `vacancy` (vacant/assigned), `territoryId`, `needsAttention`, `side`, `q`                                                         | route 4b   |
+| POST   | `/api/routes`                | Create (start/end address, street, side; volunteer optional)                                                                                     | 4a         |
+| GET    | `/api/routes/{id}`           | Detail (derived lifecycle + suspended flag, house count, counts)                                                                                 | 4c         |
+| PATCH  | `/api/routes/{id}`           | Edit definition (addresses, street, side, `houseCountOverride`, note)                                                                            | 4d         |
+| DELETE | `/api/routes/{id}`           | **Soft delete** (sets `deletedAt`, hidden from all views; the row is retained so past `RouteDelivery` records still resolve; addresses reusable) | route flow |
+| POST   | `/api/routes/{id}/assign`    | Assign a volunteer (`{ volunteerId }`) → Active-Assigned                                                                                         | 4e         |
+| POST   | `/api/routes/{id}/unassign`  | Unassign → Active-Vacant                                                                                                                         | 4f         |
+| POST   | `/api/routes/{id}/reassign`  | Swap carrier (`{ volunteerId }`)                                                                                                                 | 4f         |
+| GET    | `/api/routes/nearest-vacant` | Rank vacant routes by proximity to a volunteer home (`?volunteerId=` or `?placeId=`) — Routes Matrix                                             | PRD Flow 2 |
 
 Splitting/extending is manual (PATCH the geography, then POST a new route) — no
 dedicated endpoint, per the route flow. House count is auto-calculated; a manual
@@ -264,12 +263,12 @@ issue's delivery returns `409`. No create/delete endpoint.
 ```ts
 // PATCH /api/deliveries/{id}
 type UpdateDelivery = Partial<{
-  paperCount: number; // changing this re-derives bundleCount unless bundles set manually
-  bundleCount: number;
-  bundles: { papers: number }[];
+  paperCount: number; // reseeds `bundles` via the greedy split unless `bundles` is also provided
+  bundles: { papers: number }[]; // explicit per-bundle breakdown; must sum to paperCount (else 422)
   dropCount: number;
   missedCount: number; // in the unit matching the route's captain pay type
 }>;
+// bundleCount is derived (bundles.length) and is not directly settable.
 ```
 
 ---
@@ -306,8 +305,8 @@ the resulting `Address` + `GoogleMapsLocation`. A scheduled refresh job re-resol
   `financial-years`, `issues` (under a year), `payouts` (under an issue),
   `deliveries` (under an issue).
 - **Standard methods:** List/Create on the collection; Get/Update on the item;
-  Delete only on `routes` (hard) — people are soft-retired, finance/delivery rows are
-  lifecycle-bound.
+  Delete only on `routes` (soft — sets `deletedAt`, row retained) — people are
+  soft-retired, finance/delivery rows are lifecycle-bound.
 - **Custom actions:** volunteer `vacation`/`retire`; captain `retire`; route
   `assign`/`unassign`/`reassign`/`refresh-house-count` + `nearest-vacant`; year
   `archive`/`export`; issue `close`/`reopen`; payout
