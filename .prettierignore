@@ -1,0 +1,13 @@
+node_modules
+.next
+out
+build
+coverage
+test-results
+playwright-report
+playwright/.cache
+pnpm-lock.yaml
+next-env.d.ts
+
+# Specs are authored prose; keep Prettier out of them.
+**/*.md

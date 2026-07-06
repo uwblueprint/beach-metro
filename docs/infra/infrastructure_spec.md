@@ -156,8 +156,8 @@ Managed in Vercel project settings (production/preview) and a local untracked `.
 | Variable | Scope | Purpose |
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | client + server | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | client | Supabase anon/publishable key (browser auth session) |
-| `SUPABASE_SERVICE_ROLE_KEY` | server only | Privileged DB access from route handlers |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | client | Supabase publishable key (`sb_publishable_...`; browser auth session) |
+| `SUPABASE_SECRET_KEY` | server only | Supabase secret key (`sb_secret_...`; privileged DB access from route handlers, bypasses RLS) |
 | `GOOGLE_MAPS_SERVER_KEY` | server only | Geocoding, Address Validation, Routes (API-restricted) |
 | `NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY` | client | Maps JavaScript API (HTTP-referrer-restricted) |
 
