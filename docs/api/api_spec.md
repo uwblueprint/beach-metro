@@ -263,11 +263,12 @@ issue's delivery returns `409`. No create/delete endpoint.
 ```ts
 // PATCH /api/deliveries/{id}
 type UpdateDelivery = Partial<{
-  paperCount: number; // changing this re-derives bundleCount unless bundleCount was entered manually
-  bundleCount: number; // the greedy split itself is computed, not persisted, in MVP
+  paperCount: number; // reseeds `bundles` via the greedy split unless `bundles` is also provided
+  bundles: { papers: number }[]; // explicit per-bundle breakdown; must sum to paperCount (else 422)
   dropCount: number;
   missedCount: number; // in the unit matching the route's captain pay type
 }>;
+// bundleCount is derived (bundles.length) and is not directly settable.
 ```
 
 ---

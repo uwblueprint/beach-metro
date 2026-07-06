@@ -50,8 +50,10 @@ retained baseline.
 
 - **Paper count.** Actual papers delivered on the route. Auto-populated from the
   route's standing paper count, then adjusted.
-- **Bundle count.** Actual bundles, derived from the paper count via the bundle
-  auto-calc (section 5), or entered manually.
+- **Bundles.** The route's bundles for the issue, stored as individual per-bundle
+  paper counts (`RouteBundle`): seeded by the greedy split of the paper count
+  (section 5), hand-editable, and always summing to it. The bundle count is derived
+  from them.
 - **Drop count.** Actual drops made on the route.
 - **Missed count.** Units not delivered, recorded in the unit that matches the
   route's captain pay type (bundles, papers, or drops) — no cross-unit conversion,
@@ -137,7 +139,7 @@ the value no longer auto-updates, but an admin can reopen the issue to correct i
 flowchart TD
     Start([Open the delivery grid for an issue]) --> Pick[Select a route row]
     Pick --> Edit[Adjust paper / bundle / drop / missed counts]
-    Edit --> Cascade[Bundle count re-derives from paper count unless entered manually]
+    Edit --> Cascade[Bundle split re-derives from paper count unless bundles entered manually]
     Cascade --> Save[Save the row]
     Save --> Roll[Counts roll up to the captain's payout in finance]
 ```
@@ -148,8 +150,8 @@ vacation — seeded from the route's standing paper count (and the bundle auto-c
 from it). Vacant and suspended routes are skipped (no row; they contribute nothing
 to the issue). The delivery grid then lists one row per route for the issue. The
 manager edits the actuals progressively while the issue is open. Changing the paper
-count cascades a new bundle count via the auto-calc (section 5) unless the bundle
-count was entered manually. The missed count is captured in the unit matching that
+count reseeds the bundle split via the auto-calc (section 5) unless the bundles were
+entered manually. The missed count is captured in the unit matching that
 route's captain pay type. Saved counts feed the captain payout calculations in the
 finance flow.
 
@@ -180,11 +182,11 @@ requires a guarded admin reopen (which also reopens the finance side).
 Bundle auto-calc (paper count to bundles):
 
 - Greedy: take 50s first, then 25s, then the remainder as a final tied bundle.
-  Bundle sizes are computed individually and never assumed to be 25 or 50; MVP
-  persists the resulting bundle count rather than each bundle's paper count.
-  Manual entry of the bundle count is available as a fallback. This is the same
-  auto-calc as the finance flow (`finances_flow.md` section 5); it lives on the
-  delivery input and the finance payout reads the result.
+  Each bundle's paper count is stored individually (`RouteBundle`) and never assumed
+  to be 25 or 50; the greedy split seeds them and they are hand-editable, with the
+  bundle count derived from them. The bundles always sum to the route's paper count.
+  This is the same auto-calc as the finance flow (`finances_flow.md` section 5); it
+  lives on the delivery input and the finance payout reads the result.
 
 Missed deduction:
 

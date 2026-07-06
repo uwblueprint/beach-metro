@@ -7,7 +7,7 @@ durable artifacts; this sequences the work that turns them into a running backen
 
 **Division of labour.** This plan covers the **backend track** (one developer):
 infrastructure, schema, endpoints, business logic, integrations, plus thin screens
-to exercise the API. The **frontend design engineers** build the real UI separately
+to validate the API. The **frontend design engineers** build the real UI separately
 (vibe-coding the flows against Figma via the Figma MCP, debugging UX). The
 [API spec](../api/api_spec.md) is the contract that lets the two tracks run in
 parallel: once endpoint shapes are stable (Phase 3), the frontend can build against
@@ -104,7 +104,7 @@ Server-side wrappers per the [Google research doc](../integrations/google_maps_r
 
 ---
 
-## Phase 6 — Thin screens to exercise the API
+## Phase 6 — Thin screens to validate the API
 
 Minimal, unstyled-beyond-shadcn screens so the backend is demonstrably usable end to end — **not** the final UI (the frontend engineers build that from Figma).
 

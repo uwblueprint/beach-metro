@@ -28,8 +28,13 @@ append it here with a one-line rationale and update the docs that implement it.
 
 - **`Note` entity removed** in favour of a plain `notes?: string` field on Volunteer /
   Captain / VolunteerRoute (the flows only need free-form notes).
-- **`RouteBundle` / `RouteDelivery.bundles[]` dropped** — persist `bundleCount` only;
-  the greedy split is computed, not stored, in MVP.
+- **`RouteBundle` / `RouteDelivery.bundles[]` kept** (reversed after review — PR #10):
+  we persist each bundle's paper count, not just a count. `bundles` is an embedded
+  JSONB array seeded by the greedy split and hand-editable; `bundleCount` is derived
+  (`bundles.length`); invariant: the bundles sum to `paperCount`, and editing
+  `paperCount` reseeds the split unless the bundles were set manually. Rationale: the
+  office needs the exact bundle breakdown per issue (to physically make up the bundles
+  and preserve irregular splits), which a bare count can't reconstruct.
 - **`VolunteerRoute.deletedAt`** added — routes are **soft-deleted** (hidden, row
   retained) so historical `RouteDelivery` records still resolve.
 - **House count** is manual for MVP (`houseCount`); auto-calc via Toronto Open Data +
