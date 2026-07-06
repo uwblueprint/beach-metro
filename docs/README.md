@@ -12,6 +12,7 @@ docs/
   api/           — the REST endpoint / CRUD spec
   integrations/  — external-service research and integration plans (Google Maps)
   infra/         — infrastructure / tech-stack spec
+  plan/          — sequenced backend build plan (specs → code)
 ```
 
 ## Documents
@@ -28,3 +29,4 @@ docs/
 | [`api/api_spec.md`](api/api_spec.md)                                           | REST endpoints / CRUD                       | —          | Draft   |
 | [`integrations/google_maps_research.md`](integrations/google_maps_research.md) | Google Maps Platform research + integration | —          | Draft   |
 | [`infra/infrastructure_spec.md`](infra/infrastructure_spec.md)                 | Infrastructure / tech stack                 | —          | Draft   |
+| [`plan/backend_build_plan.md`](plan/backend_build_plan.md)                     | Backend build plan (specs → code)           | —          | Draft   |
