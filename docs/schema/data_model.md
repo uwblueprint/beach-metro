@@ -206,6 +206,18 @@ export interface CaptainTerritory {
 
 ## 4. Routes domain
 
+### RouteBundle (value type)
+
+A single bundle within a delivery, identified only by its paper count. Bundle paper
+counts are stored individually — **embedded** on the `RouteDelivery` (a JSONB array,
+not a separate child table) — and never assumed to be 25 or 50 (finance flow §5).
+
+```ts
+export interface RouteBundle {
+  papers: number; // papers in this one bundle (e.g. 50, 25, or a remainder)
+}
+```
+
 ### VolunteerRoute
 
 The street segment a volunteer walks. The captain link is **indirect** (through the
@@ -306,7 +318,12 @@ export interface RouteDelivery {
   issueId: Issue["id"];
   routeId: VolunteerRoute["id"];
   paperCount: number;
-  bundleCount: number; // from the bundle auto-calc on paperCount, or manual (the split itself is not persisted in MVP)
+  // Per-bundle paper counts (embedded JSONB, not a child table). Seeded by the
+  // greedy split of paperCount and hand-editable; the source of truth for the
+  // breakdown. `bundleCount` is DERIVED = bundles.length (not stored separately).
+  // Invariant: sum(bundles[].papers) === paperCount. Editing paperCount reseeds the
+  // split unless the bundles were set manually.
+  bundles: RouteBundle[];
   dropCount: number;
   missedCount: number; // in the unit matching the route's captain pay type
 }

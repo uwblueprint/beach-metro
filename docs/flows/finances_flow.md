@@ -187,7 +187,7 @@ Confirmed math:
 
 Bundle auto-calc (paper count to bundles):
 
-- Greedy: take 50s first, then 25s, then the remainder as a final tied bundle. Bundle sizes are computed individually and never assumed to be 25 or 50 (some 25/50 bundles are labeled, some are not); MVP persists the resulting bundle count rather than each bundle's paper count. Manual entry of the bundle count is available as a fallback, but the client leans toward auto-calculation so counts cascade when paper counts change.
+- Greedy: take 50s first, then 25s, then the remainder as a final tied bundle. Each bundle's paper count is stored individually (`RouteBundle`) and never assumed to be 25 or 50 (some 25/50 bundles are labeled, some are not); the greedy split seeds them and they are hand-editable, with the bundle count derived from them. The bundles always sum to the route's paper count, and changing the paper count reseeds the split unless the bundles were entered manually.
 
 Irregular cases (entered directly via override, 4d):
 
