@@ -6,6 +6,7 @@ import { conflict, notFound } from "@/lib/api/errors";
 import type { captainsQuery, createCaptain, updateCaptain } from "@/lib/validation/people";
 import type { CaptainRow, CaptainTerritoryRow, PayCadence, PayType } from "@/types/db";
 
+import { recalculateOpenIssues } from "./recalc";
 import { db, throwDb, today } from "./shared";
 
 export interface CaptainSummary {
@@ -135,6 +136,12 @@ export async function updateCaptainRecord(
 
   const { error } = await db().from("captains").update(patch).eq("id", id);
   if (error) throwDb(error);
+
+  // Pay config feeds the live calculation: rate/type changes ripple into every
+  // open issue's unpaid cells immediately (cadence is informational only).
+  if (input.payType !== undefined || input.payRate !== undefined) {
+    await recalculateOpenIssues();
+  }
   return getCaptain(id);
 }
 
