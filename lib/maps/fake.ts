@@ -36,10 +36,9 @@ function normalize(input: AddressLinesInput): string {
     input.administrativeArea ?? "ON",
     input.postalCode ?? "",
   ]
-    .join(", ")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
+    .map((part) => part.trim().replace(/\s+/g, " ").toLowerCase())
+    .filter((part) => part.length > 0)
+    .join(", ");
 }
 
 function resolve(placeId: string, formattedAddress: string, line1: string): ResolvedAddress {

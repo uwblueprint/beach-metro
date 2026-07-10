@@ -20,6 +20,8 @@ export function throwDb(error: PgError): never {
     case "23514": // check_violation
     case "P0001": // raise exception (our invariant triggers)
       throw invalid(error.message);
+    case "22P02": // invalid_text_representation (e.g. a malformed uuid in the path)
+      throw invalid("Malformed identifier.");
     default:
       throw new ServiceError("internal", `Database error: ${error.message}`, 500);
   }

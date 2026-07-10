@@ -1,4 +1,16 @@
+import { readFileSync } from "node:fs";
 import { defineConfig, devices } from "@playwright/test";
+
+// Load .env.local so the smoke suite (and the dev server it boots) see the
+// Supabase env + SMOKE_ADMIN_* credentials. Existing process env wins.
+try {
+  for (const line of readFileSync(".env.local", "utf8").split("\n")) {
+    const match = /^([A-Z_0-9]+)=(.*)$/.exec(line.trim());
+    if (match && process.env[match[1]] === undefined) process.env[match[1]] = match[2];
+  }
+} catch {
+  // no .env.local (e.g. CI) — fine, gated tests skip themselves
+}
 
 export default defineConfig({
   testDir: "./e2e",

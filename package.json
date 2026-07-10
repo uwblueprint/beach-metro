@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "smoke": "playwright test e2e/api-smoke.spec.ts",
     "db:push": "bash scripts/db.sh push",
     "db:seed": "bash scripts/db.sh seed",
     "db:types": "bash scripts/db.sh types",
@@ -57,6 +58,7 @@
     "prettier": "^3.8.4",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "vite": "^8.1.4",
     "vitest": "^4.1.9"
   }
 }

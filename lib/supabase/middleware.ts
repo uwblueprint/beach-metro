@@ -50,7 +50,13 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith("/login") &&
     !request.nextUrl.pathname.startsWith("/auth")
   ) {
-    // no user, potentially respond by redirecting the user to the login page
+    // API clients get the spec's 401 envelope; pages redirect to login.
+    if (request.nextUrl.pathname.startsWith("/api")) {
+      return NextResponse.json(
+        { error: { code: "unauthenticated", message: "Sign in required." } },
+        { status: 401 },
+      );
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     return NextResponse.redirect(url);
