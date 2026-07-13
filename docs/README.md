@@ -30,5 +30,6 @@ docs/
 | [`integrations/google_maps_research.md`](integrations/google_maps_research.md) | Google Maps Platform research + integration | —          | Draft   |
 | [`infra/infrastructure_spec.md`](infra/infrastructure_spec.md)                 | Infrastructure / tech stack                 | —          | Draft   |
 | [`plan/backend_build_plan.md`](plan/backend_build_plan.md)                     | Backend build plan (specs → code)           | —          | Draft   |
+| [`backend_guide.md`](backend_guide.md)                                         | Backend walkthrough + API quick-reference   | —          | Living  |
 | [`open_items.md`](open_items.md)                                               | Open calculations / decisions still pending | —          | Living  |
 | [`backend_testing.md`](backend_testing.md)                                     | How to verify the backend (suites + curl)   | —          | Living  |
