@@ -52,16 +52,18 @@ Remove entries as they're resolved (and record the decision in
   (verified against the auth admin API), but the legacy `service_role` JWT that
   leaked into a chat transcript stays valid until someone clicks
   **Disable legacy API keys** in the dashboard (API Keys page). One click, do it.
-- **Database password.** `SUPABASE_DB_URL` is wired up (session pooler), but the
-  password on file was rejected — reset it (Dashboard → Project Settings →
-  Database → Reset database password) and update the URL in `.env.local`.
-  `pnpm db:push` / `db:seed` / `db:types` and the live integration run are
-  blocked on this one value. A smoke admin (`smoke-admin@example.com`) already
-  exists for `pnpm smoke` once the schema is up.
+- ~~Database password~~ — **resolved.** Schema pushed, seed loaded (`pnpm db:push`
+  / `db:seed`), and the full suite (46 unit + 8 live integration) plus
+  `pnpm smoke` all pass against the hosted project. Smoke admin
+  (`smoke-admin@example.com`) is live.
 - **CI secrets.** Integration tests self-skip in CI until
   `SUPABASE_DB_URL` + `SUPABASE_SECRET_KEY` are added as GitHub Actions
   secrets (decide whether CI should touch the hosted DB at all).
-- **Generated DB types.** `types/db.ts` is hand-written; run `pnpm db:types`
-  after the first push and reconcile.
+- **`pnpm db:types` fails locally.** `--db-url` shells out to Docker for
+  introspection (none running here); `--project-id` needs an interactive
+  `supabase login`. Types were instead hand-verified via a direct
+  `information_schema` query against the live schema — zero drift from
+  `types/db.ts` across all 10 tables. Regenerate for real once Docker or a
+  login session is available.
 - **Idempotency keys / rate limiting.** API-spec open questions; neither is
   implemented (single-office tool, low risk — revisit before any exposure).

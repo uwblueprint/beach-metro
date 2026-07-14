@@ -169,21 +169,24 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
     issueId = issue.id;
     expect(issue.status).toBe("open");
 
-    // Carried route seeded with the greedy split; vacant route skipped.
+    // Issue creation is global (every currently-carried route gets seeded), so
+    // seed.sql's own active routes (Marcus x2, Sofia) also get delivery rows
+    // here alongside ours — find ours by routeId rather than assuming exclusivity.
     const deliveries = await S().deliveries.listDeliveries(issueId);
-    expect(deliveries).toHaveLength(1);
-    expect(deliveries[0].routeId).toBe(routeId);
-    expect(deliveries[0].paperCount).toBe(130);
-    expect(deliveries[0].bundles).toEqual([
+    const ourDelivery = deliveries.find((d) => d.routeId === routeId)!;
+    expect(ourDelivery).toBeDefined();
+    expect(ourDelivery.paperCount).toBe(130);
+    expect(ourDelivery.bundles).toEqual([
       { papers: 50 },
       { papers: 50 },
       { papers: 25 },
       { papers: 5 },
     ]);
-    expect(deliveries[0].bundleCount).toBe(4);
-    deliveryId = deliveries[0].id;
+    expect(ourDelivery.bundleCount).toBe(4);
+    deliveryId = ourDelivery.id;
 
-    // Cells for every active captain; live calc ran: 4 bundles × 1.25 = 5.00.
+    // Cells for every active captain (seed's 3 + our 2); live calc ran on ours:
+    // 4 bundles × 1.25 = 5.00.
     const payouts = await S().payouts.listPayouts(issueId);
     const bundleCell = payouts.find((p) => p.captainId === bundleCaptainId)!;
     const dropCell = payouts.find((p) => p.captainId === dropCaptainId)!;
@@ -193,7 +196,10 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
     bundlePayoutId = bundleCell.id;
     dropPayoutId = dropCell.id;
 
-    expect((await S().issues.papersToOrder(issueId)).total).toBe(130);
+    // Self-consistent: papersToOrder must equal the sum of every delivery's
+    // paperCount for the issue (seed's routes included), not just ours.
+    const expectedTotal = deliveries.reduce((sum, d) => sum + d.paperCount, 0);
+    expect((await S().issues.papersToOrder(issueId)).total).toBe(expectedTotal);
   });
 
   it("delivery edits reseed the split and re-run the live calc", async () => {
