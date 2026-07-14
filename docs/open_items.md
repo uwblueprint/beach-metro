@@ -48,13 +48,16 @@ Remove entries as they're resolved (and record the decision in
 
 ## Operational follow-ups
 
-- **Rotate the leaked legacy key.** The legacy `service_role` JWT was pasted
-  into a chat transcript during setup. Create a proper `sb_secret_...` key in
-  the dashboard, swap it into `.env.local` (`SUPABASE_SECRET_KEY`), then click
-  **Disable legacy API keys** to invalidate the exposed JWT.
-- **`SUPABASE_DB_URL`.** Still empty in `.env.local`; `pnpm db:push` /
-  `db:seed` / `db:types` and the integration suite are blocked on it
-  (Dashboard → Connect → Session pooler URI).
+- **Disable legacy API keys.** A real `sb_secret_...` key is now in use
+  (verified against the auth admin API), but the legacy `service_role` JWT that
+  leaked into a chat transcript stays valid until someone clicks
+  **Disable legacy API keys** in the dashboard (API Keys page). One click, do it.
+- **Database password.** `SUPABASE_DB_URL` is wired up (session pooler), but the
+  password on file was rejected — reset it (Dashboard → Project Settings →
+  Database → Reset database password) and update the URL in `.env.local`.
+  `pnpm db:push` / `db:seed` / `db:types` and the live integration run are
+  blocked on this one value. A smoke admin (`smoke-admin@example.com`) already
+  exists for `pnpm smoke` once the schema is up.
 - **CI secrets.** Integration tests self-skip in CI until
   `SUPABASE_DB_URL` + `SUPABASE_SECRET_KEY` are added as GitHub Actions
   secrets (decide whether CI should touch the hosted DB at all).

@@ -8,7 +8,27 @@ import { afterAll, describe, expect, it } from "vitest";
 import { ServiceError } from "@/lib/api/errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const RUN = Boolean(process.env.SUPABASE_DB_URL && process.env.SUPABASE_SECRET_KEY);
+const HAS_ENV = Boolean(process.env.SUPABASE_DB_URL && process.env.SUPABASE_SECRET_KEY);
+
+// Env present isn't enough — the schema must actually be reachable (pushed).
+// Probe one table so a fresh project skips cleanly instead of failing 40 ways.
+async function schemaReady(): Promise<boolean> {
+  if (!HAS_ENV) return false;
+  try {
+    const { error } = await createAdminClient().from("captains").select("id").limit(1);
+    if (error) {
+      console.warn(
+        `[integration] skipping — schema not reachable (${error.message}). Run pnpm db:push.`,
+      );
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const RUN = await schemaReady();
 
 // Import services lazily so a missing env never breaks the unit-only run.
 const services = RUN

@@ -12,11 +12,13 @@ Companion docs — this guide links to them rather than repeating them:
 - [`design_decisions.md`](design_decisions.md) — locked decisions + the **backend interpretation log** (judgment calls, each covered by a test).
 - [`api/api_spec.md`](api/api_spec.md), [`schema/data_model.md`](schema/data_model.md), and the flow specs in [`flows/`](flows/) — the source-of-truth specs this was built from.
 
-> **Not verified against a live database yet.** `SUPABASE_DB_URL` is still empty
-> in `.env.local`, so the schema has not been pushed to the hosted project and the
-> integration suite hasn't run live. Unit tests (46) and the build are green.
-> Treat every "works" claim below as "works by construction + unit-tested" until
-> the live pass runs (see [backend_testing.md](backend_testing.md) setup).
+> **Not verified against a live database yet.** The secret key is live (verified
+> against the auth admin API; a smoke admin exists), but the database password on
+> file was rejected, so the schema has not been pushed and the integration suite
+> hasn't run live — it auto-skips (with a warning) until the schema is reachable.
+> Unit tests (46) and the build are green. Treat every "works" claim below as
+> "works by construction + unit-tested" until the password is reset and the live
+> pass runs (see [backend_testing.md](backend_testing.md) setup).
 
 ---
 
@@ -286,8 +288,8 @@ for the full detail, owner, and code location of each).
 - **Reactivation endpoint**, **Places Autocomplete**, **auth roles** — see open_items.
 
 **Operational**
-- **Rotate the leaked legacy `service_role` key** (pasted in chat during setup), then disable legacy keys.
-- **`SUPABASE_DB_URL`** still empty → schema not pushed, integration suite unrun, DB types not generated.
+- **Disable legacy API keys** in the dashboard — a real `sb_secret_...` key is in use now, but the leaked legacy `service_role` JWT stays valid until that click.
+- **Reset the database password** → fix `SUPABASE_DB_URL` in `.env.local`; schema push, seed, live integration run, and DB-types generation are all blocked on it.
 - **CI secrets** — integration tests self-skip until `SUPABASE_DB_URL` + `SUPABASE_SECRET_KEY` are added (decide if CI should touch the hosted DB).
 - **Idempotency keys / rate limiting** — not implemented.
 
