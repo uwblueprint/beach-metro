@@ -4,12 +4,12 @@ import "./globals.css";
 import { Providers } from "./providers";
 
 const dmSans = DM_Sans({
-  variable: "--font-dm-sans",
+  variable: "--font-sans",
   subsets: ["latin"],
 });
 
 const dmMono = DM_Mono({
-  variable: "--font-dm-mono",
+  variable: "--font-mono",
   subsets: ["latin"],
   weight: ["300", "400", "500"],
 });
