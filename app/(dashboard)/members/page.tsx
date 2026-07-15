@@ -1,8 +1,15 @@
 export default function MembersPage() {
   return (
-    <div>
-      <h1 className="text-2xl font-semibold">Members</h1>
-      <p className="text-muted-foreground mt-2">Placeholder page for the Members section.</p>
+    <div className="page-container">
+      <div className="page">
+        <div className="page-header-container">
+          <div className="flex items-center gap-2">
+            <h1 className="text-md text-primary">Members</h1>
+            <p className="text-md text-secondary">Showing 9 of 53</p>
+          </div>
+          <div>Add Member</div>
+        </div>
+      </div>
     </div>
   );
 }

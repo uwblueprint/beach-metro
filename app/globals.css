@@ -41,7 +41,10 @@
 
   --color-primary: var(--primary);
   --color-secondary: var(--secondary);
-  --color-secondary-hover: var(--secondary-hover);
+
+  /* button / surface fills (not for text-*) */
+  --color-secondary-fill: var(--secondary-fill);
+  --color-secondary-fill-hover: var(--secondary-fill-hover);
   --color-active: var(--active);
   --color-active-hover: var(--active-hover);
   --color-muted: var(--muted);
@@ -54,6 +57,7 @@
   --color-warning: var(--warning);
   --color-disabled: var(--disabled);
   --color-tag: var(--tag);
+  --color-tag-hover: var(--tag-hover);
   --color-tag-success: var(--tag-success);
   --color-tag-active: var(--tag-active);
   --color-tag-warning: var(--tag-warning);
@@ -76,8 +80,8 @@
   --text-md--line-height: 1.3;
   --text-lg: 1.25rem;
   --text-lg--line-height: 1.3;
-  /* Unexpected to be used but added for consistency */
-  --text-base: 1rem;
+  /* Default body size — same as text-md (Figma body/md, 14px) */
+  --text-base: 0.875rem;
   --text-base--line-height: 1.3;
   --text-xl: 1.5rem;
   --text-xl--line-height: 1.3;
@@ -98,14 +102,18 @@
   --popover: var(--bg);
   --popover-foreground: var(--foreground);
 
-  /* text colors */
+  /* text colors — use with text-primary / text-secondary only */
   --primary: var(--foreground);
-  --secondary: oklch(0.94 0 0);
-  --secondary-hover: oklch(0.805 0 0);
+  --secondary: oklch(0.528 0 0); /* Figma text/secondary ≈ #6B6B6B */
+
+  /* button / surface fills */
+  --secondary-fill: oklch(0.94 0 0);
+  --secondary-fill-hover: oklch(0.805 0 0);
+
   --active: oklch(0.717 0.149 234.3);
   --active-hover: oklch(0.607 0.126 234.5);
   --muted: var(--bg-secondary);
-  --muted-foreground: oklch(0.528 0 0);
+  --muted-foreground: var(--secondary);
   --accent: oklch(0.967 0 0);
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.664 0.224 32.3);
@@ -125,8 +133,9 @@
   --ring: oklch(0.605 0.186 257.6);
 
   --tag: oklch(0.976 0 0);
+  --tag-hover: oklch(0.96 0 0);
   --tag-success: oklch(0.985 0.027 140.2);
-  --tag-active: var(--tag-success);
+  --tag-active: oklch(0.98 0.04 220.6);
   --tag-warning: oklch(0.988 0.018 92.7);
   --tag-destructive: oklch(0.974 0.014 50.8);
 
@@ -154,9 +163,25 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-bg text-primary;
+    @apply bg-bg text-base text-primary;
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer components {
+  /* Outer shell beside the sidebar — Figma: pt 12 / pr 12 / pb 16, no left pad */
+  .page-container {
+    @apply bg-bg-secondary flex h-full w-full min-h-0 min-w-0 flex-1 flex-col pt-3 pr-3 pb-4;
+  }
+
+  /* White content panel that fills the container */
+  .page {
+    @apply bg-bg border-border h-full w-full min-h-0 flex-1 overflow-clip rounded-[16px] border;
+  }
+
+  .page-header-container {
+    @apply border-b border-border py-4 pl-6 pr-4 flex items-center justify-between;
   }
 }
