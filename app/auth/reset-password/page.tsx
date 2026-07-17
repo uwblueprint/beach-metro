@@ -39,7 +39,7 @@ export default async function ResetPasswordPage({
               </p>
             ) : null}
 
-            <Button type="submit" className="w-full">
+            <Button type="submit" variant="primary" className="w-full">
               Send reset link
             </Button>
           </form>

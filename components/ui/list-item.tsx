@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 const listItemVariants = cva(
   [
-    "group/list-item inline-flex w-full items-center rounded-[4px] font-normal whitespace-nowrap transition-colors",
+    "group/list-item inline-flex w-full cursor-pointer items-center rounded-[4px] font-normal whitespace-nowrap transition-colors",
     "outline-none select-none",
     "text-primary",
     "hover:bg-tag-hover",

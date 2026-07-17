@@ -47,6 +47,7 @@
   --color-secondary-fill-hover: var(--secondary-fill-hover);
   --color-active: var(--active);
   --color-active-hover: var(--active-hover);
+  --color-active-grey: var(--active-grey);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
@@ -60,6 +61,7 @@
   --color-tag-hover: var(--tag-hover);
   --color-tag-success: var(--tag-success);
   --color-tag-active: var(--tag-active);
+  --color-tag-active-hover: var(--tag-active-hover);
   --color-tag-warning: var(--tag-warning);
   --color-tag-destructive: var(--tag-destructive);
 
@@ -112,6 +114,7 @@
 
   --active: oklch(0.717 0.149 234.3);
   --active-hover: oklch(0.607 0.126 234.5);
+  --active-grey: oklch(0.946 0 0); /* #EDEDED */
   --muted: var(--bg-secondary);
   --muted-foreground: var(--secondary);
   --accent: oklch(0.967 0 0);
@@ -136,6 +139,7 @@
   --tag-hover: oklch(0.96 0 0);
   --tag-success: oklch(0.985 0.027 140.2);
   --tag-active: oklch(0.98 0.04 220.6);
+  --tag-active-hover: oklch(0.964 0.06 220.6);
   --tag-warning: oklch(0.988 0.018 92.7);
   --tag-destructive: oklch(0.974 0.014 50.8);
 
@@ -173,15 +177,44 @@
 @layer components {
   /* Outer shell beside the sidebar — Figma: pt 12 / pr 12 / pb 16, no left pad */
   .page-container {
-    @apply bg-bg-secondary flex h-full w-full min-h-0 min-w-0 flex-1 flex-col pt-3 pr-3 pb-4;
+    @apply bg-bg-secondary flex h-full w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-3 pr-3 pb-4;
   }
 
   /* White content panel that fills the container */
   .page {
-    @apply bg-bg border-border h-full w-full min-h-0 flex-1 overflow-clip rounded-[16px] border;
+    @apply bg-bg border-border min-h-0 flex-1 overflow-y-auto rounded-[16px] border;
   }
 
   .page-header-container {
-    @apply border-b border-border py-4 pl-6 pr-4 flex items-center justify-between;
+    @apply border-b border-border py-4 pl-6 pr-4 h-[64px] flex items-center justify-between;
   }
+}
+
+/* Table styles use @utility (not @layer components) because the names collide
+   with Tailwind's built-in `table-row` / `table-cell` display utilities. The
+   built-in display utilities still get emitted alongside, so `display` is
+   pinned by the unlayered rules below (unlayered styles beat all layers). */
+.table-row {
+  display: flex;
+}
+.table-cell {
+  display: block;
+}
+
+/* Table row — Figma: h 40 / pad 8 / gap 40 / radius 8. States: default, hover, active (selected). */
+@utility table-row {
+  @apply flex h-10 w-full cursor-pointer items-center gap-10 rounded-md p-2 transition-colors select-none;
+
+  &:hover {
+    @apply bg-tag-hover;
+  }
+
+  &[data-active="true"] {
+    @apply bg-active-grey;
+  }
+}
+
+/* Table cell — full (equal flex) width by default; truncates overflow. */
+@utility table-cell {
+  @apply min-w-0 flex-1 overflow-hidden text-md text-ellipsis whitespace-nowrap;
 }
