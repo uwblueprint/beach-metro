@@ -1,63 +1,85 @@
 "use client";
 
-import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
+import { Briefcase, LayoutGrid, MapPin, Send, Settings, User, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { ListItem } from "@/components/ui/list-item";
 
-// Primary sections. Settings and the user footer are rendered separately below.
-const NAV_ITEMS = [
-  { label: "Overview", href: "/overview" },
-  { label: "Routes", href: "/routes" },
-  { label: "Members", href: "/members" },
-  { label: "Finances", href: "/finances" },
-] as const;
+const NAV_ITEMS: { label: string; href: string; icon: LucideIcon }[] = [
+  { label: "Overview", href: "/overview", icon: LayoutGrid },
+  { label: "Routes", href: "/routes", icon: MapPin },
+  { label: "Members", href: "/members", icon: Users },
+  { label: "Finances", href: "/finances", icon: Briefcase },
+];
 
-function NavLink({ label, href }: { label: string; href: string }) {
-  const pathname = usePathname();
-  const active = pathname === href || pathname.startsWith(`${href}/`);
-
-  return (
-    <Link
-      href={href}
-      aria-current={active ? "page" : undefined}
-      className={cn(
-        "block rounded-md px-3 py-2 text-sm",
-        active ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted/50",
-      )}
-    >
-      {label}
-    </Link>
-  );
+function displayName(email: string | null) {
+  if (!email) return "Not signed in";
+  const local = email.split("@")[0] ?? email;
+  return local
+    .split(/[._-]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 export function AppSidebar({ userEmail }: { userEmail: string | null }) {
-  return (
-    <aside className="flex w-60 shrink-0 flex-col border-r">
-      {/* Brand (not a link) */}
-      <div className="px-4 py-4 font-semibold">Dispatch</div>
+  const pathname = usePathname();
 
-      {/* Primary nav */}
-      <nav className="flex flex-1 flex-col gap-1 p-2">
-        {NAV_ITEMS.map((item) => (
-          <NavLink key={item.href} {...item} />
-        ))}
+  return (
+    <aside className="bg-bg-secondary flex h-screen w-[200px] shrink-0 flex-col px-4 pt-5 pb-4">
+      {/* Brand notch */}
+      <div className="bg-bg border-border mb-5 flex shrink-0 items-center gap-2 rounded-2xl border px-2.5 py-3">
+        <Send aria-hidden className="size-4 shrink-0" strokeWidth={1.75} />
+        <span className="text-md text-primary">Dispatch</span>
+      </div>
+
+      {/* Primary nav — grows so footer stays at the bottom */}
+      <nav className="flex min-h-0 flex-1 flex-col gap-1">
+        {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
+          const active = pathname === href || pathname.startsWith(`${href}/`);
+          return (
+            <ListItem
+              key={href}
+              href={href}
+              size="md"
+              type="leading-icon"
+              active={active}
+              icon={<Icon aria-hidden strokeWidth={1.75} />}
+              className="data-[active=true]:bg-active-grey data-[active=true]:hover:bg-active-grey data-[active=true]:text-primary"
+            >
+              {label}
+            </ListItem>
+          );
+        })}
       </nav>
 
-      {/* Settings + signed-in user */}
-      <div className="flex flex-col gap-1 border-t p-2">
-        <NavLink label="Settings" href="/settings" />
-        <div className="flex items-center justify-between gap-2 px-3 py-2">
-          <span className="text-muted-foreground truncate text-sm" title={userEmail ?? undefined}>
-            {userEmail ?? "Not signed in"}
-          </span>
-          <form action="/auth/signout" method="post">
-            <Button type="submit" variant="ghost" size="sm">
-              Sign out
-            </Button>
-          </form>
-        </div>
+      {/* Footer: Settings → hairline → user (Figma gap 16px) */}
+      <div className="mt-auto flex shrink-0 flex-col gap-4">
+        <ListItem
+          href="/settings"
+          size="md"
+          type="leading-icon"
+          active={pathname === "/settings" || pathname.startsWith("/settings/")}
+          icon={<Settings aria-hidden strokeWidth={1.75} />}
+          className="text-muted-foreground data-[active=true]:bg-active-grey data-[active=true]:text-primary data-[active=true]:hover:bg-active-grey"
+        >
+          Settings
+        </ListItem>
+
+        <div className="bg-hairline h-px w-full" role="separator" />
+
+        <form action="/auth/signout" method="post">
+          <ListItem
+            nativeType="submit"
+            type="leading-icon"
+            size="md"
+            icon={<User aria-hidden strokeWidth={1.75} />}
+            title={userEmail ? `Sign out (${userEmail})` : "Sign out"}
+          >
+            {displayName(userEmail)}
+          </ListItem>
+        </form>
       </div>
     </aside>
   );
