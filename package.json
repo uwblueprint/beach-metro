@@ -16,7 +16,13 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "smoke": "playwright test e2e/api-smoke.spec.ts",
+    "db:push": "bash scripts/db.sh push",
+    "db:seed": "bash scripts/db.sh seed",
+    "db:types": "bash scripts/db.sh types",
+    "create-admin": "node --env-file=.env.local scripts/create-admin.ts",
+    "refresh-coords": "node --env-file=.env.local scripts/refresh-coords.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -48,9 +54,11 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "jsdom": "^29.1.1",
+    "postgres": "^3.4.9",
     "prettier": "^3.8.4",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "vite": "^8.1.4",
     "vitest": "^4.1.9"
   }
 }

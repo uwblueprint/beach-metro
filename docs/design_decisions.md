@@ -4,6 +4,41 @@ Running log of locked design decisions, kept out of the individual specs so they
 stay lean. When a decision is locked (client call, review round, team discussion),
 append it here with a one-line rationale and update the docs that implement it.
 
+## Backend implementation interpretations (feat/backend-api, 2026-07)
+
+Calls made where the specs were silent; each is covered by a test (see
+[`backend_testing.md`](backend_testing.md)). Flag any that read wrong.
+
+- **No pagination.** List endpoints return everything (filters/sort intact);
+  `{ data: T[] }` stays forwards-compatible with cursors. Locked for MVP row counts.
+- **Transfer = paired overrides.** Recipient overridden up by the source's
+  effective amount, source overridden to 0, auto reasons both ways; undo by
+  clearing overrides. Requires an existing recipient cell (a captain added
+  after issue creation has none), rejects self/zero-amount/paid targets.
+- **Live calc skips paid cells** — and closed issues entirely. So a reopen
+  resumes recalculation for unpaid cells only; paid cells stay frozen.
+- **Missed clamps at zero** per route (a route can't bill negative), and
+  calculated amounts round to cents (half-up). Exact rounding is still an
+  [OPEN] client item.
+- **Payout cells = captains active at issue creation**; the year table's
+  columns derive from the cells that exist (no snapshot table).
+- **Pay-config edits recalc every open issue** immediately (cadence excluded —
+  informational only).
+- **Deliveries of routes that later lose their volunteer** (detach/soft delete)
+  roll up to no captain while the issue is open; close freezes whatever is
+  current. The transfer action is the correction tool.
+- **Issue name/date stay editable after close** (metadata, not a locked value).
+- **Archived years refuse new issues** (409).
+- **Route endpoint addresses are stored as `residential`**; `commercial` is
+  reserved for drops. Old address rows are left in place when an entity
+  re-points (endpoints can be shared; orphans are harmless).
+- **Retired volunteers/captains can't take routes/territories** (409), and
+  vacation windows use inclusive bounds.
+- **Reactivation isn't exposed** — the people flow allows Retired → Active but
+  the API spec never defined it; recorded in `open_items.md`.
+- **Soft-deleted routes 404** on direct fetch and are filtered from every list;
+  the row (and its deliveries) remain for history.
+
 ## Issue lifecycle & finance (locked 2026-06, review round with client)
 
 - **No Draft issue state.** Issues are created Open and calculations start

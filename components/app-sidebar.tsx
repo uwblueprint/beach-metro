@@ -12,6 +12,8 @@ const NAV_ITEMS = [
   { label: "Routes", href: "/routes" },
   { label: "Members", href: "/members" },
   { label: "Finances", href: "/finances" },
+  // TEMP: API playground for backend exploration — delete with app/(dashboard)/playground.
+  { label: "API Playground · temp", href: "/playground" },
 ] as const;
 
 function NavLink({ label, href }: { label: string; href: string }) {

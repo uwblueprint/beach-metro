@@ -36,7 +36,7 @@ API. (If that changes, role checks slot in as a `403` gate; out of scope now.)
 
 **Response envelope.**
 
-- Success: `{ "data": <payload> }` (lists: `{ "data": T[], "nextCursor"?: string }`).
+- Success: `{ "data": <payload> }` (lists: `{ "data": T[] }`).
 - Error: `{ "error": { "code": string, "message": string, "details"?: unknown } }`.
 
 **Status codes.** `200` OK, `201` Created, `204` No Content, `400`/`422` validation,
@@ -49,8 +49,9 @@ with `details`.
 
 **IDs.** UUID path params, except `GoogleMapsLocation`, keyed by Google `place_id`.
 
-**Lists.** Support `?limit` + `?cursor` (cursor pagination), `?sort`, and
-resource-specific filters (documented per resource).
+**Lists.** No pagination for MVP (decided — internal-tool row counts): lists
+return everything, with resource-specific filters. The `{ data: T[] }` envelope
+leaves room to add cursors later without breaking clients.
 
 **Custom actions.** Non-CRUD transitions are `POST /api/<resource>/{id}/<action>`
 (the AIP custom-method concept, spelled as a sub-path since Next file routing has no
@@ -233,8 +234,9 @@ type OverridePayout = { amount: number; reason: string }; // reason required; no
 
 // POST /api/payouts/{id}/transfer
 // Moves this issue's effective amount to another captain's cell and zeroes this one
-// (finance flow §4g). SUBJECT TO CHANGE: exact semantics of how the recipient cell
-// records the moved amount.
+// (finance flow §4g). Decided: implemented as PAIRED OVERRIDES — the recipient is
+// overridden up by the amount and the source overridden to 0, both with auto
+// reasons; undo by clearing the overrides (design_decisions.md).
 type TransferPayout = { toCaptainId: string };
 ```
 
@@ -317,10 +319,9 @@ the resulting `Address` + `GoogleMapsLocation`. A scheduled refresh job re-resol
 
 ## 8. Open questions
 
-- **Pagination style.** Cursor (recommended) vs page/offset — pick one and apply uniformly.
+- ~~Pagination style~~ — decided: no pagination for MVP (see §1 Lists).
+- ~~Transfer semantics~~ — decided: paired overrides (see §4 and design_decisions.md).
 - **Batch issue creation.** Array body vs a dedicated `:batchCreate`.
-- **Transfer semantics.** How the recipient cell records a transferred amount
-  (override-style entry vs a dedicated field) — SUBJECT TO CHANGE.
 - **House-count recompute.** A manual endpoint vs a background job (Toronto Open Data
   ingestion) — tied to the infra spec's open question.
 - **Idempotency.** Whether `POST` creates accept an `Idempotency-Key` header.
