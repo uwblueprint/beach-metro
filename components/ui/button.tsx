@@ -4,33 +4,28 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[4px] border border-transparent bg-clip-padding text-md font-normal whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "bg-active text-bg hover:bg-active-hover",
+        default:
+          "bg-secondary-fill text-primary hover:bg-secondary-fill-hover disabled:text-disabled",
+        primary: "bg-active text-bg hover:bg-active-hover disabled:bg-active/50",
         outline:
-          "border-border bg-bg hover:bg-muted hover:text-primary aria-expanded:bg-muted aria-expanded:text-primary",
-        secondary:
-          "bg-secondary text-primary hover:bg-secondary-hover aria-expanded:bg-secondary aria-expanded:text-primary",
-        ghost:
-          "hover:bg-muted hover:text-primary aria-expanded:bg-muted aria-expanded:text-primary",
-        destructive:
-          "bg-destructive text-bg hover:bg-destructive-hover focus-visible:border-destructive/40 focus-visible:ring-destructive/20",
+          "border-hairline text-primary hover:border-transparent hover:bg-secondary-fill-hover disabled:text-disabled",
+        danger: "bg-destructive text-bg hover:bg-destructive-hover disabled:bg-destructive/50",
+        text: "text-primary hover:bg-secondary-fill-hover disabled:text-disabled",
         link: "text-active underline-offset-4 hover:underline",
       },
       size: {
-        default:
-          "h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        icon: "size-8",
-        "icon-xs":
-          "size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm":
-          "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
-        "icon-lg": "size-9",
+        default: "h-8 gap-2 px-3 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
+        xs: "h-5 gap-1 px-1.5 text-xs [&_svg:not([class*='size-'])]:size-2.5",
+        sm: "h-6 gap-1 px-2 text-sm [&_svg:not([class*='size-'])]:size-3",
+        lg: "h-9 gap-2 px-4 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5",
+        icon: "size-8 p-2",
+        "icon-xs": "size-5 p-1 [&_svg:not([class*='size-'])]:size-2.5",
+        "icon-sm": "size-6 p-1.5 [&_svg:not([class*='size-'])]:size-3",
+        "icon-lg": "size-9 p-2.5",
       },
     },
     defaultVariants: {
