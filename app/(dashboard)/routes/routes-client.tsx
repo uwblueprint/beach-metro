@@ -95,6 +95,18 @@ export function RoutesClient() {
     queryKey: ["volunteers", "for-map"],
     queryFn: () => getJson<VolunteerSummary[]>("/api/volunteers"),
   });
+  // Road-following paths, keyed by route id. Independent of filters/search so it
+  // loads once; the map draws straight lines until it resolves.
+  const paths = useQuery({
+    queryKey: ["route-paths"],
+    queryFn: () =>
+      getJson<{ id: string; path: { lat: number; lng: number }[] }[]>("/api/routes/paths"),
+    staleTime: 5 * 60_000,
+  });
+  const pathById = useMemo(
+    () => new Map((paths.data ?? []).map((p) => [p.id, p.path])),
+    [paths.data],
+  );
 
   const mapRoutes: MapRoute[] = (routes.data ?? []).map((r) => ({
     id: r.id,
@@ -104,6 +116,7 @@ export function RoutesClient() {
     needsAttention: r.needsAttention,
     start: r.start,
     end: r.end,
+    path: pathById.get(r.id) ?? null,
   }));
   const mapHomes: MapHome[] = showHomes
     ? (volunteers.data ?? []).map((v) => ({

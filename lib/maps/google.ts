@@ -23,6 +23,35 @@ function serverKey(): string {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+/** Decode Google's Encoded Polyline Algorithm string into lat/lng vertices. */
+function decodePolyline(encoded: string): LatLng[] {
+  const points: LatLng[] = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+  while (index < encoded.length) {
+    let shift = 0;
+    let result = 0;
+    let b: number;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    lat += result & 1 ? ~(result >> 1) : result >> 1;
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    lng += result & 1 ? ~(result >> 1) : result >> 1;
+    points.push({ latitude: lat / 1e5, longitude: lng / 1e5 });
+  }
+  return points;
+}
+
 /** Map Address Validation granularity → our geocode-confidence enum. */
 function granularityToLocationType(granularity: string | undefined): LocationType {
   switch (granularity) {
@@ -183,5 +212,33 @@ export const googleMapsProvider: MapsProvider = {
         distanceMeters: entry.distanceMeters ?? 0,
         durationSeconds: entry.duration ? parseInt(String(entry.duration), 10) : 0,
       }));
+  },
+
+  /** Routes API Compute Routes (research doc §4) — walking path, polyline-only
+   * field mask. Returns [] when no route exists so callers fall back to a line. */
+  async routePath(origin: LatLng, destination: LatLng): Promise<LatLng[]> {
+    const res = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": serverKey(),
+        "X-Goog-FieldMask": "routes.polyline.encodedPolyline",
+      },
+      body: JSON.stringify({
+        origin: { location: { latLng: origin } },
+        destination: { location: { latLng: destination } },
+        travelMode: "WALK",
+      }),
+    });
+    const json: any = await res.json();
+    if (!res.ok) {
+      throw new ServiceError(
+        "internal",
+        `Compute Routes failed: ${json?.error?.message ?? res.status}`,
+        502,
+      );
+    }
+    const encoded: string | undefined = json.routes?.[0]?.polyline?.encodedPolyline;
+    return encoded ? decodePolyline(encoded) : [];
   },
 };

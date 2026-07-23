@@ -16,6 +16,8 @@ export interface MapRoute {
   needsAttention: boolean;
   start: { latitude: number; longitude: number } | null;
   end: { latitude: number; longitude: number } | null;
+  /** Road-following vertices from the Routes API; falls back to start→end. */
+  path?: { lat: number; lng: number }[] | null;
 }
 
 export interface MapHome {
@@ -75,10 +77,12 @@ function RouteOverlay(props: { route: MapRoute; selected: boolean; onSelect: () 
     const from = { lat: route.start.latitude, lng: route.start.longitude };
     const to = { lat: route.end.latitude, lng: route.end.longitude };
     const dashed = route.suspended; // suspended reads as a dashed / "paused" line
+    // Trace the real street path when we have it; otherwise a straight segment.
+    const linePath = route.path && route.path.length >= 2 ? route.path : [from, to];
 
     const line = new google.maps.Polyline({
       map,
-      path: [from, to],
+      path: linePath,
       strokeColor: color,
       strokeWeight: selected ? 6 : 4,
       strokeOpacity: dashed ? 0 : 0.95,

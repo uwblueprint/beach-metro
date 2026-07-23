@@ -165,6 +165,49 @@ export async function listRoutes(filters: z.infer<typeof routesQuery>): Promise<
   return all;
 }
 
+export interface RoutePathEntry {
+  id: string;
+  /** Road-following vertices (lat/lng) for the map to draw. */
+  path: { lat: number; lng: number }[];
+}
+
+// Compute Routes is billed per call, but a route's path only changes when its
+// endpoints move — so cache by id+endpoints for the server's lifetime.
+const routePathCache = new Map<string, { lat: number; lng: number }[]>();
+
+/**
+ * Road-following path for every route that has both endpoints. Computed via the
+ * Routes API and cached; a route whose call fails is simply omitted, so the map
+ * draws a straight line for it rather than blanking.
+ */
+export async function listRoutePaths(): Promise<RoutePathEntry[]> {
+  const routes = (await listRoutes({})).filter((r) => r.start && r.end);
+  const provider = getMapsProvider();
+
+  const entries = await Promise.all(
+    routes.map(async (r): Promise<RoutePathEntry | null> => {
+      const start = r.start!;
+      const end = r.end!;
+      const key = `${r.id}:${start.latitude},${start.longitude}:${end.latitude},${end.longitude}`;
+      let path = routePathCache.get(key);
+      if (!path) {
+        try {
+          const pts = await provider.routePath(start, end);
+          const mapped = pts.map((p) => ({ lat: p.latitude, lng: p.longitude }));
+          if (mapped.length >= 2) {
+            routePathCache.set(key, mapped);
+            path = mapped;
+          }
+        } catch {
+          return null; // degrade to straight line on the client
+        }
+      }
+      return path && path.length >= 2 ? { id: r.id, path } : null;
+    }),
+  );
+  return entries.filter((e): e is RoutePathEntry => e !== null);
+}
+
 async function fetchRoute(id: string): Promise<VolunteerRouteRow> {
   const { data, error } = await db()
     .from("volunteer_routes")
