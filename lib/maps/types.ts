@@ -52,4 +52,7 @@ export interface MapsProvider {
   geocodePlaceId(placeId: string): Promise<ResolvedAddress>;
   /** Compute Route Matrix: one origin → many destinations, for nearest-vacant. */
   routeMatrix(origin: LatLng, destinations: LatLng[]): Promise<RouteMatrixEntry[]>;
+  /** Compute Routes: the walking path along real streets between two points,
+   * decoded to lat/lng vertices — so the map traces roads, not straight lines. */
+  routePath(origin: LatLng, destination: LatLng): Promise<LatLng[]>;
 }

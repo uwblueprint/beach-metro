@@ -102,4 +102,9 @@ export const fakeMapsProvider: MapsProvider = {
       };
     });
   },
+
+  async routePath(origin, destination) {
+    // No road network offline — the straight segment is the honest fallback.
+    return [origin, destination];
+  },
 };

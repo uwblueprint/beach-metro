@@ -42,6 +42,10 @@ export interface RouteSummary {
   notes: string | null;
   assignedVolunteer: { id: string; firstName: string; lastName: string; status: string } | null;
   captain: { id: string; name: string } | null;
+  /** Cached start/end coordinates so the map can draw every polyline from one
+   * list call (null when the 30-day coordinate cache is empty). */
+  start: { latitude: number; longitude: number } | null;
+  end: { latitude: number; longitude: number } | null;
 }
 
 export interface RouteDetail extends RouteSummary {
@@ -72,7 +76,18 @@ async function fetchContext(): Promise<Context> {
   };
 }
 
-function toSummary(r: VolunteerRouteRow, ctx: Context, date: string): RouteSummary {
+function coord(detail: AddressDetail | undefined): { latitude: number; longitude: number } | null {
+  return detail && detail.latitude !== null && detail.longitude !== null
+    ? { latitude: detail.latitude, longitude: detail.longitude }
+    : null;
+}
+
+function toSummary(
+  r: VolunteerRouteRow,
+  ctx: Context,
+  date: string,
+  addresses?: Map<string, AddressDetail>,
+): RouteSummary {
   const volunteer = r.assigned_volunteer_id
     ? (ctx.volunteers.find((v) => v.id === r.assigned_volunteer_id) ?? null)
     : null;
@@ -110,6 +125,8 @@ function toSummary(r: VolunteerRouteRow, ctx: Context, date: string): RouteSumma
     captain: captain
       ? { id: captain.id, name: `${captain.first_name} ${captain.last_name}` }
       : null,
+    start: coord(addresses?.get(r.start_address_id)),
+    end: coord(addresses?.get(r.end_address_id)),
   };
 }
 
@@ -123,7 +140,12 @@ export async function listRoutes(filters: z.infer<typeof routesQuery>): Promise<
   const ctx = await fetchContext();
   const date = today();
 
-  let all = ((data ?? []) as VolunteerRouteRow[]).map((r) => toSummary(r, ctx, date));
+  const rows = (data ?? []) as VolunteerRouteRow[];
+  const addresses = await getAddressDetails([
+    ...new Set(rows.flatMap((r) => [r.start_address_id, r.end_address_id])),
+  ]);
+
+  let all = rows.map((r) => toSummary(r, ctx, date, addresses));
   if (filters.vacancy) all = all.filter((r) => r.lifecycle === filters.vacancy);
   if (filters.side) all = all.filter((r) => r.side === filters.side);
   if (filters.needsAttention !== undefined) {
@@ -143,6 +165,49 @@ export async function listRoutes(filters: z.infer<typeof routesQuery>): Promise<
   return all;
 }
 
+export interface RoutePathEntry {
+  id: string;
+  /** Road-following vertices (lat/lng) for the map to draw. */
+  path: { lat: number; lng: number }[];
+}
+
+// Compute Routes is billed per call, but a route's path only changes when its
+// endpoints move — so cache by id+endpoints for the server's lifetime.
+const routePathCache = new Map<string, { lat: number; lng: number }[]>();
+
+/**
+ * Road-following path for every route that has both endpoints. Computed via the
+ * Routes API and cached; a route whose call fails is simply omitted, so the map
+ * draws a straight line for it rather than blanking.
+ */
+export async function listRoutePaths(): Promise<RoutePathEntry[]> {
+  const routes = (await listRoutes({})).filter((r) => r.start && r.end);
+  const provider = getMapsProvider();
+
+  const entries = await Promise.all(
+    routes.map(async (r): Promise<RoutePathEntry | null> => {
+      const start = r.start!;
+      const end = r.end!;
+      const key = `${r.id}:${start.latitude},${start.longitude}:${end.latitude},${end.longitude}`;
+      let path = routePathCache.get(key);
+      if (!path) {
+        try {
+          const pts = await provider.routePath(start, end);
+          const mapped = pts.map((p) => ({ lat: p.latitude, lng: p.longitude }));
+          if (mapped.length >= 2) {
+            routePathCache.set(key, mapped);
+            path = mapped;
+          }
+        } catch {
+          return null; // degrade to straight line on the client
+        }
+      }
+      return path && path.length >= 2 ? { id: r.id, path } : null;
+    }),
+  );
+  return entries.filter((e): e is RoutePathEntry => e !== null);
+}
+
 async function fetchRoute(id: string): Promise<VolunteerRouteRow> {
   const { data, error } = await db()
     .from("volunteer_routes")
@@ -158,8 +223,9 @@ async function fetchRoute(id: string): Promise<VolunteerRouteRow> {
 export async function getRoute(id: string): Promise<RouteDetail> {
   const r = await fetchRoute(id);
   const ctx = await fetchContext();
+  const addresses = await getAddressDetails([r.start_address_id, r.end_address_id]);
   return {
-    ...toSummary(r, ctx, today()),
+    ...toSummary(r, ctx, today(), addresses),
     startAddress: await getAddressDetail(r.start_address_id),
     endAddress: await getAddressDetail(r.end_address_id),
   };
@@ -317,29 +383,16 @@ export async function nearestVacantRoutes(
     origin = { latitude: resolved.latitude, longitude: resolved.longitude };
   }
 
-  // Vacant routes + their start-address coordinates.
+  // Vacant routes — list summaries already carry start coordinates.
   const vacant = (await listRoutes({ vacancy: "vacant" })).slice(0, 100);
-  const { data: rows, error } = await db()
-    .from("volunteer_routes")
-    .select("id, start_address_id")
-    .in(
-      "id",
-      vacant.map((r) => r.id),
-    );
-  if (error) throwDb(error);
-  const startByRoute = new Map(
-    ((rows ?? []) as Array<Pick<VolunteerRouteRow, "id" | "start_address_id">>).map((r) => [
-      r.id,
-      r.start_address_id,
-    ]),
-  );
-  const addressDetails = await getAddressDetails([...startByRoute.values()]);
-
   const destinations: Array<{ route: RouteSummary; latitude: number; longitude: number }> = [];
   for (const route of vacant) {
-    const addr = addressDetails.get(startByRoute.get(route.id) ?? "");
-    if (addr && addr.latitude !== null && addr.longitude !== null) {
-      destinations.push({ route, latitude: addr.latitude, longitude: addr.longitude });
+    if (route.start) {
+      destinations.push({
+        route,
+        latitude: route.start.latitude,
+        longitude: route.start.longitude,
+      });
     }
   }
   if (destinations.length === 0) return [];
