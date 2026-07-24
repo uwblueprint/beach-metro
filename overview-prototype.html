@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beach Metro — Overview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f7f7f7; color: #1a1a1a; display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 180px; background: #fff; border-right: 1px solid #e5e5e5; padding: 20px 12px; display: flex; flex-direction: column; justify-content: space-between; }
+  .sidebar-top { display: flex; flex-direction: column; gap: 4px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin-bottom: 16px; font-weight: 600; font-size: 15px; }
+  .sidebar-logo svg { width: 18px; height: 18px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; font-size: 14px; color: #555; cursor: pointer; text-decoration: none; }
+  .sidebar-item:hover { background: #f0f0f0; }
+  .sidebar-item.active { background: #e0f4ff; color: #0ea5e9; font-weight: 500; }
+  .sidebar-bottom { display: flex; flex-direction: column; gap: 4px; }
+  .sidebar-bottom .sidebar-item { font-size: 13px; }
+
+  /* Main */
+  .main { flex: 1; padding: 24px 32px; overflow-y: auto; }
+
+  /* Header */
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #666; }
+  .breadcrumb .current { color: #1a1a1a; font-weight: 500; display: flex; align-items: center; gap: 4px; }
+  .breadcrumb .current svg { width: 12px; height: 12px; }
+  .more-btn { width: 32px; height: 32px; border-radius: 6px; border: 1px solid #e0e0e0; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; color: #666; }
+
+  /* Stat cards */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: #fff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 16px 20px; }
+  .stat-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .stat-value { font-size: 32px; font-weight: 600; margin-bottom: 4px; }
+  .stat-sub { font-size: 12px; color: #888; }
+  .stat-sub a { color: #0ea5e9; text-decoration: none; }
+
+  /* Cards */
+  .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 20px 24px; margin-bottom: 16px; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .card-title { font-size: 14px; font-weight: 600; }
+  .card-meta { font-size: 13px; color: #666; }
+  .card-meta strong { color: #1a1a1a; }
+
+  /* Chart */
+  .chart { display: flex; align-items: flex-end; gap: 8px; height: 120px; padding-top: 24px; position: relative; }
+  .chart-bar-group { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
+  .chart-bar { width: 100%; border-radius: 4px 4px 0 0; background: #b2e6f7; min-height: 4px; position: relative; }
+  .chart-bar.current { background: #0ea5e9; }
+  .chart-bar.future { background: #f0f0f0; }
+  .chart-label { font-size: 11px; color: #888; }
+  .chart-tooltip { position: absolute; top: -28px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 4px; white-space: nowrap; }
+  .today-line { position: absolute; top: 0; bottom: 20px; width: 1px; background: #ccc; }
+  .today-label { position: absolute; top: -16px; font-size: 10px; color: #999; }
+
+  /* Period dropdown */
+  .period-dropdown-wrap { position: relative; }
+  .period-dropdown-btn { font-size: 13px; padding: 5px 12px; border-radius: 6px; border: 1px solid #e0e0e0; background: #fff; color: #1a1a1a; cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: 500; }
+  .period-dropdown-btn:hover { background: #f5f5f5; }
+  .period-dropdown-btn svg { width: 12px; height: 12px; }
+  .period-menu { position: absolute; top: calc(100% + 4px); right: 0; background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); min-width: 180px; z-index: 10; display: none; overflow: hidden; }
+  .period-menu.open { display: block; }
+  .period-menu-item { padding: 10px 14px; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
+  .period-menu-item:hover { background: #f5f5f5; }
+  .period-menu-item.active { font-weight: 500; }
+  .period-menu-item.active::after { content: '✓'; font-size: 12px; color: #0ea5e9; }
+  .period-menu-divider { height: 1px; background: #f0f0f0; margin: 4px 0; }
+  .period-range { font-size: 12px; color: #888; margin-top: 8px; margin-bottom: 4px; }
+
+  /* Section divider */
+  .section-label { font-size: 11px; font-weight: 500; color: #aaa; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 24px; margin-bottom: 6px; }
+
+  /* Captain payments */
+  .payment-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid #f0f0f0; }
+  .payment-row:last-child { border-bottom: none; }
+  .payment-name { font-size: 14px; font-weight: 500; }
+  .payment-meta { font-size: 13px; color: #888; margin-left: 12px; }
+  .payment-amount { font-size: 14px; font-weight: 500; }
+
+  /* Papers per issue */
+  .issue-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid #f0f0f0; }
+  .issue-row:last-child { border-bottom: none; }
+  .issue-name { font-size: 14px; font-weight: 600; }
+  .issue-date { font-size: 13px; color: #888; margin-left: 8px; }
+  .issue-count { font-size: 14px; font-weight: 500; }
+  .view-all { font-size: 13px; color: #0ea5e9; text-decoration: none; padding-top: 12px; display: inline-block; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <div class="sidebar-top">
+    <div class="sidebar-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+      Dispatch
+    </div>
+    <a class="sidebar-item active" href="#">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+      Overview
+    </a>
+    <a class="sidebar-item" href="#">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><circle cx="8" cy="8" r="6.5"/></svg>
+      Routes
+    </a>
+    <a class="sidebar-item" href="#">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2.5-5 6-5s6 2 6 5"/></svg>
+      Members
+    </a>
+    <a class="sidebar-item" href="#">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6h12"/></svg>
+      Finances
+    </a>
+  </div>
+  <div class="sidebar-bottom">
+    <a class="sidebar-item" href="#">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 2"/></svg>
+      Settings
+    </a>
+    <a class="sidebar-item" href="#">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2.5-5 6-5s6 2 6 5"/></svg>
+      Melinda Drake
+    </a>
+  </div>
+</nav>
+
+<!-- Main content -->
+<main class="main">
+  <!-- Header -->
+  <div class="page-header">
+    <div class="breadcrumb">
+      <span>Overview</span>
+      <span>/</span>
+      <span class="current">2025-26 <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5l3 3 3-3"/></svg></span>
+    </div>
+    <button class="more-btn">...</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-label">Papers for next issue</div>
+      <div class="stat-value">2847</div>
+      <div class="stat-sub">Issue 27 &bull; Dec 30th</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Active volunteers</div>
+      <div class="stat-value">48</div>
+      <div class="stat-sub">of 53 total</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Routes missing a carrier</div>
+      <div class="stat-value">3</div>
+      <div class="stat-sub"><a href="#">View routes &nearr;</a></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">YTD captain costs</div>
+      <div class="stat-value">$1,847</div>
+      <div class="stat-sub">26 issues</div>
+    </div>
+  </div>
+
+  <!-- YTD Running Cost -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">YTD Running Cost</span>
+      <span class="card-meta">June 2026 <strong>$216.00</strong></span>
+    </div>
+    <div class="chart">
+      <div class="chart-bar-group"><div class="chart-bar" style="height:55px"></div><span class="chart-label">Mar</span></div>
+      <div class="chart-bar-group"><div class="chart-bar" style="height:65px"></div><span class="chart-label">Apr</span></div>
+      <div class="chart-bar-group"><div class="chart-bar" style="height:58px"></div><span class="chart-label">May</span></div>
+      <div class="chart-bar-group" style="position:relative"><div class="chart-bar current" style="height:80px"><span class="chart-tooltip">$216.00</span></div><span class="chart-label">Jun</span></div>
+      <div class="chart-bar-group"><div class="chart-bar future" style="height:30px"></div><span class="chart-label">Jul</span></div>
+      <div class="chart-bar-group"><div class="chart-bar future" style="height:0px"></div><span class="chart-label">Aug</span></div>
+      <div class="chart-bar-group"><div class="chart-bar future" style="height:0px"></div><span class="chart-label">Sep</span></div>
+      <div class="chart-bar-group"><div class="chart-bar future" style="height:0px"></div><span class="chart-label">Oct</span></div>
+      <div class="chart-bar-group"><div class="chart-bar future" style="height:0px"></div><span class="chart-label">Nov</span></div>
+      <div class="chart-bar-group"><div class="chart-bar future" style="height:0px"></div><span class="chart-label">Dec</span></div>
+      <div class="chart-bar-group"><div class="chart-bar future" style="height:0px"></div><span class="chart-label">Jan</span></div>
+      <div class="chart-bar-group"><div class="chart-bar future" style="height:0px"></div><span class="chart-label">Feb</span></div>
+    </div>
+  </div>
+
+  <!-- Captain Payments -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Captain Payments</span>
+      <div class="period-dropdown-wrap">
+        <button class="period-dropdown-btn" onclick="toggleDropdown()">
+          <span id="period-btn-label">YTD</span>
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5l3 3 3-3"/></svg>
+        </button>
+        <div class="period-menu" id="period-menu">
+          <div class="period-menu-item active" onclick="setPeriod('ytd')">YTD</div>
+          <div class="period-menu-divider"></div>
+          <div class="period-menu-item" onclick="setPeriod('q1')">Q1 (Mar – May)</div>
+          <div class="period-menu-item" onclick="setPeriod('q2')">Q2 (Jun – Aug)</div>
+          <div class="period-menu-item" onclick="setPeriod('q3')">Q3 (Sep – Nov)</div>
+          <div class="period-menu-item" onclick="setPeriod('q4')">Q4 (Dec – Feb)</div>
+          <div class="period-menu-divider"></div>
+          <div class="period-menu-item" onclick="setPeriod('custom')">Custom range...</div>
+        </div>
+      </div>
+    </div>
+    <div class="period-range" id="period-range">Mar 2025 &ndash; Jun 2026 (full year)</div>
+
+    <div id="captain-payments">
+      <div class="payment-row">
+        <div><span class="payment-name">Walter Wren</span><span class="payment-meta">Drop &bull; Biweekly</span></div>
+        <span class="payment-amount">$438.00</span>
+      </div>
+      <div class="payment-row">
+        <div><span class="payment-name">Rudy Peel</span><span class="payment-meta">Bundle &bull; Biweekly</span></div>
+        <span class="payment-amount">$612.00</span>
+      </div>
+      <div class="payment-row">
+        <div><span class="payment-name">Carol Fenn</span><span class="payment-meta">Bundle &bull; Monthly</span></div>
+        <span class="payment-amount">$402.00</span>
+      </div>
+      <div class="payment-row">
+        <div><span class="payment-name">Morris Hatch</span><span class="payment-meta">Drop &bull; Biweekly</span></div>
+        <span class="payment-amount">$256.00</span>
+      </div>
+      <div class="payment-row">
+        <div><span class="payment-name">Doug Kim</span><span class="payment-meta">Bundle &bull; Monthly</span></div>
+        <span class="payment-amount">$214.00</span>
+      </div>
+    </div>
+
+    <div class="section-label">Substitute Payments</div>
+    <div class="payment-row">
+      <div><span class="payment-name">Susan Drake</span><span class="payment-meta">Covered Carol Fenn &bull; 2 issues</span></div>
+      <span class="payment-amount">$50.00</span>
+    </div>
+  </div>
+
+  <!-- Papers Per Issue -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Papers Per Issue</span>
+    </div>
+    <div class="issue-row">
+      <div><span class="issue-name">Issue 26</span><span class="issue-date">Dec 16th</span></div>
+      <span class="issue-count">2,901</span>
+    </div>
+    <div class="issue-row">
+      <div><span class="issue-name">Issue 25</span><span class="issue-date">Dec 2nd</span></div>
+      <span class="issue-count">2,846</span>
+    </div>
+    <div class="issue-row">
+      <div><span class="issue-name">Issue 24</span><span class="issue-date">Nov 18th</span></div>
+      <span class="issue-count">2,734</span>
+    </div>
+    <a class="view-all" href="#">View all 26 issues &nearr;</a>
+  </div>
+</main>
+
+<script>
+const quarterData = {
+  ytd: {
+    label: 'YTD',
+    range: 'Mar 2025 &ndash; Jun 2026 (full year)',
+    captains: [
+      { name: 'Walter Wren', meta: 'Drop &bull; Biweekly', amount: '$438.00' },
+      { name: 'Rudy Peel', meta: 'Bundle &bull; Biweekly', amount: '$612.00' },
+      { name: 'Carol Fenn', meta: 'Bundle &bull; Monthly', amount: '$402.00' },
+      { name: 'Morris Hatch', meta: 'Drop &bull; Biweekly', amount: '$256.00' },
+      { name: 'Doug Kim', meta: 'Bundle &bull; Monthly', amount: '$214.00' },
+    ],
+    subs: [
+      { name: 'Susan Drake', meta: 'Covered Carol Fenn &bull; 2 issues', amount: '$50.00' },
+    ]
+  },
+  q1: {
+    label: 'Q1',
+    range: 'Mar 1 &ndash; May 31, 2026',
+    captains: [
+      { name: 'Walter Wren', meta: 'Drop &bull; Biweekly', amount: '$312.00' },
+      { name: 'Rudy Peel', meta: 'Bundle &bull; Biweekly', amount: '$445.00' },
+      { name: 'Carol Fenn', meta: 'Bundle &bull; Monthly', amount: '$289.00' },
+      { name: 'Morris Hatch', meta: 'Drop &bull; Biweekly', amount: '$178.00' },
+      { name: 'Doug Kim', meta: 'Bundle &bull; Monthly', amount: '$156.00' },
+    ],
+    subs: [
+      { name: 'Susan Drake', meta: 'Covered Carol Fenn &bull; 1 issue', amount: '$25.00' },
+    ]
+  },
+  q2: {
+    label: 'Q2',
+    range: 'Jun 1 &ndash; Aug 31, 2026',
+    captains: [
+      { name: 'Walter Wren', meta: 'Drop &bull; Biweekly', amount: '$126.00' },
+      { name: 'Rudy Peel', meta: 'Bundle &bull; Biweekly', amount: '$167.00' },
+      { name: 'Carol Fenn', meta: 'Bundle &bull; Monthly', amount: '$113.00' },
+      { name: 'Morris Hatch', meta: 'Drop &bull; Biweekly', amount: '$78.00' },
+      { name: 'Doug Kim', meta: 'Bundle &bull; Monthly', amount: '$58.00' },
+    ],
+    subs: [
+      { name: 'Susan Drake', meta: 'Covered Carol Fenn &bull; 1 issue', amount: '$25.00' },
+    ]
+  },
+  q3: {
+    label: 'Q3',
+    range: 'Sep 1 &ndash; Nov 30, 2026',
+    captains: [
+      { name: 'Walter Wren', meta: 'Drop &bull; Biweekly', amount: '$0.00' },
+      { name: 'Rudy Peel', meta: 'Bundle &bull; Biweekly', amount: '$0.00' },
+      { name: 'Carol Fenn', meta: 'Bundle &bull; Monthly', amount: '$0.00' },
+      { name: 'Morris Hatch', meta: 'Drop &bull; Biweekly', amount: '$0.00' },
+      { name: 'Doug Kim', meta: 'Bundle &bull; Monthly', amount: '$0.00' },
+    ],
+    subs: []
+  },
+  q4: {
+    label: 'Q4',
+    range: 'Dec 1, 2026 &ndash; Feb 28, 2027',
+    captains: [
+      { name: 'Walter Wren', meta: 'Drop &bull; Biweekly', amount: '$0.00' },
+      { name: 'Rudy Peel', meta: 'Bundle &bull; Biweekly', amount: '$0.00' },
+      { name: 'Carol Fenn', meta: 'Bundle &bull; Monthly', amount: '$0.00' },
+      { name: 'Morris Hatch', meta: 'Drop &bull; Biweekly', amount: '$0.00' },
+      { name: 'Doug Kim', meta: 'Bundle &bull; Monthly', amount: '$0.00' },
+    ],
+    subs: []
+  },
+  custom: {
+    label: 'Custom',
+    range: '<input type="date" style="font-size:12px;border:1px solid #ddd;border-radius:4px;padding:2px 6px;"> &ndash; <input type="date" style="font-size:12px;border:1px solid #ddd;border-radius:4px;padding:2px 6px;">',
+    captains: [
+      { name: 'Walter Wren', meta: 'Drop &bull; Biweekly', amount: '$438.00' },
+      { name: 'Rudy Peel', meta: 'Bundle &bull; Biweekly', amount: '$612.00' },
+      { name: 'Carol Fenn', meta: 'Bundle &bull; Monthly', amount: '$402.00' },
+      { name: 'Morris Hatch', meta: 'Drop &bull; Biweekly', amount: '$256.00' },
+      { name: 'Doug Kim', meta: 'Bundle &bull; Monthly', amount: '$214.00' },
+    ],
+    subs: [
+      { name: 'Susan Drake', meta: 'Covered Carol Fenn &bull; 2 issues', amount: '$50.00' },
+    ]
+  }
+};
+
+function toggleDropdown() {
+  document.getElementById('period-menu').classList.toggle('open');
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.period-dropdown-wrap')) {
+    document.getElementById('period-menu').classList.remove('open');
+  }
+});
+
+function setPeriod(period) {
+  const data = quarterData[period];
+  document.getElementById('period-btn-label').textContent = data.label;
+  document.getElementById('period-range').innerHTML = data.range;
+  document.getElementById('period-menu').classList.remove('open');
+
+  document.querySelectorAll('.period-menu-item').forEach(item => item.classList.remove('active'));
+  event.target.classList.add('active');
+
+  let html = '';
+  data.captains.forEach(c => {
+    html += `<div class="payment-row"><div><span class="payment-name">${c.name}</span><span class="payment-meta">${c.meta}</span></div><span class="payment-amount">${c.amount}</span></div>`;
+  });
+
+  if (data.subs.length > 0) {
+    html += '<div class="section-label">Substitute Payments</div>';
+    data.subs.forEach(s => {
+      html += `<div class="payment-row"><div><span class="payment-name">${s.name}</span><span class="payment-meta">${s.meta}</span></div><span class="payment-amount">${s.amount}</span></div>`;
+    });
+  }
+
+  document.getElementById('captain-payments').innerHTML = html;
+}
+</script>
+
+</body>
+</html>
