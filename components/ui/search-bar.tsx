@@ -25,7 +25,7 @@ function SearchBar({
   return (
     <div
       className={cn(
-        "flex w-full items-center gap-3 rounded-full border border-border px-3 py-2 transition-colors",
+        "@container flex w-full items-center gap-3 rounded-full border border-border px-3 py-2 transition-colors",
         "focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50", // TODO: define the focus ring style more deliberately.
         disabled && "pointer-events-none opacity-50",
         className,
@@ -40,7 +40,8 @@ function SearchBar({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        className="min-w-0 flex-1 bg-transparent text-md text-primary outline-none placeholder:text-secondary"
+        aria-label={placeholder}
+        className="min-w-0 flex-1 bg-transparent text-md text-primary outline-none placeholder:text-transparent @[10rem]:placeholder:text-secondary"
       />
       {value.length > 0 && (
         <button
