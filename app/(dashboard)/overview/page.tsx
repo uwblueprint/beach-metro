@@ -239,16 +239,7 @@ export default function OverviewPage() {
                 </Button>
               }
             />
-            <PopoverContent
-              align="end"
-              side="bottom"
-              collisionAvoidance={{
-                side: "shift",
-                align: "shift",
-                fallbackAxisSide: "none",
-              }}
-              className="w-44 gap-0 p-1"
-            >
+            <PopoverContent align="end" side="bottom" sideOffset={4} className="w-44 gap-0 p-1">
               <button
                 type="button"
                 onClick={() => {

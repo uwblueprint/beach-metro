@@ -19,7 +19,11 @@ function PopoverContent({
   alignOffset = 0,
   side = "bottom",
   sideOffset = 4,
-  collisionAvoidance,
+  collisionAvoidance = {
+    side: "none",
+    align: "none",
+    fallbackAxisSide: "none",
+  },
   ...props
 }: PopoverPrimitive.Popup.Props &
   Pick<
