@@ -223,3 +223,158 @@ const captainRows: { sortKey: DateOnly; row: MemberRow }[] = captains.map((c, i)
 export const memberRows: MemberRow[] = [...volunteerRows, ...captainRows]
   .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
   .map((entry) => entry.row);
+
+// --- Sidepanel detail types ---
+
+export interface Note {
+  id: UUID;
+  text: string;
+  date: string;
+}
+
+export interface RouteDetail {
+  id: UUID;
+  name: string;
+  bundles: number;
+  papers: number;
+}
+
+export interface TerritoryDrop {
+  id: UUID;
+  location: string;
+  bundles: number;
+  date: string;
+}
+
+export interface Reimbursement {
+  id: UUID;
+  amount: number;
+  date: string;
+  description: string;
+}
+
+export interface VolunteerDetail {
+  id: UUID;
+  role: "volunteer";
+  name: string;
+  email: Email;
+  phone: Phone;
+  address: string;
+  startDate: string;
+  captainName: string;
+  notes: Note[];
+  routes: RouteDetail[];
+}
+
+export interface CaptainDetail {
+  id: UUID;
+  role: "captain";
+  name: string;
+  email: Email;
+  phone: Phone;
+  rate: string;
+  cadence: string;
+  notes: Note[];
+  reimbursements: Reimbursement[];
+  territoryDrops: TerritoryDrop[];
+}
+
+export type MemberDetail = VolunteerDetail | CaptainDetail;
+
+const PAY_TYPE_LABEL: Record<PayType, string> = {
+  bundle: "by bundle",
+  paper: "by paper",
+  drop: "by drop",
+};
+
+const CADENCE_LABEL: Record<PayCadence, string> = {
+  weekly: "Weekly",
+  biweekly: "Bi-Weekly",
+};
+
+const sampleNotes: Record<UUID, Note[]> = {
+  [fakeUuid(2, 0)]: [
+    { id: fakeUuid(9, 1), text: "Prefers morning deliveries", date: "Mar. 15, 2024" },
+  ],
+  [fakeUuid(2, 2)]: [
+    { id: fakeUuid(9, 2), text: "On vacation for issues 19-22", date: "May 20, 2026" },
+    {
+      id: fakeUuid(9, 3),
+      text: "Lena lives in a cul-de-sac that is a 15 minute drive from her route",
+      date: "Jun. 4, 2022",
+    },
+  ],
+  [fakeUuid(1, 2)]: [
+    {
+      id: fakeUuid(9, 4),
+      text: "Handles overflow from Territory 2 when Raj is away",
+      date: "Jan. 8, 2025",
+    },
+  ],
+};
+
+const sampleRouteDetails: Record<UUID, RouteDetail[]> = {};
+volunteerSeeds.forEach(([, , routes], i) => {
+  const id = fakeUuid(2, i);
+  sampleRouteDetails[id] = routes.map((name, ri) => ({
+    id: fakeUuid(7, i * 10 + ri),
+    name,
+    bundles: 1,
+    papers: Math.floor(Math.random() * 40) + 15,
+  }));
+});
+
+const sampleTerritoryDrops: Record<UUID, TerritoryDrop[]> = {
+  [fakeUuid(1, 0)]: [
+    { id: fakeUuid(8, 1), location: "Woodbine Station", bundles: 3, date: "Jul. 1, 2026" },
+    { id: fakeUuid(8, 2), location: "Coxwell Station", bundles: 2, date: "Jul. 1, 2026" },
+  ],
+};
+
+const fakeAddresses = [
+  "1287 Whitehorn Cres., Toronto, ON, L8W 4R2",
+  "42 Balsam Ave., Toronto, ON, M4E 3B7",
+  "18 Silver Birch Ave., Toronto, ON, M4E 3L3",
+  "305 Kingston Rd., Toronto, ON, M4L 1T7",
+  "78 Wineva Ave., Toronto, ON, M4E 2T1",
+];
+
+export function getMemberDetail(id: UUID): MemberDetail | null {
+  const volunteer = volunteers.find((v) => v.id === id);
+  if (volunteer) {
+    const volIndex = volunteers.indexOf(volunteer);
+    const routes = sampleRouteDetails[id] ?? [];
+    return {
+      id: volunteer.id,
+      role: "volunteer",
+      name: `${volunteer.firstName} ${volunteer.lastName}`,
+      email: volunteer.email,
+      phone: volunteer.phone,
+      address: fakeAddresses[volIndex % fakeAddresses.length],
+      startDate: formatDate(volunteer.startDate),
+      captainName: volunteer.captainTerritoryId
+        ? (captainNameByTerritoryId.get(volunteer.captainTerritoryId) ?? "—")
+        : "—",
+      notes: sampleNotes[id] ?? [],
+      routes,
+    };
+  }
+
+  const captain = captains.find((c) => c.id === id);
+  if (captain) {
+    return {
+      id: captain.id,
+      role: "captain",
+      name: `${captain.firstName} ${captain.lastName}`,
+      email: captain.email,
+      phone: captain.phone,
+      rate: `$${captain.payRate.toFixed(2)}, ${PAY_TYPE_LABEL[captain.payType]}`,
+      cadence: CADENCE_LABEL[captain.payCadence],
+      notes: sampleNotes[id] ?? [],
+      reimbursements: [],
+      territoryDrops: sampleTerritoryDrops[id] ?? [],
+    };
+  }
+
+  return null;
+}

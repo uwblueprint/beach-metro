@@ -21,6 +21,10 @@ interface MembersTableProps {
   state: MembersTableState;
   /** Qualifying members for the current state, already filtered by the parent. */
   members: MemberRow[];
+  /** Externally-controlled selected row (for sidepanel highlighting). */
+  selectedId?: string | null;
+  /** Called when a row is clicked with the member's id. */
+  onRowClick?: (memberId: string) => void;
 }
 
 interface Column {
@@ -109,9 +113,21 @@ function RowActions({ member }: { member: MemberRow }) {
   );
 }
 
-function MembersTable({ state, members }: MembersTableProps) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+function MembersTable({
+  state,
+  members,
+  selectedId: externalSelectedId,
+  onRowClick,
+}: MembersTableProps) {
+  const [internalSelectedId, setInternalSelectedId] = useState<string | null>(null);
+  const selectedId = externalSelectedId ?? internalSelectedId;
   const columns = COLUMNS[state];
+
+  function handleRowClick(memberId: string) {
+    const next = selectedId === memberId ? null : memberId;
+    setInternalSelectedId(next);
+    onRowClick?.(memberId);
+  }
 
   return (
     <div className="flex w-full flex-col gap-1">
@@ -129,7 +145,7 @@ function MembersTable({ state, members }: MembersTableProps) {
           key={member.id}
           className="table-row group/table-row"
           data-active={selectedId === member.id || undefined}
-          onClick={() => setSelectedId((current) => (current === member.id ? null : member.id))}
+          onClick={() => handleRowClick(member.id)}
         >
           {columns.map((col) => (
             <TableCell key={col.key} width={col.width}>
