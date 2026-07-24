@@ -1,7 +1,7 @@
 "use client";
 
 import { MoreHorizontal } from "lucide-react";
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { type CSSProperties, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -113,21 +113,8 @@ function RowActions({ member }: { member: MemberRow }) {
   );
 }
 
-function MembersTable({
-  state,
-  members,
-  selectedId: externalSelectedId,
-  onRowClick,
-}: MembersTableProps) {
-  const [internalSelectedId, setInternalSelectedId] = useState<string | null>(null);
-  const selectedId = externalSelectedId ?? internalSelectedId;
+function MembersTable({ state, members, selectedId, onRowClick }: MembersTableProps) {
   const columns = COLUMNS[state];
-
-  function handleRowClick(memberId: string) {
-    const next = selectedId === memberId ? null : memberId;
-    setInternalSelectedId(next);
-    onRowClick?.(memberId);
-  }
 
   return (
     <div className="flex w-full flex-col gap-1">
@@ -145,7 +132,7 @@ function MembersTable({
           key={member.id}
           className="table-row group/table-row"
           data-active={selectedId === member.id || undefined}
-          onClick={() => handleRowClick(member.id)}
+          onClick={() => onRowClick?.(member.id)}
         >
           {columns.map((col) => (
             <TableCell key={col.key} width={col.width}>
