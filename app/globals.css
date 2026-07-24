@@ -160,3 +160,18 @@
     @apply font-sans;
   }
 }
+
+@keyframes payment-cell-flash {
+  from {
+    background-color: var(--bg-secondary);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@layer utilities {
+  .payment-cell-flash {
+    animation: payment-cell-flash 1.5s ease-out forwards;
+  }
+}
