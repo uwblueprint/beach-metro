@@ -26,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${dmSans.variable} ${dmMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">
+      <body className="flex h-full min-h-full flex-col">
         <Providers>{children}</Providers>
       </body>
     </html>
