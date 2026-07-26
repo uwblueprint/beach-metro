@@ -1,4 +1,4 @@
-# Beach Metro
+# Beach Metro 🏖️
 
 Internal volunteer and distribution management system for Beach Metro Community News,
 built by UW Blueprint. Product and engineering specs live in [`docs/`](docs/) (start

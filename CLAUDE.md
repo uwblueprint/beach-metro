@@ -1,19 +1,22 @@
+@AGENTS.md
+
 # Beach Metro — CLAUDE.md
 
 Internal volunteer & distribution management system for Beach Metro Community News, built by UW Blueprint. Replaces a fragile ~30-tab spreadsheet. Two internal admin users: a distribution manager (routes + volunteers) and an accounts manager (captain payments). Product and flow specs live in `docs/` (the PRD and route flow currently live on the `prd-md` and `route-management-md` branches until merged).
 
 ## Status
-Early. Design and docs exist; application code is not scaffolded yet. The `backend/` and `frontend/` apps (and their own narrower CLAUDE.md files) get added when those apps take shape — don't assume they exist.
+Early. Specs and design decisions live in `docs/`; a Next.js app is taking shape at the repo root (`app/`, `components/`, `features/`). Don’t assume a separate `backend/` or `frontend/` package exists yet.
 
 ## Stack (working assumptions)
 - TypeScript end-to-end.
-- Frontend: React, responsive web.
-- Backend: Node API; Postgres + PostGIS.
+- Frontend: React, responsive web (Next.js in this repo).
+- Backend: Node API; Postgres + PostGIS (Supabase in progress).
 - ORM (Prisma vs Drizzle vs raw `pg`) and auth library: not chosen yet — don't assume one.
 - Linear for tickets (prefix `BM-`).
 
 ## Repo map
 - `docs/` — PRD, schema, and flow specs. Source of truth for product + data model.
+- `AGENTS.md` — shared skill roster and routing (imported above for Claude Code; Cursor reads it natively).
 - `.claude/skills/` — project skills. `blueprint-*` are general and reusable across Blueprint projects; `beach-metro-*` are specific to this product. See `.claude/skills/README.md`.
 - `.claude/hooks/` — `block-secrets` (pre-write), `format-on-write`, `test-on-stop`.
 - `.claude/settings.json` — hook wiring.
@@ -37,10 +40,16 @@ At session start, read `LEARNINGS.md`. At session end, run `/blueprint-wrapup` t
 - Before declaring any change done, run `/blueprint-self-review`.
 
 ## Recommended skills to install (not bundled in this repo)
-Install separately when relevant, and verify each before trusting it:
+Install once per machine, and verify each before trusting it. Design-skill roster and routing: see `AGENTS.md`.
+
+- `make-interfaces-feel-better` — UI micro-polish (proactive on UI work).
+- `web-design-guidelines` — UI / a11y audit (default on UI work).
+- `transitions-dev` — CSS transitions (only when asked to animate).
+- `emil-design-eng` — motion/taste framework (only when explicitly called).
 - `frontend-design` (Anthropic) — intentional UI instead of generic patterns.
 - `skill-creator` (Anthropic) — author new Blueprint/Beach-Metro skills.
 - `obra/superpowers` (official marketplace) — plan + TDD methodology, if the team wants it.
+
 Bundled `/code-review`, `/run`, and `/verify` are available out of the box.
 
 Keep this file lean. Procedures belong in skills; discoveries belong in LEARNINGS.md.

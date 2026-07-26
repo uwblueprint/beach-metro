@@ -42,7 +42,7 @@ export default async function LoginPage({
             </p>
           ) : null}
 
-          <Button type="submit" className="w-full">
+          <Button type="submit" variant="primary" className="w-full">
             Sign in
           </Button>
         </form>
