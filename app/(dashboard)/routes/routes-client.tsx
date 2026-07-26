@@ -5,7 +5,7 @@
 // assign) — the design engineers restyle it. Structural Tailwind only.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +78,7 @@ export function RoutesClient() {
   const [q, setQ] = useState("");
   const [showHomes, setShowHomes] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const listUrl = useMemo(() => {
     const params = new URLSearchParams();
@@ -131,9 +132,20 @@ export function RoutesClient() {
     <div className="flex h-[calc(100vh-4rem)] flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold">Routes</h1>
-        <span className="text-muted-foreground text-sm">
-          {routes.data ? `Showing ${routes.data.length}` : "Loading…"}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-muted-foreground text-sm">
+            {routes.data ? `Showing ${routes.data.length}` : "Loading…"}
+          </span>
+          <Button
+            size="sm"
+            onClick={() => {
+              setSelectedId(null);
+              setCreating(true);
+            }}
+          >
+            Add route
+          </Button>
+        </div>
       </div>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1fr_360px]">
@@ -180,9 +192,19 @@ export function RoutesClient() {
           </div>
         </div>
 
-        {/* Right rail: list OR detail */}
+        {/* Right rail: create form, detail, OR list */}
         <div className="min-h-0 overflow-auto rounded-lg border">
-          {selectedId ? (
+          {creating ? (
+            <CreateRoutePanel
+              onClose={() => setCreating(false)}
+              onCreated={(id) => {
+                setCreating(false);
+                setSelectedId(id);
+                qc.invalidateQueries({ queryKey: ["routes"] });
+                qc.invalidateQueries({ queryKey: ["route-paths"] });
+              }}
+            />
+          ) : selectedId ? (
             <RouteDetailPanel
               routeId={selectedId}
               onClose={() => setSelectedId(null)}
@@ -353,7 +375,7 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
       <div>
         <Label className="text-xs">Route notes</Label>
         <textarea
-          className="border-input bg-background min-h-16 w-full rounded-md border p-2 text-sm"
+          className="border-input bg-bg min-h-16 w-full rounded-md border p-2 text-sm"
           value={notes ?? r.notes ?? ""}
           onChange={(e) => setNotes(e.target.value)}
         />
@@ -364,7 +386,7 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
         <Label className="text-xs">Assignment</Label>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <select
-            className="border-input bg-background h-8 rounded-md border px-2 text-sm"
+            className="border-input bg-bg h-8 rounded-md border px-2 text-sm"
             value={assignVolunteerId}
             onChange={(e) => setAssignVolunteerId(e.target.value)}
           >
@@ -416,6 +438,295 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
         )}
         {save.error && <span className="text-xs text-red-600">{save.error.message}</span>}
       </div>
+    </div>
+  );
+}
+
+interface AddressSuggestion {
+  placeId: string;
+  primaryText: string;
+  secondaryText: string;
+}
+
+/**
+ * Address field with Places Autocomplete suggestions. Picking a suggestion
+ * captures its placeId, which the API resolves exactly — no re-guessing from
+ * free text. Typing again clears the placeId and falls back to text resolution,
+ * so the field still works if Places is unavailable (endpoint returns []).
+ *
+ * One session token is reused for every keystroke and discarded after a pick,
+ * so an address entry bills as a single autocomplete session (research doc §4).
+ */
+function AddressField(props: {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (text: string) => void;
+  onPick: (placeId: string, text: string) => void;
+}) {
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+  const sessionRef = useRef<string>("");
+  // Set by a pick so the resulting value change doesn't refetch suggestions.
+  const justPickedRef = useRef(false);
+
+  const { value } = props;
+
+  // Too-short input hides suggestions by derivation rather than by clearing
+  // state in the effect (which would cost an extra render per keystroke).
+  const visible = value.trim().length >= 3 ? suggestions : [];
+
+  useEffect(() => {
+    if (justPickedRef.current) {
+      justPickedRef.current = false;
+      return;
+    }
+    if (value.trim().length < 3) return;
+    if (!sessionRef.current) sessionRef.current = crypto.randomUUID();
+
+    // Debounce: one request per pause, not per keystroke.
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ q: value, session: sessionRef.current });
+        const results = await getJson<AddressSuggestion[]>(`/api/addresses/autocomplete?${params}`);
+        setSuggestions(results);
+        setHighlight(0);
+        setOpen(results.length > 0);
+      } catch {
+        setSuggestions([]); // stay silent; the field still accepts free text
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [value]);
+
+  function pick(s: AddressSuggestion) {
+    justPickedRef.current = true;
+    const text = [s.primaryText, s.secondaryText].filter(Boolean).join(", ");
+    props.onPick(s.placeId, text);
+    sessionRef.current = ""; // session ends at selection
+    setSuggestions([]);
+    setOpen(false);
+  }
+
+  return (
+    <div className="relative">
+      <Label className="text-xs">{props.label}</Label>
+      <Input
+        className="h-8 text-sm"
+        placeholder={props.placeholder}
+        value={value}
+        autoComplete="off"
+        onChange={(e) => props.onChange(e.target.value)}
+        onFocus={() => setOpen(visible.length > 0)}
+        // Delay so a click on a suggestion lands before the list unmounts.
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={(e) => {
+          if (!open || visible.length === 0) return;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setHighlight((h) => (h + 1) % visible.length);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setHighlight((h) => (h - 1 + visible.length) % visible.length);
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            pick(visible[highlight]);
+          } else if (e.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+      />
+      {open && visible.length > 0 && (
+        <ul className="bg-bg absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border shadow-md">
+          {visible.map((s, i) => (
+            <li key={s.placeId}>
+              <button
+                type="button"
+                className={cn(
+                  "block w-full px-2 py-1.5 text-left text-sm",
+                  i === highlight ? "bg-muted" : "hover:bg-muted/50",
+                )}
+                onMouseEnter={() => setHighlight(i)}
+                onClick={() => pick(s)}
+              >
+                <span className="block">{s.primaryText}</span>
+                <span className="text-muted-foreground block text-xs">{s.secondaryText}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Create a route. Endpoint addresses resolve server-side — by placeId when a
+ * suggestion was picked (exact), otherwise by Address Validation on the typed
+ * text. Either way the route gets the coordinates the map needs, so it appears
+ * on the map as soon as it's saved.
+ */
+function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) => void }) {
+  const volunteers = useQuery({
+    queryKey: ["volunteers", "assignable"],
+    queryFn: () => getJson<VolunteerSummary[]>("/api/volunteers?status=active"),
+  });
+
+  const [streetName, setStreetName] = useState("");
+  const [startLine, setStartLine] = useState("");
+  const [endLine, setEndLine] = useState("");
+  // Set when a suggestion is picked; cleared when the text is edited again.
+  const [startPlaceId, setStartPlaceId] = useState<string | null>(null);
+  const [endPlaceId, setEndPlaceId] = useState<string | null>(null);
+  const [houseCount, setHouseCount] = useState("0");
+  const [papers, setPapers] = useState("0");
+  const [side, setSide] = useState("");
+  const [volunteerId, setVolunteerId] = useState("");
+  const [note, setNote] = useState("");
+
+  // A picked suggestion resolves exactly by placeId. Otherwise fall back to the
+  // typed text — Toronto is implied for every route Beach Metro covers.
+  const address = (line: string, placeId: string | null) =>
+    placeId
+      ? { placeId }
+      : {
+          addressLines: [line.trim()],
+          locality: "Toronto",
+          administrativeArea: "ON",
+          regionCode: "CA" as const,
+        };
+
+  const create = useMutation({
+    mutationFn: () =>
+      sendJson<RouteDetail>("/api/routes", "POST", {
+        streetName: streetName.trim(),
+        startAddress: address(startLine, startPlaceId),
+        endAddress: address(endLine, endPlaceId),
+        houseCount: Number(houseCount) || 0,
+        papers: Number(papers) || 0,
+        ...(side ? { side } : {}),
+        ...(volunteerId ? { assignedVolunteerId: volunteerId } : {}),
+        ...(note.trim() ? { note: note.trim() } : {}),
+      }),
+    onSuccess: (route) => props.onCreated(route.id),
+  });
+
+  const ready = streetName.trim() && startLine.trim() && endLine.trim();
+
+  return (
+    <div className="flex flex-col gap-3 p-4">
+      <div className="flex items-center justify-between">
+        <button className="text-muted-foreground text-xs underline" onClick={props.onClose}>
+          ← Back to list
+        </button>
+        <span className="text-xs font-medium">New route</span>
+      </div>
+      <div>
+        <Label className="text-xs">Street name</Label>
+        <Input
+          className="h-8 text-sm"
+          placeholder="Queen St E"
+          value={streetName}
+          onChange={(e) => setStreetName(e.target.value)}
+        />
+      </div>
+      <AddressField
+        label="Start address"
+        placeholder="1900 Queen St E"
+        value={startLine}
+        onChange={(text) => {
+          setStartLine(text);
+          setStartPlaceId(null); // edited by hand — no longer an exact match
+        }}
+        onPick={(placeId, text) => {
+          setStartPlaceId(placeId);
+          setStartLine(text);
+        }}
+      />
+      <AddressField
+        label="End address"
+        placeholder="2100 Queen St E"
+        value={endLine}
+        onChange={(text) => {
+          setEndLine(text);
+          setEndPlaceId(null);
+        }}
+        onPick={(placeId, text) => {
+          setEndPlaceId(placeId);
+          setEndLine(text);
+        }}
+      />
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="text-xs">House count</Label>
+          <Input
+            className="h-8 text-sm"
+            type="number"
+            min={0}
+            value={houseCount}
+            onChange={(e) => setHouseCount(e.target.value)}
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Papers</Label>
+          <Input
+            className="h-8 text-sm"
+            type="number"
+            min={0}
+            value={papers}
+            onChange={(e) => setPapers(e.target.value)}
+          />
+        </div>
+      </div>
+      <div>
+        <Label className="text-xs">Side (optional)</Label>
+        <select
+          className="border-input bg-bg h-8 w-full rounded-md border px-2 text-sm"
+          value={side}
+          onChange={(e) => setSide(e.target.value)}
+        >
+          <option value="">— none —</option>
+          {["NORTH", "SOUTH", "EAST", "WEST", "BOTH"].map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <Label className="text-xs">Assign volunteer (optional)</Label>
+        <select
+          className="border-input bg-bg h-8 w-full rounded-md border px-2 text-sm"
+          value={volunteerId}
+          onChange={(e) => setVolunteerId(e.target.value)}
+        >
+          <option value="">— leave vacant —</option>
+          {(volunteers.data ?? []).map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.firstName} {v.lastName}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <Label className="text-xs">Route notes (optional)</Label>
+        <textarea
+          className="border-input bg-bg min-h-16 w-full rounded-md border p-2 text-sm"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <Button size="sm" disabled={!ready || create.isPending} onClick={() => create.mutate()}>
+          {create.isPending ? "Creating…" : "Create route"}
+        </Button>
+        <Button size="sm" variant="outline" onClick={props.onClose}>
+          Cancel
+        </Button>
+      </div>
+      {create.error && <p className="text-xs text-red-600">{create.error.message}</p>}
     </div>
   );
 }

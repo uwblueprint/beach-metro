@@ -7,11 +7,17 @@ import type { LocationType } from "@/types/db";
 
 import type {
   AddressLinesInput,
+  AddressSuggestion,
   LatLng,
   MapsProvider,
   ResolvedAddress,
   RouteMatrixEntry,
 } from "./types";
+
+// Beach Metro's coverage area (the Beaches, Toronto). Autocomplete results are
+// biased here so local streets rank first instead of same-named ones elsewhere.
+const COVERAGE_CENTER = { latitude: 43.6725, longitude: -79.2915 };
+const COVERAGE_RADIUS_M = 8000;
 
 function serverKey(): string {
   const key = process.env.GOOGLE_MAPS_SERVER_KEY;
@@ -148,6 +154,54 @@ export const googleMapsProvider: MapsProvider = {
             : null,
       components: extractComponents(result.address?.addressComponents ?? []),
     };
+  },
+
+  /**
+   * Places Autocomplete (New). Address-only, Canada-only, biased to the
+   * coverage area. The session token bundles every keystroke plus the eventual
+   * lookup into one billed session (10k free/month per the research doc).
+   */
+  async autocompleteAddress(input: string, sessionToken: string): Promise<AddressSuggestion[]> {
+    const trimmed = input.trim();
+    if (trimmed.length < 3) return []; // don't spend a call on 1–2 characters
+
+    const res = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": serverKey(),
+        "X-Goog-FieldMask":
+          "suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat",
+      },
+      body: JSON.stringify({
+        input: trimmed,
+        sessionToken,
+        includedPrimaryTypes: ["street_address", "premise", "subpremise"],
+        includedRegionCodes: ["ca"],
+        locationBias: {
+          circle: { center: COVERAGE_CENTER, radius: COVERAGE_RADIUS_M },
+        },
+      }),
+    });
+    const json: any = await res.json();
+    if (!res.ok) {
+      throw new ServiceError(
+        "internal",
+        `Places Autocomplete failed: ${json?.error?.message ?? res.status}`,
+        502,
+      );
+    }
+
+    return (json.suggestions ?? [])
+      .map((s: any) => s.placePrediction)
+      .filter((p: any) => p?.placeId)
+      .map(
+        (p: any): AddressSuggestion => ({
+          placeId: p.placeId,
+          primaryText: p.structuredFormat?.mainText?.text ?? "",
+          secondaryText: p.structuredFormat?.secondaryText?.text ?? "",
+        }),
+      );
   },
 
   /** Geocoding API by place_id (research doc §2) — cache refresh + autocomplete input. */
