@@ -175,7 +175,7 @@ function RefSelect(props: { field: FieldSpec; value: string; onChange: (v: strin
           </option>
         ))}
       </select>
-      <Button type="button" variant="ghost" size="sm" onClick={reload} title="Refresh options">
+      <Button type="button" variant="text" size="sm" onClick={reload} title="Refresh options">
         ↻
       </Button>
     </div>

@@ -26,6 +26,19 @@ folder.
   template. See the Claude Code plugins docs.
 
 ## Recommended third-party skills (install separately, verify first)
+Design skills used by this project (routing in `AGENTS.md`). Install once per machine:
+
+```bash
+npx skills add https://github.com/jakubkrehel/make-interfaces-feel-better --skill make-interfaces-feel-better -y -g
+npx skills add https://github.com/vercel-labs/agent-skills --skill web-design-guidelines -y -g
+npx skills add jakubantalik/transitions-dev -y -g
+npx skills add https://github.com/emilkowalski/skill --skill emil-design-eng -y -g
+```
+
+- `make-interfaces-feel-better` — UI micro-polish (proactive on UI work).
+- `web-design-guidelines` — UI / a11y audit (default on UI work).
+- `transitions-dev` — CSS transitions (only when asked to animate).
+- `emil-design-eng` — motion/taste framework (only when explicitly called).
 - `frontend-design` (Anthropic) — intentional UI instead of generic patterns.
 - `skill-creator` (Anthropic) — author new skills.
 - `obra/superpowers` (official marketplace) — plan + TDD methodology, if wanted.
