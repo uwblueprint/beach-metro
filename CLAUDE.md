@@ -2,10 +2,10 @@
 
 # Beach Metro — CLAUDE.md
 
-Internal volunteer & distribution management system for Beach Metro Community News, built by UW Blueprint. Replaces a fragile ~30-tab spreadsheet. Two internal admin users: a distribution manager (routes + volunteers) and an accounts manager (captain payments). Product and flow specs live in `docs/` (the PRD and route flow currently live on the `prd-md` and `route-management-md` branches until merged).
+Internal volunteer & distribution management system for Beach Metro Community News, built by UW Blueprint. Replaces a fragile ~30-tab spreadsheet. Two internal admin users: a distribution manager (routes + volunteers) and an accounts manager (captain payments). Product and flow specs live in `docs/`.
 
 ## Status
-Early. Specs and design decisions live in `docs/`; a Next.js app is taking shape at the repo root (`app/`, `components/`, `features/`). Don’t assume a separate `backend/` or `frontend/` package exists yet.
+Early, but past bootstrap. Specs and design decisions live in `docs/`. The Next.js app is scaffolded at the repo root: Supabase email/password auth is wired (login, password reset, session gate in `proxy.ts`), the dashboard shell and shared UI components exist, and CI runs typecheck/lint/format/build/unit/e2e. Feature modules (`features/`), the API/service layer (`lib/api`, `lib/services`, `lib/validation`), and the Supabase CLI stack are still placeholders. Don’t assume a separate `backend/` or `frontend/` package exists yet.
 
 ## Stack (working assumptions)
 - TypeScript end-to-end.
