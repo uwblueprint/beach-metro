@@ -129,13 +129,17 @@ export function RoutesClient() {
   const missingCoords = (routes.data ?? []).filter((r) => !r.start || !r.end).length;
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold">Routes</h1>
-        <div className="flex items-center gap-3">
-          <span className="text-muted-foreground text-sm">
-            {routes.data ? `Showing ${routes.data.length}` : "Loading…"}
-          </span>
+    // Shared page shell (same as Members/Finances) so the map + rail fill the
+    // viewport instead of sitting in a fixed-height box.
+    <div className="page-container">
+      <div className="page flex flex-col overflow-hidden">
+        <div className="page-header-container">
+          <div className="flex items-center gap-2">
+            <h1 className="text-md text-primary">Routes</h1>
+            <p className="text-md text-secondary">
+              {routes.data ? `Showing ${routes.data.length}` : "Loading…"}
+            </p>
+          </div>
           <Button
             size="sm"
             onClick={() => {
@@ -146,81 +150,81 @@ export function RoutesClient() {
             Add route
           </Button>
         </div>
-      </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1fr_360px]">
-        {/* Map + a thin filter bar */}
-        <div className="flex min-h-0 flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {(["all", "vacant", "assigned"] as const).map((v) => (
-              <Button
-                key={v}
-                size="sm"
-                variant={vacancy === v ? "default" : "outline"}
-                onClick={() => setVacancy(v)}
-              >
-                {v === "all" ? "All" : v[0].toUpperCase() + v.slice(1)}
-              </Button>
-            ))}
-            <Input
-              className="h-8 w-48 text-sm"
-              placeholder="Search street…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-            <label className="text-muted-foreground flex items-center gap-1 text-xs">
-              <input
-                type="checkbox"
-                checked={showHomes}
-                onChange={(e) => setShowHomes(e.target.checked)}
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-4 lg:grid-cols-[1fr_360px]">
+          {/* Map + a thin filter bar */}
+          <div className="flex min-h-0 flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {(["all", "vacant", "assigned"] as const).map((v) => (
+                <Button
+                  key={v}
+                  size="sm"
+                  variant={vacancy === v ? "default" : "outline"}
+                  onClick={() => setVacancy(v)}
+                >
+                  {v === "all" ? "All" : v[0].toUpperCase() + v.slice(1)}
+                </Button>
+              ))}
+              <Input
+                className="h-8 w-48 text-sm"
+                placeholder="Search street…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
               />
-              Volunteer homes
-            </label>
-            {missingCoords > 0 && (
-              <span className="text-xs text-amber-700 dark:text-amber-400">
-                {missingCoords} route(s) missing coordinates (not geocoded yet)
-              </span>
+              <label className="text-muted-foreground flex items-center gap-1 text-xs">
+                <input
+                  type="checkbox"
+                  checked={showHomes}
+                  onChange={(e) => setShowHomes(e.target.checked)}
+                />
+                Volunteer homes
+              </label>
+              {missingCoords > 0 && (
+                <span className="text-xs text-amber-700 dark:text-amber-400">
+                  {missingCoords} route(s) missing coordinates (not geocoded yet)
+                </span>
+              )}
+            </div>
+            <div className="min-h-0 flex-1">
+              <RouteMap
+                routes={mapRoutes}
+                homes={mapHomes}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+              />
+            </div>
+          </div>
+
+          {/* Right rail: create form, detail, OR list */}
+          <div className="min-h-0 overflow-auto rounded-lg border">
+            {creating ? (
+              <CreateRoutePanel
+                onClose={() => setCreating(false)}
+                onCreated={(id) => {
+                  setCreating(false);
+                  setSelectedId(id);
+                  qc.invalidateQueries({ queryKey: ["routes"] });
+                  qc.invalidateQueries({ queryKey: ["route-paths"] });
+                }}
+              />
+            ) : selectedId ? (
+              <RouteDetailPanel
+                routeId={selectedId}
+                onClose={() => setSelectedId(null)}
+                onChanged={() => {
+                  qc.invalidateQueries({ queryKey: ["routes"] });
+                  qc.invalidateQueries({ queryKey: ["route", selectedId] });
+                }}
+              />
+            ) : (
+              <RouteList
+                routes={routes.data ?? []}
+                loading={routes.isLoading}
+                error={routes.error?.message}
+                onSelect={setSelectedId}
+              />
             )}
           </div>
-          <div className="min-h-0 flex-1">
-            <RouteMap
-              routes={mapRoutes}
-              homes={mapHomes}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-            />
-          </div>
-        </div>
-
-        {/* Right rail: create form, detail, OR list */}
-        <div className="min-h-0 overflow-auto rounded-lg border">
-          {creating ? (
-            <CreateRoutePanel
-              onClose={() => setCreating(false)}
-              onCreated={(id) => {
-                setCreating(false);
-                setSelectedId(id);
-                qc.invalidateQueries({ queryKey: ["routes"] });
-                qc.invalidateQueries({ queryKey: ["route-paths"] });
-              }}
-            />
-          ) : selectedId ? (
-            <RouteDetailPanel
-              routeId={selectedId}
-              onClose={() => setSelectedId(null)}
-              onChanged={() => {
-                qc.invalidateQueries({ queryKey: ["routes"] });
-                qc.invalidateQueries({ queryKey: ["route", selectedId] });
-              }}
-            />
-          ) : (
-            <RouteList
-              routes={routes.data ?? []}
-              loading={routes.isLoading}
-              error={routes.error?.message}
-              onSelect={setSelectedId}
-            />
-          )}
         </div>
       </div>
     </div>
