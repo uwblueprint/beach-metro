@@ -37,7 +37,7 @@ export default async function UpdatePasswordPage({
             </p>
           ) : null}
 
-          <Button type="submit" className="w-full">
+          <Button type="submit" variant="primary" className="w-full">
             Update password
           </Button>
         </form>
