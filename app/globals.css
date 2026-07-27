@@ -65,7 +65,6 @@
   --color-tag-warning: var(--tag-warning);
   --color-tag-destructive: var(--tag-destructive);
 
-  /* still need to do this */
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
