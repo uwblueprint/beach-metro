@@ -1,5 +1,31 @@
 export type PaymentPeriod = "ytd" | "q1" | "q2" | "q3" | "q4";
 
+export type OverviewYear = "2025-26" | "2024-25" | "2023-24" | "2022-23" | "2021-22" | "2020-21";
+
+export type OverviewYearOption = {
+  id: OverviewYear;
+  label: string;
+  archived: boolean;
+};
+
+export const OVERVIEW_YEAR_OPTIONS: OverviewYearOption[] = [
+  { id: "2025-26", label: "2025-26 Payments", archived: false },
+  { id: "2024-25", label: "2024-25 Payments (archived)", archived: true },
+  { id: "2023-24", label: "2023-24 Payments (archived)", archived: true },
+  { id: "2022-23", label: "2022-23 Payments (archived)", archived: true },
+  { id: "2021-22", label: "2021-22 Payments (archived)", archived: true },
+  { id: "2020-21", label: "2020-21 Payments (archived)", archived: true },
+];
+
+export const OVERVIEW_YEAR_DATE_RANGES: Record<OverviewYear, string> = {
+  "2025-26": "Mar 2025 – Feb 2026",
+  "2024-25": "Mar 2024 – Feb 2025",
+  "2023-24": "Mar 2023 – Feb 2024",
+  "2022-23": "Mar 2022 – Feb 2023",
+  "2021-22": "Mar 2021 – Feb 2022",
+  "2020-21": "Mar 2020 – Feb 2021",
+};
+
 export type CaptainPayment = {
   name: string;
   type: "Drop" | "Bundle";
@@ -55,6 +81,29 @@ export const PAPERS_PER_ISSUE = [
   { issue: 26, date: "Dec 16th", count: 2901 },
   { issue: 25, date: "Dec 2nd", count: 2846 },
   { issue: 24, date: "Nov 18th", count: 2734 },
+  { issue: 23, date: "Nov 4th", count: 2948 },
+  { issue: 22, date: "Oct 21st", count: 2801 },
+  { issue: 21, date: "Oct 7th", count: 2654 },
+  { issue: 20, date: "Sep 23rd", count: 2945 },
+  { issue: 19, date: "Sep 9th", count: 2784 },
+  { issue: 18, date: "Aug 26th", count: 2879 },
+  { issue: 17, date: "Aug 12th", count: 2623 },
+  { issue: 16, date: "Jul 29th", count: 2788 },
+  { issue: 15, date: "Jul 15th", count: 3012 },
+  { issue: 14, date: "Jul 1st", count: 2567 },
+  { issue: 13, date: "Jun 17th", count: 2891 },
+  { issue: 12, date: "Jun 3rd", count: 2733 },
+  { issue: 11, date: "May 20th", count: 2645 },
+  { issue: 10, date: "May 6th", count: 2987 },
+  { issue: 9, date: "Apr 22nd", count: 2512 },
+  { issue: 8, date: "Apr 8th", count: 2834 },
+  { issue: 7, date: "Mar 25th", count: 2766 },
+  { issue: 6, date: "Mar 11th", count: 2923 },
+  { issue: 5, date: "Feb 25th", count: 2589 },
+  { issue: 4, date: "Feb 11th", count: 3045 },
+  { issue: 3, date: "Jan 28th", count: 2678 },
+  { issue: 2, date: "Jan 14th", count: 2812 },
+  { issue: 1, date: "Dec 31st", count: 2534 },
 ] as const;
 
 const captainMeta = (
