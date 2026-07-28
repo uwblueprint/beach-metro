@@ -1,7 +1,11 @@
 // Typed errors thrown by lib/services and translated to HTTP by lib/api/handler.
 
 export type ErrorCode =
-  "unauthenticated" | "not_found" | "conflict" | "validation_failed" | "internal";
+  | "unauthenticated"
+  | "not_found"
+  | "conflict"
+  | "validation_failed"
+  | "internal";
 
 export class ServiceError extends Error {
   constructor(

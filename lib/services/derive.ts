@@ -83,16 +83,24 @@ export function calculatedAmount(
   return Math.round(payRate * quantity * 100) / 100;
 }
 
-/** Effective amount of a payout cell: override wins over the live calculation. */
+/**
+ * Effective amount of a payout cell, in precedence order:
+ * a manual override wins; failing that a frozen snapshot (taken on bundling day
+ * so later route edits can't move the number); failing that the live calculation.
+ */
 export function effectiveAmount(
-  p: Pick<CaptainPayoutRow, "calculated_amount" | "override_amount">,
+  p: Pick<CaptainPayoutRow, "calculated_amount" | "override_amount" | "frozen_amount">,
 ): number {
-  return p.override_amount ?? p.calculated_amount;
+  return p.override_amount ?? p.frozen_amount ?? p.calculated_amount;
 }
 
-/** Calculation status is derived: an override present means Overridden. */
+/**
+ * Calculation status is derived. Frozen is a distinct state from paid: the
+ * amount is locked against recalculation, but nobody has been paid yet.
+ */
 export function calculationStatus(
-  p: Pick<CaptainPayoutRow, "override_amount">,
-): "calculated" | "overridden" {
-  return p.override_amount === null ? "calculated" : "overridden";
+  p: Pick<CaptainPayoutRow, "override_amount" | "frozen_amount">,
+): "calculated" | "frozen" | "overridden" {
+  if (p.override_amount !== null) return "overridden";
+  return p.frozen_amount === null ? "calculated" : "frozen";
 }

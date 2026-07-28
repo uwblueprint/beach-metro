@@ -20,7 +20,13 @@ export interface PayoutSummary {
   overrideAmount: number | null;
   overrideReason: string | null;
   effectiveAmount: number;
-  calculationStatus: "calculated" | "overridden";
+  calculationStatus: "calculated" | "frozen" | "overridden";
+  /** Locked against recalculation on bundling day. Independent of `paid`. */
+  frozenAmount: number | null;
+  frozenAt: string | null;
+  /** Set when another captain covered this issue; the payment is theirs. */
+  substituteCaptainId: string | null;
+  substituteCaptainName: string | null;
   paid: boolean;
   paidAt: string | null;
 }
@@ -50,7 +56,11 @@ async function captainName(client: ReturnType<typeof db>, id: string): Promise<s
   return c ? `${c.first_name} ${c.last_name}` : "Unknown captain";
 }
 
-function toSummary(p: CaptainPayoutRow, name: string): PayoutSummary {
+function toSummary(
+  p: CaptainPayoutRow,
+  name: string,
+  substituteName?: string | null,
+): PayoutSummary {
   return {
     id: p.id,
     issueId: p.issue_id,
@@ -61,6 +71,10 @@ function toSummary(p: CaptainPayoutRow, name: string): PayoutSummary {
     overrideReason: p.override_reason,
     effectiveAmount: effectiveAmount(p),
     calculationStatus: calculationStatus(p),
+    frozenAmount: p.frozen_amount,
+    frozenAt: p.frozen_at,
+    substituteCaptainId: p.substitute_captain_id,
+    substituteCaptainName: substituteName ?? null,
     paid: p.paid,
     paidAt: p.paid_at,
   };
@@ -83,10 +97,13 @@ export async function listPayouts(issueId: string): Promise<PayoutSummary[]> {
   if (pRes.error) throwDb(pRes.error);
   if (cRes.error) throwDb(cRes.error);
   const captains = (cRes.data ?? []) as Pick<CaptainRow, "id" | "first_name" | "last_name">[];
-  return ((pRes.data ?? []) as CaptainPayoutRow[]).map((p) => {
-    const c = captains.find((x) => x.id === p.captain_id);
-    return toSummary(p, c ? `${c.first_name} ${c.last_name}` : "Unknown captain");
-  });
+  const nameOf = (id: string | null) => {
+    const c = id ? captains.find((x) => x.id === id) : undefined;
+    return c ? `${c.first_name} ${c.last_name}` : null;
+  };
+  return ((pRes.data ?? []) as CaptainPayoutRow[]).map((p) =>
+    toSummary(p, nameOf(p.captain_id) ?? "Unknown captain", nameOf(p.substitute_captain_id)),
+  );
 }
 
 /** Detail + the calculation breakdown (quantity × rate; finance flow §4c). */
@@ -160,8 +177,12 @@ export async function getPayout(id: string): Promise<PayoutDetail> {
     }
   }
 
+  const substituteName = p.substitute_captain_id
+    ? await captainName(client, p.substitute_captain_id)
+    : null;
+
   return {
-    ...toSummary(p, `${captain.first_name} ${captain.last_name}`),
+    ...toSummary(p, `${captain.first_name} ${captain.last_name}`, substituteName),
     breakdown: {
       payType: captain.pay_type,
       payRate: captain.pay_rate,
@@ -223,6 +244,85 @@ export async function unmarkPayoutPaid(id: string): Promise<PayoutDetail> {
   const { error } = await db()
     .from("captain_payouts")
     .update({ paid: false, paid_at: null })
+    .eq("id", id);
+  if (error) throwDb(error);
+  return getPayout(id);
+}
+
+/**
+ * Freeze: snapshot the live calculation so later route or carrier edits can't
+ * move this cell. Distinct from paid — the office locks amounts on bundling day
+ * and pays later, and an issue does not need to be closed to freeze.
+ */
+export async function freezePayout(id: string): Promise<PayoutDetail> {
+  const p = await fetchPayout(id);
+  assertUnpaid(p);
+  if (p.frozen_amount !== null) throw conflict("Payout is already frozen.");
+  const { error } = await db()
+    .from("captain_payouts")
+    .update({ frozen_amount: p.calculated_amount, frozen_at: today() })
+    .eq("id", id);
+  if (error) throwDb(error);
+  return getPayout(id);
+}
+
+/** Unfreeze: drop the snapshot and track the live calculation again. */
+export async function unfreezePayout(id: string): Promise<PayoutDetail> {
+  const p = await fetchPayout(id);
+  assertUnpaid(p);
+  if (p.frozen_amount === null) throw conflict("Payout is not frozen.");
+  const { error } = await db()
+    .from("captain_payouts")
+    .update({ frozen_amount: null, frozen_at: null })
+    .eq("id", id);
+  if (error) throwDb(error);
+  return getPayout(id);
+}
+
+/**
+ * Record that another captain covered this issue. The cell stays on the original
+ * captain so the (issue, captain) grid is unchanged; the payment is attributed
+ * to the substitute, which is what lets substitute pay be totalled separately.
+ *
+ * Supersedes the transfer-as-substitute workaround: transfer moved money between
+ * cells and left only free text behind, so it could not be aggregated.
+ */
+export async function setPayoutSubstitute(
+  id: string,
+  substituteCaptainId: string,
+): Promise<PayoutDetail> {
+  const p = await fetchPayout(id);
+  assertUnpaid(p);
+  if (substituteCaptainId === p.captain_id) {
+    throw conflict("A captain cannot substitute for themselves.");
+  }
+  const { data, error: lookupError } = await db()
+    .from("captains")
+    .select("id, retired_at")
+    .eq("id", substituteCaptainId)
+    .maybeSingle();
+  if (lookupError) throwDb(lookupError);
+  if (!data) throw notFound("Captain");
+  if ((data as CaptainRow).retired_at) {
+    throw conflict("Cannot assign a retired captain as a substitute.");
+  }
+
+  const { error } = await db()
+    .from("captain_payouts")
+    .update({ substitute_captain_id: substituteCaptainId })
+    .eq("id", id);
+  if (error) throwDb(error);
+  return getPayout(id);
+}
+
+/** Clear the substitute; the payment reverts to the cell's own captain. */
+export async function clearPayoutSubstitute(id: string): Promise<PayoutDetail> {
+  const p = await fetchPayout(id);
+  assertUnpaid(p);
+  if (p.substitute_captain_id === null) throw conflict("Payout has no substitute.");
+  const { error } = await db()
+    .from("captain_payouts")
+    .update({ substitute_captain_id: null })
     .eq("id", id);
   if (error) throwDb(error);
   return getPayout(id);

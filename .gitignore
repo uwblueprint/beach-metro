@@ -47,3 +47,6 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 /playwright/.cache/
+
+# Downloaded reference data (Toronto Open Data address points)
+/.data/

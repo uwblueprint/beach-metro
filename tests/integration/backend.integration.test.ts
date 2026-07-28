@@ -84,7 +84,7 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
       phone: "416-555-0001",
       payType: "bundle",
       payRate: 1.25,
-      payCadence: "weekly",
+      payCadence: "biweekly",
       startDate: "2026-01-01",
       endDate: null,
       note: null,
@@ -159,7 +159,10 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
   });
 
   it("creates an issue born Open with seeded deliveries and payout cells", async () => {
-    const year = await S().years.createYear({ name: `IT ${crypto.randomUUID().slice(0, 8)}` });
+    const year = await S().years.createYear({
+      name: `IT ${crypto.randomUUID().slice(0, 8)}`,
+      startDate: "2026-03-01",
+    });
     yearId = year.id;
     created.yearIds.push(year.id);
 

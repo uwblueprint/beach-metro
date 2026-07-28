@@ -129,7 +129,7 @@ type CreateCaptain = {
   phone: string;
   payType: "bundle" | "paper" | "drop";
   payRate: number; // 0 is valid (donate-back arrangements)
-  payCadence: "weekly" | "biweekly";
+  payCadence: "biweekly" | "monthly";
   startDate: string;
   endDate?: string | null;
   note?: string;
