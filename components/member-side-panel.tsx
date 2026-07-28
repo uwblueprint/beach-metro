@@ -133,6 +133,13 @@ function MemberSidePanel({ member, onClose }: MemberSidePanelProps) {
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hadMemberRef = useRef(false);
 
+  // Keep panel content in sync with the selected member during render.
+  // Clearing on close stays in the effect so the close animation can finish first.
+  // Compare by id — parent recreates the member object every render.
+  if (member && member.id !== displayed?.id) {
+    setDisplayed(member);
+  }
+
   useEffect(() => {
     if (member) {
       if (closeTimerRef.current) {
@@ -142,7 +149,6 @@ function MemberSidePanel({ member, onClose }: MemberSidePanelProps) {
 
       const isOpening = !hadMemberRef.current;
       hadMemberRef.current = true;
-      setDisplayed(member);
 
       if (isOpening) {
         setOpen(false);
