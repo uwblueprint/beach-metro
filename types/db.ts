@@ -121,3 +121,18 @@ export interface RouteDeliveryRow {
   drop_count: number;
   missed_count: number;
 }
+
+/** Toronto Open Data address point — reference data for the suggested house
+ * count, loaded by `pnpm load-addresses`. Never written to by the app. */
+export interface TorontoAddressPointRow {
+  address_point_id: number;
+  centreline_id: number | null;
+  centreline_side: "L" | "R" | null;
+  address_number: string; // '2962B' — display only
+  street_number: number; // LO_NUM — the numeric range key
+  linear_name_full: string;
+  address_full: string;
+  latitude: number;
+  longitude: number;
+  linear_name_norm: string;
+}

@@ -30,6 +30,22 @@ async function schemaReady(): Promise<boolean> {
 
 const RUN = await schemaReady();
 
+// The reference address data is loaded separately, so house-count assertions
+// skip on their own rather than failing a project that hasn't run the loader.
+async function addressPointsLoaded(): Promise<boolean> {
+  if (!RUN) return false;
+  const { data, error } = await createAdminClient()
+    .from("toronto_address_points")
+    .select("address_point_id")
+    .limit(1);
+  if (error || !data?.length) {
+    console.warn("[integration] skipping house-count — run pnpm load-addresses.");
+    return false;
+  }
+  return true;
+}
+const HAS_ADDRESS_POINTS = await addressPointsLoaded();
+
 // Import services lazily so a missing env never breaks the unit-only run.
 const services = RUN
   ? {
@@ -320,6 +336,44 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
     const listed = await S().routes.listRoutes({});
     expect(listed.find((r) => r.id === vacantRouteId)).toBeUndefined();
     await expectServiceError(S().routes.getRoute(vacantRouteId), 404);
+  });
+
+  // Ground truth for these counts doesn't exist yet, so the assertions are
+  // self-consistency ones: house numbering alternates by side, so a one-sided
+  // route that returns both odd and even numbers has a side or range bug.
+  describe.skipIf(!HAS_ADDRESS_POINTS)("suggested house count", () => {
+    it("counts a one-sided seeded route with consistent parity", async () => {
+      // Seed route 1: Queen St E, NORTH side.
+      const s = await S().routes.suggestRouteHouseCount("e0000000-0000-4000-8000-000000000001");
+      expect(s.reason).toBe("ok");
+      expect(s.count).toBeGreaterThan(0);
+      expect(s.parityConsistent).toBe(true);
+      expect(s.addresses).toHaveLength(s.count!);
+      const parities = new Set(s.addresses.map((a) => parseInt(a, 10) % 2));
+      expect(parities.size).toBe(1);
+    });
+
+    it("only matches addresses on the route's own street", async () => {
+      const s = await S().routes.suggestRouteHouseCount("e0000000-0000-4000-8000-000000000003");
+      expect(s.reason).toBe("ok");
+      expect(s.addresses.every((a) => a.toLowerCase().includes("lee ave"))).toBe(true);
+    });
+
+    it("declines rather than guessing when the route has no coordinates", async () => {
+      // A route whose street has no match at all still resolves, never throws.
+      const route = await S().routes.createRouteRecord({
+        startAddress: { addressLines: ["1 Nowhere Rd"], locality: "Toronto" },
+        endAddress: { addressLines: ["9 Nowhere Rd"], locality: "Toronto" },
+        streetName: "Zzz Nonexistent Rd",
+        houseCount: 0,
+        papers: 0,
+      });
+      created.routeIds.push(route.id);
+      created.addressIds.push(route.startAddress.id, route.endAddress.id);
+      const s = await S().routes.suggestRouteHouseCount(route.id);
+      expect(s.count).toBeNull();
+      expect(["street-not-found", "no-matches", "no-coordinates"]).toContain(s.reason);
+    });
   });
 
   afterAll(async () => {

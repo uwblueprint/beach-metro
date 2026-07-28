@@ -171,9 +171,11 @@ two memberships (volunteers, commercial drops) and the map colour.
 | GET    | `/api/routes/nearest-vacant` | Rank vacant routes by proximity to a volunteer home (`?volunteerId=` or `?placeId=`) — Routes Matrix                                             | PRD Flow 2 |
 
 Splitting/extending is manual (PATCH the geography, then POST a new route) — no
-dedicated endpoint, per the route flow. House count is auto-calculated; a manual
-recompute is `POST /api/routes/{id}/refresh-house-count` (route 4g) — `SUBJECT TO
-CHANGE`: recompute trigger may be a background job instead.
+dedicated endpoint, per the route flow. House count is suggested, not stored:
+`GET /api/routes/{id}/suggested-house-count` computes it on read from the
+Toronto address points, so there is nothing to recompute and no
+`refresh-house-count` endpoint. Accepting a suggestion is a normal
+`PATCH /api/routes/{id}` setting `houseCount` and clearing `houseCountOverride`.
 
 ```ts
 // GET /api/routes/nearest-vacant?volunteerId=...&limit=5
