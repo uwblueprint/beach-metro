@@ -6,7 +6,7 @@ import type { createFinancialYear, yearsQuery } from "@/lib/validation/finance";
 import type { CaptainPayoutRow, CaptainRow, FinancialYearRow, IssueRow } from "@/types/db";
 
 import { calculationStatus, effectiveAmount } from "./derive";
-import { db, throwDb } from "./shared";
+import { coercePayoutNumerics, db, throwDb } from "./shared";
 
 export interface YearSummary {
   id: string;
@@ -85,7 +85,7 @@ export async function getYearDetail(id: string): Promise<YearDetail> {
       ? await client.from("captain_payouts").select("*").in("issue_id", issueIds)
       : { data: [], error: null };
   if (payoutError) throwDb(payoutError);
-  const payouts = (payoutData ?? []) as CaptainPayoutRow[];
+  const payouts = ((payoutData ?? []) as CaptainPayoutRow[]).map(coercePayoutNumerics);
 
   const { data: captainData, error: captainError } = await client
     .from("captains")

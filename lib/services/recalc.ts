@@ -13,7 +13,7 @@ import type {
 } from "@/types/db";
 
 import { calculatedAmount } from "./derive";
-import { db, throwDb } from "./shared";
+import { coerceCaptainNumerics, coercePayoutNumerics, db, throwDb } from "./shared";
 
 export async function recalculateIssue(issueId: string): Promise<void> {
   const client = db();
@@ -47,7 +47,7 @@ export async function recalculateIssue(issueId: string): Promise<void> {
     if (res.error) throwDb(res.error);
   }
 
-  const payouts = (payoutsRes.data ?? []) as CaptainPayoutRow[];
+  const payouts = ((payoutsRes.data ?? []) as CaptainPayoutRow[]).map(coercePayoutNumerics);
   const deliveries = (deliveriesRes.data ?? []) as RouteDeliveryRow[];
   const routes = (routesRes.data ?? []) as Pick<
     VolunteerRouteRow,
@@ -61,7 +61,9 @@ export async function recalculateIssue(issueId: string): Promise<void> {
     CaptainTerritoryRow,
     "id" | "assigned_captain_id"
   >[];
-  const captains = (captainsRes.data ?? []) as Pick<CaptainRow, "id" | "pay_type" | "pay_rate">[];
+  const captains = (
+    (captainsRes.data ?? []) as Pick<CaptainRow, "id" | "pay_type" | "pay_rate">[]
+  ).map(coerceCaptainNumerics);
 
   // Rollup chain (data model ERD): delivery → route → volunteer → territory → captain.
   const volunteerByRoute = new Map(routes.map((r) => [r.id, r.assigned_volunteer_id]));
