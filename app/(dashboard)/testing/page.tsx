@@ -40,6 +40,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Banner } from "@/components/ui/banner";
+import { Checkbox, CheckboxIcon } from "@/components/ui/checkbox";
 
 // ─── Section components ───────────────────────────────────────────────────────
 // To add a new component section:
@@ -1024,6 +1025,88 @@ function DialogsSection() {
 const BANNER_VARIANTS = ["default", "warning", "danger", "active"] as const;
 const BANNER_SAMPLE = "Viewing Mar 2023 - Feb 2024 (archived) • Read-only";
 
+function CheckboxesSection() {
+  const [checked, setChecked] = useState(true);
+  const [unchecked, setUnchecked] = useState(false);
+  const [withLabel, setWithLabel] = useState(false);
+
+  return (
+    <div className="space-y-10">
+      <div>
+        <h1 className="text-2xl font-semibold text-balance">Checkbox</h1>
+        <p className="text-secondary mt-2 text-md text-pretty">
+          Figma Design System checkbox — 16px, 4px radius. Unchecked uses border/divider; checked
+          uses text/secondary border + check. Use CheckboxIcon inside menus where the row handles
+          selection.
+        </p>
+      </div>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">States</h2>
+        <div className="flex flex-wrap items-center gap-6">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="checkbox-checked"
+              checked={checked}
+              onCheckedChange={(value) => setChecked(value === true)}
+            />
+            <Label htmlFor="checkbox-checked" className="text-md font-normal text-primary">
+              Checked
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="checkbox-unchecked"
+              checked={unchecked}
+              onCheckedChange={(value) => setUnchecked(value === true)}
+            />
+            <Label htmlFor="checkbox-unchecked" className="text-md font-normal text-primary">
+              Unchecked
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox id="checkbox-disabled-off" disabled />
+            <Label htmlFor="checkbox-disabled-off" className="text-md font-normal text-primary">
+              Disabled
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox id="checkbox-disabled-on" checked disabled />
+            <Label htmlFor="checkbox-disabled-on" className="text-md font-normal text-primary">
+              Disabled checked
+            </Label>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">With label</h2>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="checkbox-labeled"
+            checked={withLabel}
+            onCheckedChange={(value) => setWithLabel(value === true)}
+          />
+          <Label htmlFor="checkbox-labeled" className="text-md font-normal text-primary">
+            Include commercial drops
+          </Label>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">CheckboxIcon (decorative)</h2>
+        <p className="text-secondary text-sm">
+          Non-interactive graphic for list/menu rows — parent owns the hit target.
+        </p>
+        <div className="flex items-center gap-4">
+          <CheckboxIcon checked />
+          <CheckboxIcon checked={false} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function BannersSection() {
   const [visible, setVisible] = useState<Record<(typeof BANNER_VARIANTS)[number], boolean>>({
     default: true,
@@ -1153,6 +1236,11 @@ export default function TestingPage() {
       value: "input",
       label: "Input",
       content: <InputsSection />,
+    },
+    {
+      value: "checkbox",
+      label: "Checkbox",
+      content: <CheckboxesSection />,
     },
     {
       value: "dialog",
