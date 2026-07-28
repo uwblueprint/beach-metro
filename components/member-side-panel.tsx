@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { MemberDetail } from "@/lib/stubs/members";
+import { NotesSection } from "@/components/notes-section";
 import { SidePanelRow } from "@/components/side-panel-row";
 import { SidePanelSection } from "@/components/side-panel-section";
 
@@ -49,17 +50,7 @@ function VolunteerContent({ member }: { member: Extract<MemberDetail, { role: "v
         <InfoField label="Captain" value={member.captainName} />
       </div>
 
-      <SidePanelSection title="Notes" onAdd={() => {}}>
-        {member.notes.length === 0 ? (
-          <SidePanelRow className="text-secondary">No notes</SidePanelRow>
-        ) : (
-          member.notes.map((note) => (
-            <SidePanelRow key={note.id} meta={note.date} onEdit={() => {}}>
-              <span className="text-primary">{note.text}</span>
-            </SidePanelRow>
-          ))
-        )}
-      </SidePanelSection>
+      <NotesSection notes={member.notes} />
 
       <SidePanelSection title="Route Info" onAdd={() => {}}>
         {member.routes.length === 0 ? (
@@ -101,17 +92,7 @@ function CaptainContent({ member }: { member: Extract<MemberDetail, { role: "cap
         <InfoField label="Cadence" value={member.cadence} />
       </div>
 
-      <SidePanelSection title="Notes" onAdd={() => {}}>
-        {member.notes.length === 0 ? (
-          <SidePanelRow className="text-secondary">No notes</SidePanelRow>
-        ) : (
-          member.notes.map((note) => (
-            <SidePanelRow key={note.id} meta={note.date} onEdit={() => {}}>
-              <span className="text-primary">{note.text}</span>
-            </SidePanelRow>
-          ))
-        )}
-      </SidePanelSection>
+      <NotesSection notes={member.notes} />
 
       <SidePanelSection title="Reimbursements">
         {member.reimbursements.length === 0 ? (
@@ -215,9 +196,9 @@ function MemberSidePanel({ member, onClose }: MemberSidePanelProps) {
         </div>
         <div className="flex-1 overflow-y-auto p-4">
           {displayed.role === "volunteer" ? (
-            <VolunteerContent member={displayed} />
+            <VolunteerContent key={displayed.id} member={displayed} />
           ) : (
-            <CaptainContent member={displayed} />
+            <CaptainContent key={displayed.id} member={displayed} />
           )}
         </div>
       </div>

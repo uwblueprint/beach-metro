@@ -3,6 +3,7 @@
 import { Pencil } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface SidePanelRowProps {
@@ -29,16 +30,18 @@ function SidePanelRow({ children, meta, onEdit, className }: SidePanelRowProps) 
             className="pointer-events-none absolute inset-y-0 right-0 w-1/2 rounded-[4px] bg-gradient-to-r from-transparent to-tag-hover opacity-0 transition-opacity group-hover/row:opacity-100"
           />
           <div className="absolute right-0 top-0 flex h-full items-center justify-end px-1 opacity-0 transition-opacity group-hover/row:opacity-100">
-            <button
+            <Button
               type="button"
-              className="flex cursor-pointer items-center justify-center rounded-[4px] p-1.5"
+              variant="text"
+              size="icon-sm"
+              aria-label="Edit"
               onClick={(e) => {
                 e.stopPropagation();
                 onEdit();
               }}
             >
-              <Pencil className="size-3 text-primary" />
-            </button>
+              <Pencil className="size-3" />
+            </Button>
           </div>
         </>
       )}

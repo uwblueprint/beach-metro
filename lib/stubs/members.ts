@@ -79,6 +79,12 @@ function formatDate(iso: DateOnly): string {
   return `${MONTHS[month - 1]} ${day}, ${year}`;
 }
 
+/** Today's date in the same display format as stored notes/dates, e.g. "Jul. 24, 2026". */
+export function formatToday(): string {
+  const now = new Date();
+  return `${MONTHS[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+}
+
 function contact(first: string, last: string): { email: Email; phone: Phone } {
   const slug = `${first}.${last}`.toLowerCase().replace(/[^a-z.]/g, "");
   return { email: `${slug}@example.com`, phone: "416-555-0100" };
