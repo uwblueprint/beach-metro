@@ -124,32 +124,38 @@ export async function createIssuesBatch(
     if (issueError) throwDb(issueError);
     const issue = issueData as IssueRow;
 
-    if (carriableRoutes.length > 0) {
-      const { error: deliveriesError } = await client.from("route_deliveries").insert(
-        carriableRoutes.map((r) => ({
-          issue_id: issue.id,
-          route_id: r.id,
-          paper_count: r.papers,
-          bundles: greedySplit(r.papers),
-          drop_count: 0,
-          missed_count: 0,
-        })),
-      );
-      if (deliveriesError) throwDb(deliveriesError);
+    try {
+      if (carriableRoutes.length > 0) {
+        const { error: deliveriesError } = await client.from("route_deliveries").insert(
+          carriableRoutes.map((r) => ({
+            issue_id: issue.id,
+            route_id: r.id,
+            paper_count: r.papers,
+            bundles: greedySplit(r.papers),
+            drop_count: 0,
+            missed_count: 0,
+          })),
+        );
+        if (deliveriesError) throwDb(deliveriesError);
+      }
+
+      if (activeCaptainIds.length > 0) {
+        const { error: payoutsError } = await client.from("captain_payouts").insert(
+          activeCaptainIds.map((captainId) => ({
+            issue_id: issue.id,
+            captain_id: captainId,
+            calculated_amount: 0,
+          })),
+        );
+        if (payoutsError) throwDb(payoutsError);
+      }
+
+      await recalculateIssue(issue.id);
+    } catch (err) {
+      await client.from("issues").delete().eq("id", issue.id);
+      throw err;
     }
 
-    if (activeCaptainIds.length > 0) {
-      const { error: payoutsError } = await client.from("captain_payouts").insert(
-        activeCaptainIds.map((captainId) => ({
-          issue_id: issue.id,
-          captain_id: captainId,
-          calculated_amount: 0,
-        })),
-      );
-      if (payoutsError) throwDb(payoutsError);
-    }
-
-    await recalculateIssue(issue.id);
     created.push(toSummary(issue));
   }
   return created;

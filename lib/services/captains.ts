@@ -7,7 +7,7 @@ import type { captainsQuery, createCaptain, updateCaptain } from "@/lib/validati
 import type { CaptainRow, CaptainTerritoryRow, PayCadence, PayType } from "@/types/db";
 
 import { recalculateOpenIssues } from "./recalc";
-import { db, throwDb, today } from "./shared";
+import { coerceCaptainNumerics, db, throwDb, today } from "./shared";
 
 export interface CaptainSummary {
   id: string;
@@ -59,7 +59,9 @@ export async function listCaptains(
   if (error) throwDb(error);
   const territories = await fetchTerritories();
 
-  let all = ((data ?? []) as CaptainRow[]).map((c) => toSummary(c, territories));
+  let all = ((data ?? []) as CaptainRow[]).map((c) =>
+    toSummary(coerceCaptainNumerics(c), territories),
+  );
   if (filters.status) all = all.filter((c) => c.status === filters.status);
   if (filters.q) {
     const q = filters.q.toLowerCase();
@@ -72,7 +74,7 @@ async function fetchCaptain(id: string): Promise<CaptainRow> {
   const { data, error } = await db().from("captains").select("*").eq("id", id).maybeSingle();
   if (error) throwDb(error);
   if (!data) throw notFound("Captain");
-  return data as CaptainRow;
+  return coerceCaptainNumerics(data as CaptainRow);
 }
 
 export async function getCaptain(id: string): Promise<CaptainSummary> {
@@ -162,6 +164,10 @@ export async function retireCaptain(id: string): Promise<CaptainSummary> {
     .update({ assigned_captain_id: null })
     .eq("assigned_captain_id", id);
   if (territoryError) throwDb(territoryError);
+
+  // Territory is now detached, so open-issue cells no longer roll up to this
+  // captain — recompute them to zero (unpaid cells only; paid stay frozen).
+  await recalculateOpenIssues();
 
   return getCaptain(id);
 }

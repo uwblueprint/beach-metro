@@ -10,6 +10,12 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     include: ["tests/**/*.{test,spec}.{ts,tsx}"],
     css: true,
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "html"],
+      include: ["lib/**", "app/api/**"],
+      exclude: ["**/*.d.ts", "types/**", "lib/maps/index.ts"],
+    },
     // Load .env/.env.local into the test process (all vars, no prefix filter) so
     // the integration suite can see SUPABASE_* — it self-skips when they're absent.
     env: loadEnv("", process.cwd(), ""),

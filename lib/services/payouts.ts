@@ -9,7 +9,7 @@ import type { CaptainPayoutRow, CaptainRow, RouteDeliveryRow, VolunteerRouteRow 
 
 import { billableQuantity, calculationStatus, effectiveAmount } from "./derive";
 import { fetchIssue } from "./issues";
-import { db, throwDb, today } from "./shared";
+import { coerceCaptainNumerics, coercePayoutNumerics, db, throwDb, today } from "./shared";
 
 export interface PayoutSummary {
   id: string;
@@ -84,7 +84,7 @@ async function fetchPayout(id: string): Promise<CaptainPayoutRow> {
   const { data, error } = await db().from("captain_payouts").select("*").eq("id", id).maybeSingle();
   if (error) throwDb(error);
   if (!data) throw notFound("Payout");
-  return data as CaptainPayoutRow;
+  return coercePayoutNumerics(data as CaptainPayoutRow);
 }
 
 export async function listPayouts(issueId: string): Promise<PayoutSummary[]> {
@@ -101,9 +101,10 @@ export async function listPayouts(issueId: string): Promise<PayoutSummary[]> {
     const c = id ? captains.find((x) => x.id === id) : undefined;
     return c ? `${c.first_name} ${c.last_name}` : null;
   };
-  return ((pRes.data ?? []) as CaptainPayoutRow[]).map((p) =>
-    toSummary(p, nameOf(p.captain_id) ?? "Unknown captain", nameOf(p.substitute_captain_id)),
-  );
+  return ((pRes.data ?? []) as CaptainPayoutRow[]).map((raw) => {
+    const p = coercePayoutNumerics(raw);
+    return toSummary(p, nameOf(p.captain_id) ?? "Unknown captain", nameOf(p.substitute_captain_id));
+  });
 }
 
 /** Detail + the calculation breakdown (quantity × rate; finance flow §4c). */
@@ -117,7 +118,7 @@ export async function getPayout(id: string): Promise<PayoutDetail> {
     .eq("id", p.captain_id)
     .maybeSingle();
   if (captainError) throwDb(captainError);
-  const captain = captainData as CaptainRow | null;
+  const captain = captainData ? coerceCaptainNumerics(captainData as CaptainRow) : null;
   if (!captain) throw notFound("Captain");
 
   // Current rollup chain for this captain's territory.
@@ -355,7 +356,7 @@ export async function transferPayoutAmount(
     .eq("captain_id", input.toCaptainId)
     .maybeSingle();
   if (recipientError) throwDb(recipientError);
-  const recipient = recipientData as CaptainPayoutRow | null;
+  const recipient = recipientData ? coercePayoutNumerics(recipientData as CaptainPayoutRow) : null;
   if (!recipient) {
     throw conflict("The receiving captain has no payout cell in this issue.");
   }
@@ -368,6 +369,13 @@ export async function transferPayoutAmount(
     captainName(client, input.toCaptainId),
   ]);
 
+  // Ordered source-first so a partial failure underpays rather than double-pays.
+  const { error: sourceUpdateError } = await client
+    .from("captain_payouts")
+    .update({ override_amount: 0, override_reason: `Transferred to ${recipientName}` })
+    .eq("id", source.id);
+  if (sourceUpdateError) throwDb(sourceUpdateError);
+
   const { error: recipientUpdateError } = await client
     .from("captain_payouts")
     .update({
@@ -376,12 +384,6 @@ export async function transferPayoutAmount(
     })
     .eq("id", recipient.id);
   if (recipientUpdateError) throwDb(recipientUpdateError);
-
-  const { error: sourceUpdateError } = await client
-    .from("captain_payouts")
-    .update({ override_amount: 0, override_reason: `Transferred to ${recipientName}` })
-    .eq("id", source.id);
-  if (sourceUpdateError) throwDb(sourceUpdateError);
 
   return getPayout(id);
 }
