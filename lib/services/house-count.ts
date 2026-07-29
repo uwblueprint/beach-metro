@@ -29,11 +29,7 @@ export interface AddressPoint {
 }
 
 export type SuggestionReason =
-  | "ok"
-  | "no-coordinates"
-  | "street-not-found"
-  | "no-matches"
-  | "too-many-matches";
+  "ok" | "no-coordinates" | "street-not-found" | "no-matches" | "too-many-matches";
 
 export interface HouseCountSuggestion {
   /** null whenever reason !== "ok" — callers must not fall back to 0. */
