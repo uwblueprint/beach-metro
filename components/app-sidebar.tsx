@@ -46,7 +46,6 @@ export function AppSidebar({ userEmail }: { userEmail: string | null }) {
               type="leading-icon"
               active={active}
               icon={<Icon aria-hidden strokeWidth={1.75} />}
-              className="data-[active=true]:bg-active-grey data-[active=true]:hover:bg-active-grey data-[active=true]:text-primary"
             >
               {label}
             </ListItem>
@@ -62,7 +61,7 @@ export function AppSidebar({ userEmail }: { userEmail: string | null }) {
           type="leading-icon"
           active={pathname === "/settings" || pathname.startsWith("/settings/")}
           icon={<Settings aria-hidden strokeWidth={1.75} />}
-          className="text-muted-foreground data-[active=true]:bg-active-grey data-[active=true]:text-primary data-[active=true]:hover:bg-active-grey"
+          className="text-muted-foreground data-[active=true]:text-primary"
         >
           Settings
         </ListItem>
