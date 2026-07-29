@@ -84,7 +84,7 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
       phone: "416-555-0001",
       payType: "bundle",
       payRate: 1.25,
-      payCadence: "weekly",
+      payCadence: "biweekly",
       startDate: "2026-01-01",
       endDate: null,
       note: null,
@@ -159,7 +159,10 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
   });
 
   it("creates an issue born Open with seeded deliveries and payout cells", async () => {
-    const year = await S().years.createYear({ name: `IT ${crypto.randomUUID().slice(0, 8)}` });
+    const year = await S().years.createYear({
+      name: `IT ${crypto.randomUUID().slice(0, 8)}`,
+      startDate: "2026-03-01",
+    });
     yearId = year.id;
     created.yearIds.push(year.id);
 
@@ -332,5 +335,102 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
     for (const id of created.addressIds) await client.from("addresses").delete().eq("id", id);
     await client.from("captain_territories").delete().in("assigned_captain_id", created.captainIds);
     for (const id of created.captainIds) await client.from("captains").delete().eq("id", id);
+  });
+});
+
+// Isolated scenario for the "retiring zeros a captain's open-issue cells"
+// invariant.
+describe.skipIf(!RUN)("retiring a captain zeros their open-issue cells", () => {
+  const ids = {
+    captainId: "",
+    territoryId: "",
+    volunteerId: "",
+    routeId: "",
+    yearId: "",
+    addressIds: [] as string[],
+  };
+
+  it("recomputes a retired captain's open cells to zero on retire", async () => {
+    // Bundle captain @ $1/bundle, with their auto-created 1:1 territory.
+    const captain = await S().captains.createCaptainRecord({
+      firstName: "IT",
+      lastName: "RetireKeep",
+      email: `it-retire-${crypto.randomUUID().slice(0, 8)}@example.com`,
+      phone: "416-555-0100",
+      payType: "bundle",
+      payRate: 1,
+      payCadence: "biweekly",
+      startDate: "2026-01-01",
+      endDate: null,
+      note: null,
+    });
+    ids.captainId = captain.id;
+    ids.territoryId = captain.territory!.id;
+
+    // Volunteer in that territory, carrying a 50-paper route → exactly 1 bundle.
+    const volunteer = await S().volunteers.createVolunteerRecord({
+      firstName: "IT",
+      lastName: "RetireKeepVol",
+      email: `it-retire-vol-${crypto.randomUUID().slice(0, 8)}@example.com`,
+      phone: "416-555-0101",
+      address: { addressLines: ["7 Retire Keep Way"] },
+      captainTerritoryId: ids.territoryId,
+      startDate: "2026-01-01",
+      endDate: null,
+      note: null,
+    });
+    ids.volunteerId = volunteer.id;
+    ids.addressIds.push(volunteer.address.id);
+
+    const route = await S().routes.createRouteRecord({
+      startAddress: { addressLines: ["7 Retire Keep Way"] },
+      endAddress: { addressLines: ["77 Retire Keep Way"] },
+      streetName: "Retire Keep Way",
+      side: null,
+      assignedVolunteerId: volunteer.id,
+      houseCount: 25,
+      papers: 50,
+      note: null,
+    });
+    ids.routeId = route.id;
+    ids.addressIds.push(route.startAddress.id, route.endAddress.id);
+
+    // Open issue: seeds the delivery (1 bundle) and the captain's cell → $1.
+    const year = await S().years.createYear({
+      name: `IT-RK ${crypto.randomUUID().slice(0, 8)}`,
+      startDate: "2026-01-01",
+    });
+    ids.yearId = year.id;
+    const [issue] = await S().issues.createIssuesBatch(year.id, {
+      issues: [{ name: "RK Issue", date: "2026-07-09" }],
+    });
+
+    const before = (await S().payouts.listPayouts(issue.id)).find(
+      (p) => p.captainId === captain.id,
+    )!;
+    expect(before.calculatedAmount).toBe(1); // 1 bundle × $1
+
+    // Retiring detaches the captain's territory and recomputes open issues, so
+    // the now-unattributed cell drops to $0 immediately — no other edit needed.
+    await S().captains.retireCaptain(captain.id);
+
+    const after = (await S().payouts.listPayouts(issue.id)).find(
+      (p) => p.captainId === captain.id,
+    )!;
+    expect(after.calculatedAmount).toBe(0);
+  });
+
+  afterAll(async () => {
+    if (!RUN) return;
+    const client = createAdminClient();
+    // FK-safe order; the year cascades its issues → payouts + deliveries. The
+    // territory is deleted by id because retirement already nulled its captain.
+    if (ids.yearId) await client.from("financial_years").delete().eq("id", ids.yearId);
+    if (ids.routeId) await client.from("volunteer_routes").delete().eq("id", ids.routeId);
+    if (ids.volunteerId) await client.from("volunteers").delete().eq("id", ids.volunteerId);
+    for (const id of ids.addressIds) await client.from("addresses").delete().eq("id", id);
+    if (ids.territoryId)
+      await client.from("captain_territories").delete().eq("id", ids.territoryId);
+    if (ids.captainId) await client.from("captains").delete().eq("id", ids.captainId);
   });
 });

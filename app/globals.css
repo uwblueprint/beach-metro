@@ -65,7 +65,6 @@
   --color-tag-warning: var(--tag-warning);
   --color-tag-destructive: var(--tag-destructive);
 
-  /* still need to do this */
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -96,6 +95,7 @@
 }
 
 :root {
+  --sidebar-width: 200px;
   --bg: oklch(1 0 0);
   --bg-secondary: oklch(0.98 0 0);
   --foreground: oklch(0.216 0.009 255.6);

@@ -2,18 +2,21 @@
 
 import * as React from "react";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
-import { CheckIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronRightIcon } from "lucide-react";
 
+import { CheckboxIcon } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
-/** Shared item surface — aligned with ListItem (4px radius, 8px padding, active-grey). */
+/** Shared item surface — aligned with ListItem (4px radius, 8px padding).
+ * Hover: tag-hover (lighter). Selected / open: active-grey (darker). */
 const dropdownItemStyles = [
   "group/dropdown-menu-item relative flex w-full cursor-pointer items-center gap-2 rounded-[4px] p-2",
   "text-sm font-normal text-primary whitespace-nowrap transition-colors",
   "outline-none select-none",
   "hover:bg-tag-hover",
-  "data-highlighted:bg-active-grey data-highlighted:text-primary data-highlighted:hover:bg-active-grey",
-  "data-checked:bg-active-grey data-checked:text-primary data-checked:hover:bg-active-grey",
+  "data-highlighted:bg-tag-hover data-highlighted:text-primary",
+  "data-checked:bg-active-grey data-checked:text-primary",
+  "data-checked:data-highlighted:bg-active-grey data-checked:hover:bg-active-grey",
   "data-popup-open:bg-active-grey data-popup-open:text-primary data-popup-open:hover:bg-active-grey",
   "data-open:bg-active-grey data-open:text-primary data-open:hover:bg-active-grey",
   "data-disabled:pointer-events-none data-disabled:text-disabled data-disabled:hover:bg-transparent",
@@ -179,18 +182,17 @@ function DropdownMenuCheckboxItem({
     <MenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
       data-inset={inset}
-      className={cn(dropdownItemStyles, "pr-8 data-inset:pl-7", className)}
+      className={cn(
+        dropdownItemStyles,
+        // Multiselect: selection is the left checkbox only — no selected row fill.
+        "data-checked:bg-transparent data-checked:hover:bg-tag-hover data-checked:data-highlighted:bg-tag-hover",
+        "data-inset:pl-7",
+        className,
+      )}
       checked={checked}
       {...props}
     >
-      <span
-        className="pointer-events-none absolute right-2 flex items-center justify-center"
-        data-slot="dropdown-menu-checkbox-item-indicator"
-      >
-        <MenuPrimitive.CheckboxItemIndicator>
-          <CheckIcon className="size-4" />
-        </MenuPrimitive.CheckboxItemIndicator>
-      </span>
+      <CheckboxIcon checked={checked === true} />
       {children}
     </MenuPrimitive.CheckboxItem>
   );

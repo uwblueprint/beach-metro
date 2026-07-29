@@ -9,7 +9,7 @@ import type { CaptainPayoutRow, CaptainRow, RouteDeliveryRow, VolunteerRouteRow 
 
 import { billableQuantity, calculationStatus, effectiveAmount } from "./derive";
 import { fetchIssue } from "./issues";
-import { db, throwDb, today } from "./shared";
+import { coerceCaptainNumerics, coercePayoutNumerics, db, throwDb, today } from "./shared";
 
 export interface PayoutSummary {
   id: string;
@@ -20,7 +20,13 @@ export interface PayoutSummary {
   overrideAmount: number | null;
   overrideReason: string | null;
   effectiveAmount: number;
-  calculationStatus: "calculated" | "overridden";
+  calculationStatus: "calculated" | "frozen" | "overridden";
+  /** Locked against recalculation on bundling day. Independent of `paid`. */
+  frozenAmount: number | null;
+  frozenAt: string | null;
+  /** Set when another captain covered this issue; the payment is theirs. */
+  substituteCaptainId: string | null;
+  substituteCaptainName: string | null;
   paid: boolean;
   paidAt: string | null;
 }
@@ -50,7 +56,11 @@ async function captainName(client: ReturnType<typeof db>, id: string): Promise<s
   return c ? `${c.first_name} ${c.last_name}` : "Unknown captain";
 }
 
-function toSummary(p: CaptainPayoutRow, name: string): PayoutSummary {
+function toSummary(
+  p: CaptainPayoutRow,
+  name: string,
+  substituteName?: string | null,
+): PayoutSummary {
   return {
     id: p.id,
     issueId: p.issue_id,
@@ -61,6 +71,10 @@ function toSummary(p: CaptainPayoutRow, name: string): PayoutSummary {
     overrideReason: p.override_reason,
     effectiveAmount: effectiveAmount(p),
     calculationStatus: calculationStatus(p),
+    frozenAmount: p.frozen_amount,
+    frozenAt: p.frozen_at,
+    substituteCaptainId: p.substitute_captain_id,
+    substituteCaptainName: substituteName ?? null,
     paid: p.paid,
     paidAt: p.paid_at,
   };
@@ -70,7 +84,7 @@ async function fetchPayout(id: string): Promise<CaptainPayoutRow> {
   const { data, error } = await db().from("captain_payouts").select("*").eq("id", id).maybeSingle();
   if (error) throwDb(error);
   if (!data) throw notFound("Payout");
-  return data as CaptainPayoutRow;
+  return coercePayoutNumerics(data as CaptainPayoutRow);
 }
 
 export async function listPayouts(issueId: string): Promise<PayoutSummary[]> {
@@ -83,9 +97,13 @@ export async function listPayouts(issueId: string): Promise<PayoutSummary[]> {
   if (pRes.error) throwDb(pRes.error);
   if (cRes.error) throwDb(cRes.error);
   const captains = (cRes.data ?? []) as Pick<CaptainRow, "id" | "first_name" | "last_name">[];
-  return ((pRes.data ?? []) as CaptainPayoutRow[]).map((p) => {
-    const c = captains.find((x) => x.id === p.captain_id);
-    return toSummary(p, c ? `${c.first_name} ${c.last_name}` : "Unknown captain");
+  const nameOf = (id: string | null) => {
+    const c = id ? captains.find((x) => x.id === id) : undefined;
+    return c ? `${c.first_name} ${c.last_name}` : null;
+  };
+  return ((pRes.data ?? []) as CaptainPayoutRow[]).map((raw) => {
+    const p = coercePayoutNumerics(raw);
+    return toSummary(p, nameOf(p.captain_id) ?? "Unknown captain", nameOf(p.substitute_captain_id));
   });
 }
 
@@ -100,7 +118,7 @@ export async function getPayout(id: string): Promise<PayoutDetail> {
     .eq("id", p.captain_id)
     .maybeSingle();
   if (captainError) throwDb(captainError);
-  const captain = captainData as CaptainRow | null;
+  const captain = captainData ? coerceCaptainNumerics(captainData as CaptainRow) : null;
   if (!captain) throw notFound("Captain");
 
   // Current rollup chain for this captain's territory.
@@ -160,8 +178,12 @@ export async function getPayout(id: string): Promise<PayoutDetail> {
     }
   }
 
+  const substituteName = p.substitute_captain_id
+    ? await captainName(client, p.substitute_captain_id)
+    : null;
+
   return {
-    ...toSummary(p, `${captain.first_name} ${captain.last_name}`),
+    ...toSummary(p, `${captain.first_name} ${captain.last_name}`, substituteName),
     breakdown: {
       payType: captain.pay_type,
       payRate: captain.pay_rate,
@@ -229,6 +251,85 @@ export async function unmarkPayoutPaid(id: string): Promise<PayoutDetail> {
 }
 
 /**
+ * Freeze: snapshot the live calculation so later route or carrier edits can't
+ * move this cell. Distinct from paid — the office locks amounts on bundling day
+ * and pays later, and an issue does not need to be closed to freeze.
+ */
+export async function freezePayout(id: string): Promise<PayoutDetail> {
+  const p = await fetchPayout(id);
+  assertUnpaid(p);
+  if (p.frozen_amount !== null) throw conflict("Payout is already frozen.");
+  const { error } = await db()
+    .from("captain_payouts")
+    .update({ frozen_amount: p.calculated_amount, frozen_at: today() })
+    .eq("id", id);
+  if (error) throwDb(error);
+  return getPayout(id);
+}
+
+/** Unfreeze: drop the snapshot and track the live calculation again. */
+export async function unfreezePayout(id: string): Promise<PayoutDetail> {
+  const p = await fetchPayout(id);
+  assertUnpaid(p);
+  if (p.frozen_amount === null) throw conflict("Payout is not frozen.");
+  const { error } = await db()
+    .from("captain_payouts")
+    .update({ frozen_amount: null, frozen_at: null })
+    .eq("id", id);
+  if (error) throwDb(error);
+  return getPayout(id);
+}
+
+/**
+ * Record that another captain covered this issue. The cell stays on the original
+ * captain so the (issue, captain) grid is unchanged; the payment is attributed
+ * to the substitute, which is what lets substitute pay be totalled separately.
+ *
+ * Supersedes the transfer-as-substitute workaround: transfer moved money between
+ * cells and left only free text behind, so it could not be aggregated.
+ */
+export async function setPayoutSubstitute(
+  id: string,
+  substituteCaptainId: string,
+): Promise<PayoutDetail> {
+  const p = await fetchPayout(id);
+  assertUnpaid(p);
+  if (substituteCaptainId === p.captain_id) {
+    throw conflict("A captain cannot substitute for themselves.");
+  }
+  const { data, error: lookupError } = await db()
+    .from("captains")
+    .select("id, retired_at")
+    .eq("id", substituteCaptainId)
+    .maybeSingle();
+  if (lookupError) throwDb(lookupError);
+  if (!data) throw notFound("Captain");
+  if ((data as CaptainRow).retired_at) {
+    throw conflict("Cannot assign a retired captain as a substitute.");
+  }
+
+  const { error } = await db()
+    .from("captain_payouts")
+    .update({ substitute_captain_id: substituteCaptainId })
+    .eq("id", id);
+  if (error) throwDb(error);
+  return getPayout(id);
+}
+
+/** Clear the substitute; the payment reverts to the cell's own captain. */
+export async function clearPayoutSubstitute(id: string): Promise<PayoutDetail> {
+  const p = await fetchPayout(id);
+  assertUnpaid(p);
+  if (p.substitute_captain_id === null) throw conflict("Payout has no substitute.");
+  const { error } = await db()
+    .from("captain_payouts")
+    .update({ substitute_captain_id: null })
+    .eq("id", id);
+  if (error) throwDb(error);
+  return getPayout(id);
+}
+
+/**
  * Transfer (finance flow §4g), implemented as PAIRED OVERRIDES (locked decision):
  * the recipient's cell is overridden up by this cell's effective amount and this
  * cell is overridden to 0. Both carry auto-generated reasons. Undo by clearing
@@ -255,7 +356,7 @@ export async function transferPayoutAmount(
     .eq("captain_id", input.toCaptainId)
     .maybeSingle();
   if (recipientError) throwDb(recipientError);
-  const recipient = recipientData as CaptainPayoutRow | null;
+  const recipient = recipientData ? coercePayoutNumerics(recipientData as CaptainPayoutRow) : null;
   if (!recipient) {
     throw conflict("The receiving captain has no payout cell in this issue.");
   }
@@ -268,6 +369,13 @@ export async function transferPayoutAmount(
     captainName(client, input.toCaptainId),
   ]);
 
+  // Ordered source-first so a partial failure underpays rather than double-pays.
+  const { error: sourceUpdateError } = await client
+    .from("captain_payouts")
+    .update({ override_amount: 0, override_reason: `Transferred to ${recipientName}` })
+    .eq("id", source.id);
+  if (sourceUpdateError) throwDb(sourceUpdateError);
+
   const { error: recipientUpdateError } = await client
     .from("captain_payouts")
     .update({
@@ -276,12 +384,6 @@ export async function transferPayoutAmount(
     })
     .eq("id", recipient.id);
   if (recipientUpdateError) throwDb(recipientUpdateError);
-
-  const { error: sourceUpdateError } = await client
-    .from("captain_payouts")
-    .update({ override_amount: 0, override_reason: `Transferred to ${recipientName}` })
-    .eq("id", source.id);
-  if (sourceUpdateError) throwDb(sourceUpdateError);
 
   return getPayout(id);
 }

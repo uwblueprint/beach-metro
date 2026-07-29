@@ -4,7 +4,7 @@
 
 export type RouteSide = "NORTH" | "SOUTH" | "EAST" | "WEST" | "BOTH";
 export type PayType = "bundle" | "paper" | "drop";
-export type PayCadence = "weekly" | "biweekly";
+export type PayCadence = "biweekly" | "monthly";
 export type IssueStatus = "open" | "closed";
 export type AddressType = "residential" | "commercial";
 export type LocationType = "ROOFTOP" | "RANGE_INTERPOLATED" | "GEOMETRIC_CENTER" | "APPROXIMATE";
@@ -87,6 +87,8 @@ export interface FinancialYearRow {
   id: string;
   name: string;
   archived: boolean;
+  /** The year runs from this month, not January — quarters are relative to it. */
+  start_date: string;
 }
 
 export interface IssueRow {
@@ -104,6 +106,11 @@ export interface CaptainPayoutRow {
   calculated_amount: number;
   override_amount: number | null;
   override_reason: string | null;
+  /** Snapshot of the calculation, taken on bundling day. Null = still live. */
+  frozen_amount: number | null;
+  frozen_at: string | null;
+  /** Captain who covered this issue; the payment is theirs, not captain_id's. */
+  substitute_captain_id: string | null;
   paid: boolean;
   paid_at: string | null;
 }

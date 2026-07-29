@@ -1,16 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import {
-  Briefcase,
-  FlaskConical,
-  LayoutGrid,
-  MapPin,
-  Send,
-  Settings,
-  User,
-  Users,
-} from "lucide-react";
+import { Briefcase, LayoutGrid, MapPin, Send, Settings, User, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { ListItem } from "@/components/ui/list-item";
@@ -20,8 +11,6 @@ const NAV_ITEMS: { label: string; href: string; icon: LucideIcon }[] = [
   { label: "Routes", href: "/routes", icon: MapPin },
   { label: "Members", href: "/members", icon: Users },
   { label: "Finances", href: "/finances", icon: Briefcase },
-  // TEMP: API playground for backend exploration — delete with app/(dashboard)/playground.
-  { label: "API Playground · temp", href: "/playground", icon: FlaskConical },
 ];
 
 function displayName(email: string | null) {
@@ -57,7 +46,6 @@ export function AppSidebar({ userEmail }: { userEmail: string | null }) {
               type="leading-icon"
               active={active}
               icon={<Icon aria-hidden strokeWidth={1.75} />}
-              className="data-[active=true]:bg-active-grey data-[active=true]:hover:bg-active-grey data-[active=true]:text-primary"
             >
               {label}
             </ListItem>
@@ -73,7 +61,7 @@ export function AppSidebar({ userEmail }: { userEmail: string | null }) {
           type="leading-icon"
           active={pathname === "/settings" || pathname.startsWith("/settings/")}
           icon={<Settings aria-hidden strokeWidth={1.75} />}
-          className="text-muted-foreground data-[active=true]:bg-active-grey data-[active=true]:text-primary data-[active=true]:hover:bg-active-grey"
+          className="text-muted-foreground data-[active=true]:text-primary"
         >
           Settings
         </ListItem>
