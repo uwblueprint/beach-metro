@@ -95,3 +95,16 @@ Remove entries as they're resolved (and record the decision in
   routes/volunteers/territories/captains per call; `recalculateOpenIssues` repeats
   it per open issue. O(all data) per edit — fine now; scope the reads or use a SQL
   view/function for scale. → `lib/services/recalc.ts`.
+- **The numeric-as-string premise didn't reproduce.** The `coerce*Numerics` helpers
+  in `lib/services/shared.ts` were added on the stated grounds that "PostgREST
+  serializes `numeric` columns as JSON strings." Probing the live project directly
+  (`GET /rest/v1/captains?select=pay_rate`) returns **unquoted JSON numbers**
+  (`[{"pay_rate":1.25},{"pay_rate":2.00}]`), i.e. `typeof === "number"`, so the
+  helpers are currently no-ops rather than fixes. Left in place as harmless
+  insurance and deliberately not modified — @kenzysoror to confirm what they
+  observed (a different PostgREST/supabase-js version, or a column type other than
+  `numeric(10,2)`, would both explain it) and then either keep them with a
+  corrected comment or drop them. Consequence if the premise *is* ever true for
+  some deployment: `lib/services/overview.ts` is the one reader that never got a
+  coercer, and its `+=` accumulators would produce `NaN` past the first row.
+  → `lib/services/shared.ts`, `lib/services/overview.ts`.
