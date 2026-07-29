@@ -45,11 +45,7 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
 
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/auth")
-  ) {
+  if (!user && !request.nextUrl.pathname.startsWith("/auth")) {
     // API clients get the spec's 401 envelope; pages redirect to login.
     if (request.nextUrl.pathname.startsWith("/api")) {
       return NextResponse.json(

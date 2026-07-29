@@ -68,7 +68,7 @@ export const createCaptain = z.object({
   phone: z.string().trim().min(1),
   payType: z.enum(["bundle", "paper", "drop"]),
   payRate: z.number().min(0), // 0 is valid (donate-back)
-  payCadence: z.enum(["weekly", "biweekly"]),
+  payCadence: z.enum(["biweekly", "monthly"]),
   startDate: isoDate,
   endDate: isoDate.nullish(),
   note: noteField,
@@ -82,7 +82,7 @@ export const updateCaptain = z
     phone: z.string().trim().min(1),
     payType: z.enum(["bundle", "paper", "drop"]),
     payRate: z.number().min(0),
-    payCadence: z.enum(["weekly", "biweekly"]),
+    payCadence: z.enum(["biweekly", "monthly"]),
     startDate: isoDate,
     endDate: isoDate.nullable(),
     note: noteField,

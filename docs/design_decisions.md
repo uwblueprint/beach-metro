@@ -50,14 +50,37 @@ Calls made where the specs were silent; each is covered by a test (see
 - **Paid locks the cell.** Only unpaid cells are editable: closing detaches a
   payout from the live calculation, and marking it paid locks it from any further
   edits (unmark to edit again).
-- **No captain substitutes.** Replaced by a reallocate/transfer feature that moves
-  a cell's amount to another captain for that issue (original zeroed, finance-only;
-  routes/territory untouched). No temp-captain creation, no substitute modeling in
-  the schema. (Finance flow §4g; payout `transfer` action in the API spec.)
+- ~~**No captain substitutes.**~~ **Superseded (client review, July 2026).**
+  Substitutes are real: a captain can be recorded as covering one issue for
+  another, and the payment is the substitute's. `captain_payouts` carries
+  `substitute_captain_id`; assign/clear via `POST`/`DELETE` on
+  `/api/payouts/{id}/substitute`. Substitutes must be existing captains (no
+  guest records). The transfer action stays for genuine money reallocation, but
+  it is no longer the substitute mechanism — it recorded the substitution only
+  as free text in `override_reason`, which made substitute pay impossible to
+  total or filter on, and the overview needs both.
 - **No substitute deliverer.** Informal route coverage (e.g. a neighbour) is not
   recorded on `RouteDelivery`.
 - **Reopen stays.** A closed issue can be reopened as a guarded admin correction;
   it reopens finance and delivery together.
+
+## Post-design reconciliation (client review, July 2026)
+
+- **Freeze is separate from paid.** Bundling day locks a captain's calculated
+  amount so later route or carrier edits cannot move it, which is not the same
+  as having paid them. `captain_payouts.frozen_amount` holds the snapshot;
+  precedence is override → frozen → calculated. Freezing does not require the
+  issue to be closed, and a frozen-but-unpaid cell can be unfrozen.
+  Creating an issue still never closes another one — the manual freeze button
+  replaces the auto-close idea that was considered and rejected.
+- **The financial year has an explicit start month.** It begins whenever the
+  office starts it, not in January, so `financial_years.start_date` is required
+  and the overview's quarter filters are relative to it (a March year has
+  Q1 = March–May).
+- **Reimbursement history is derived, not stored.** A captain's payment history
+  is their payout cells; there is no separate reimbursement entity. This keeps
+  the earlier decision that replaced `Reimbursement` with
+  `FinancialYear → Issue → CaptainPayout`.
 
 ## Pre-code reconciliation (locked 2026-06)
 
@@ -80,7 +103,10 @@ Calls made where the specs were silent; each is covered by a test (see
 - `Reimbursement` (flat amount/paid) **replaced** by `FinancialYear` → `Issue` →
   `CaptainPayout`, matching the finance flow.
 - Added `RouteDelivery` (per route per issue actuals) — the core of the delivery flow.
-- `PayCadence`: `"biweekly" | "monthly"` → **`"weekly" | "biweekly"`**.
+- `PayCadence`: `"biweekly" | "monthly"` → `"weekly" | "biweekly"` →
+  **reverted to `"biweekly" | "monthly"`** (client review, July 2026: nobody is
+  paid weekly; monthly is real). Migration `20260729000000` remaps any
+  `weekly` row to `biweekly`.
 - `Captain.address` **removed** (captains have no address); pay config (type, rate,
   cadence) **moved onto the captain** (was split across territory/captain).
 - `Captain.territoryIds[]` → **1:1** (the FK lives on `CaptainTerritory.assignedCaptainId`);

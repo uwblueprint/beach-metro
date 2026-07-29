@@ -46,7 +46,7 @@ export type RouteSide = "NORTH" | "SOUTH" | "EAST" | "WEST" | "BOTH";
 
 // Captain pay configuration.
 export type PayType = "bundle" | "paper" | "drop";
-export type PayCadence = "weekly" | "biweekly"; // informational; payouts not aggregated
+export type PayCadence = "biweekly" | "monthly"; // informational; payouts not aggregated
 
 // AdminUser role. SUBJECT TO CHANGE (the whole role concept is not finalized).
 export type AdminRole = "distribution manager" | "accounts manager";
@@ -163,8 +163,9 @@ export interface Volunteer {
 ### Captain
 
 No address. Pay config lives here. Status (Active / Retired) is derived from
-`retiredAt`; captains have no vacation state — absences are handled by reallocating
-the issue's payout to another captain (finance flow §4g).
+`retiredAt`; captains have no vacation state — an absence is recorded by naming a
+substitute on the affected issue's payout cell (finance flow §4k), which attributes
+the payment to whoever covered without moving the cell.
 
 ```ts
 export interface Captain {
@@ -258,7 +259,10 @@ machines and calculations.
 export interface FinancialYear {
   id: UUID;
   name: string; // e.g. "2026–2027" (runs ~March–Feb, not calendar-locked)
-  archived: boolean; // archived tables stay fully accessible
+  // The month the year actually begins. Required, not inferred from `name`:
+  // reporting quarters are measured from here, so a March year has Q1 = Mar–May.
+  startDate: DateOnly;
+  archived: boolean; // archived tables stay fully accessible; refuses new issues
   // Issues (rows) = Issues whose financialYearId points here (inverse FK).
   // Columns auto-populate for captains active at creation.
   // SUBJECT TO CHANGE: whether the captain column set is snapshotted or derived live.
@@ -268,7 +272,9 @@ export interface FinancialYear {
 ### Issue
 
 One publication run; shared with the delivery flow. Open → Closed; closing
-freezes payout values and delivery actuals together.
+detaches every payout in the issue from the live calculation and locks delivery
+actuals together. Note this is a lifecycle-level detach — distinct from a payout's
+own `frozenAmount` snapshot (see `CaptainPayout` and finance flow §3b).
 
 ```ts
 export interface Issue {
@@ -282,20 +288,32 @@ export interface Issue {
 
 ### CaptainPayout
 
-One cell per captain per issue. The effective amount is
-`overrideAmount ?? calculatedAmount`, frozen when the issue closes. Payment is a
-separate marker, only toggleable once the issue is closed.
+One cell per captain per issue. The effective amount resolves by precedence:
+`overrideAmount ?? frozenAmount ?? calculatedAmount`. Freeze, close, and paid are
+three separate mechanisms — see finance flow §3b and §7.
 
 ```ts
 export interface CaptainPayout {
   id: UUID;
   issueId: Issue["id"];
-  captainId: Captain["id"]; // the captain receiving this payout
-  // Calculation status is derived: overrideAmount present => "overridden", else "calculated".
+  captainId: Captain["id"]; // whose column this cell sits in; never moves
+  // Calculation status is derived: overrideAmount present => "overridden",
+  // else frozenAmount present => "frozen", else "calculated".
   calculatedAmount: number; // auto from pay config + delivery rollup (while open)
-  overrideAmount?: number | null; // manual override
+  overrideAmount?: number | null; // manual override; wins over frozenAmount
   overrideReason?: string | null; // required when overridden; no audit of prior values
+  // Manual snapshot taken on bundling day so later route/carrier edits can't move
+  // this cell. Null = still tracking the live calculation. Reversible while unpaid,
+  // and independent of the issue's open/closed status. NOT the same as paid.
+  frozenAmount?: number | null;
+  frozenAt?: DateOnly | null; // set together with frozenAmount (DB-enforced)
+  // The captain who actually covered this issue; the payment is theirs rather than
+  // captainId's. The cell stays on captainId so the issue × captain grid is intact,
+  // which is what lets substitute pay be totalled separately from own-territory pay.
+  // Must be an existing, non-retired captain, and never equal to captainId.
+  substituteCaptainId?: Captain["id"] | null;
   // Payment (separate from calculation; only toggleable once the issue is Closed).
+  // Paid locks the cell against override / freeze / unfreeze / substitute / transfer.
   paid: boolean;
   paidAt?: DateOnly | null;
 }

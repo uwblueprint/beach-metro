@@ -6,12 +6,14 @@ import type { createFinancialYear, yearsQuery } from "@/lib/validation/finance";
 import type { CaptainPayoutRow, CaptainRow, FinancialYearRow, IssueRow } from "@/types/db";
 
 import { calculationStatus, effectiveAmount } from "./derive";
-import { db, throwDb } from "./shared";
+import { coercePayoutNumerics, db, throwDb } from "./shared";
 
 export interface YearSummary {
   id: string;
   name: string;
   archived: boolean;
+  /** The month the year starts; quarter filters are relative to it. */
+  startDate: string;
   issueCount: number;
 }
 
@@ -30,7 +32,7 @@ export interface YearDetail {
       payoutId: string;
       captainId: string;
       effectiveAmount: number;
-      calculationStatus: "calculated" | "overridden";
+      calculationStatus: "calculated" | "frozen" | "overridden";
       paid: boolean;
     }>;
   }>;
@@ -50,6 +52,7 @@ export async function listYears(filters: z.infer<typeof yearsQuery>): Promise<Ye
     id: y.id,
     name: y.name,
     archived: y.archived,
+    startDate: y.start_date,
     issueCount: issues.filter((i) => i.financial_year_id === y.id).length,
   }));
   if (filters.archived !== undefined) all = all.filter((y) => y.archived === filters.archived);
@@ -82,7 +85,7 @@ export async function getYearDetail(id: string): Promise<YearDetail> {
       ? await client.from("captain_payouts").select("*").in("issue_id", issueIds)
       : { data: [], error: null };
   if (payoutError) throwDb(payoutError);
-  const payouts = (payoutData ?? []) as CaptainPayoutRow[];
+  const payouts = ((payoutData ?? []) as CaptainPayoutRow[]).map(coercePayoutNumerics);
 
   const { data: captainData, error: captainError } = await client
     .from("captains")
@@ -121,12 +124,12 @@ export async function getYearDetail(id: string): Promise<YearDetail> {
 export async function createYear(input: z.infer<typeof createFinancialYear>): Promise<YearSummary> {
   const { data, error } = await db()
     .from("financial_years")
-    .insert({ name: input.name })
+    .insert({ name: input.name, start_date: input.startDate })
     .select()
     .single();
   if (error) throwDb(error); // unique name violation → 409
   const y = data as FinancialYearRow;
-  return { id: y.id, name: y.name, archived: y.archived, issueCount: 0 };
+  return { id: y.id, name: y.name, archived: y.archived, startDate: y.start_date, issueCount: 0 };
 }
 
 /** Archive: the table stays fully accessible (finance flow §4i). */
@@ -141,6 +144,7 @@ export async function archiveYear(id: string): Promise<YearSummary> {
     id: detail.id,
     name: detail.name,
     archived: detail.archived,
+    startDate: detail.start_date,
     issueCount: (data ?? []).length,
   };
 }

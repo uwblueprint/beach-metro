@@ -141,15 +141,29 @@ describe("volunteerStatus / needsAttention", () => {
 });
 
 describe("payout cell derivations", () => {
-  it("effective amount: override wins; else calculated", () => {
-    expect(effectiveAmount({ calculated_amount: 20, override_amount: null })).toBe(20);
-    expect(effectiveAmount({ calculated_amount: 20, override_amount: 12.5 })).toBe(12.5);
-    expect(effectiveAmount({ calculated_amount: 20, override_amount: 0 })).toBe(0); // zeroed by transfer
+  it("effective amount: override wins, then frozen, then calculated", () => {
+    const live = { calculated_amount: 20, override_amount: null, frozen_amount: null };
+    expect(effectiveAmount(live)).toBe(20);
+    expect(effectiveAmount({ ...live, override_amount: 12.5 })).toBe(12.5);
+    expect(effectiveAmount({ ...live, override_amount: 0 })).toBe(0); // zeroed by transfer
+
+    // Frozen holds the amount steady even when the calculation moves under it.
+    expect(effectiveAmount({ ...live, frozen_amount: 18 })).toBe(18);
+    expect(
+      effectiveAmount({ calculated_amount: 99, override_amount: null, frozen_amount: 18 }),
+    ).toBe(18);
+    // An override still beats a freeze.
+    expect(effectiveAmount({ calculated_amount: 99, override_amount: 5, frozen_amount: 18 })).toBe(
+      5,
+    );
   });
 
-  it("calculation status derives from override presence", () => {
-    expect(calculationStatus({ override_amount: null })).toBe("calculated");
-    expect(calculationStatus({ override_amount: 0 })).toBe("overridden");
+  it("calculation status distinguishes frozen from overridden and live", () => {
+    expect(calculationStatus({ override_amount: null, frozen_amount: null })).toBe("calculated");
+    expect(calculationStatus({ override_amount: null, frozen_amount: 18 })).toBe("frozen");
+    expect(calculationStatus({ override_amount: 0, frozen_amount: null })).toBe("overridden");
+    // Override wins the label too — it is the more specific human action.
+    expect(calculationStatus({ override_amount: 5, frozen_amount: 18 })).toBe("overridden");
   });
 
   it("bundleCount derives from the stored breakdown", () => {

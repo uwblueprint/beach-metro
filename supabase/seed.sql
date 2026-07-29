@@ -49,9 +49,9 @@ insert into captain_territories (id, assigned_captain_id, color) values
   ('a0000000-0000-4000-8000-000000000003', null, '#16a34a');
 
 insert into captains (id, first_name, last_name, email, phone, pay_type, pay_rate, pay_cadence, start_date, end_date, retired_at, notes) values
-  ('c0000000-0000-4000-8000-000000000001', 'Emily',  'Chen',     'emily.chen@example.com',  '416-555-0101', 'bundle', 1.25, 'weekly',   '2023-11-20', null, null, null),
+  ('c0000000-0000-4000-8000-000000000001', 'Emily',  'Chen',     'emily.chen@example.com',  '416-555-0101', 'bundle', 1.25, 'monthly',    '2023-11-20', null, null, null),
   ('c0000000-0000-4000-8000-000000000002', 'Oliver', 'Martinez', 'oliver.m@example.com',    '416-555-0102', 'drop',   2.00, 'biweekly', '2024-08-30', null, null, 'Prefers Tuesday pickups'),
-  ('c0000000-0000-4000-8000-000000000003', 'Maya',   'Singh',    'maya.singh@example.com',  '416-555-0103', 'paper',  0.00, 'weekly',   '2024-07-27', null, null, 'Declines reimbursement (donate-back)');
+  ('c0000000-0000-4000-8000-000000000003', 'Maya',   'Singh',    'maya.singh@example.com',  '416-555-0103', 'paper',  0.00, 'monthly',   '2024-07-27', null, null, 'Declines reimbursement (donate-back)');
 
 update captain_territories set assigned_captain_id = 'c0000000-0000-4000-8000-000000000001' where id = 'a0000000-0000-4000-8000-000000000001';
 update captain_territories set assigned_captain_id = 'c0000000-0000-4000-8000-000000000002' where id = 'a0000000-0000-4000-8000-000000000002';
@@ -114,5 +114,5 @@ insert into volunteer_routes (id, start_address_id, end_address_id, street_name,
   -- SOFT-DELETED: must be hidden from all views but keep resolving historically.
   ('e0000000-0000-4000-8000-000000000008', 'b0000000-0000-4000-8000-000000000115', 'b0000000-0000-4000-8000-000000000116', 'Balsam Ave',   'NORTH', null,                                     30, null, 30,  null, now());
 
-insert into financial_years (id, name, archived) values
-  ('f0000000-0000-4000-8000-000000000001', '2026–2027', false);
+insert into financial_years (id, name, archived, start_date) values
+  ('f0000000-0000-4000-8000-000000000001', '2026–2027', false, '2026-03-01');

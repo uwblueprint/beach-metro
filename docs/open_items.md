@@ -77,3 +77,44 @@ Remove entries as they're resolved (and record the decision in
   login session is available.
 - **Idempotency keys / rate limiting.** API-spec open questions; neither is
   implemented (single-office tool, low risk — revisit before any exposure).
+
+## Structural follow-ups (backend review)
+
+- **API response contract has no single source of truth.** Request shapes are
+  double-sourced (prose in [`api/api_spec.md`](api/api_spec.md) + Zod in
+  `lib/validation/`), but *response* shapes exist only as hand-written interfaces
+  inside each service (`PayoutSummary`, `CaptainSummary`, …) and aren't in the
+  spec (e.g. `calculatedAmount`/`effectiveAmount` appear nowhere in it). When the
+  frontend consumes them it re-declares them — a third copy to drift. Consider a
+  server-agnostic `types/api.ts` both services return and the client imports.
+  → `types/db.ts` header, all `lib/services/*.ts` return types.
+- **Money is JS floats.** `Math.round(x*100)/100` against `numeric(10,2)`; consider
+  integer cents / a decimal at the boundary. → `lib/services/derive.ts`,
+  `lib/services/shared.ts` (`coerce*Numerics`). Note the numeric string→number
+  coercion itself is now centralized there; this item is only about the float
+  representation of money, which remains.
+- **Transfer isn't atomic.** `transferPayoutAmount` does two sequential writes
+  (source-first, so a partial failure underpays). For a money path, move to a
+  Postgres function/RPC for a real transaction (`postgres` is already a dep).
+  → `lib/services/payouts.ts`.
+- **Payout breakdown vs stored amount can disagree.** `getPayout`'s per-route
+  breakdown is rebuilt from *current* territory membership, but the amount is
+  stored — for a paid (frozen) cell they can differ. Snapshot the breakdown at
+  freeze, or label it a current estimate. → `lib/services/payouts.ts`.
+- **`recalc` reads whole tables.** `recalculateIssue` fetches all
+  routes/volunteers/territories/captains per call; `recalculateOpenIssues` repeats
+  it per open issue. O(all data) per edit — fine now; scope the reads or use a SQL
+  view/function for scale. → `lib/services/recalc.ts`.
+- **The numeric-as-string premise didn't reproduce.** The `coerce*Numerics` helpers
+  in `lib/services/shared.ts` were added on the stated grounds that "PostgREST
+  serializes `numeric` columns as JSON strings." Probing the live project directly
+  (`GET /rest/v1/captains?select=pay_rate`) returns **unquoted JSON numbers**
+  (`[{"pay_rate":1.25},{"pay_rate":2.00}]`), i.e. `typeof === "number"`, so the
+  helpers are currently no-ops rather than fixes. Left in place as harmless
+  insurance and deliberately not modified — @kenzysoror to confirm what they
+  observed (a different PostgREST/supabase-js version, or a column type other than
+  `numeric(10,2)`, would both explain it) and then either keep them with a
+  corrected comment or drop them. Consequence if the premise *is* ever true for
+  some deployment: `lib/services/overview.ts` is the one reader that never got a
+  coercer, and its `+=` accumulators would produce `NaN` past the first row.
+  → `lib/services/shared.ts`, `lib/services/overview.ts`.

@@ -195,13 +195,11 @@ export const googleMapsProvider: MapsProvider = {
     return (json.suggestions ?? [])
       .map((s: any) => s.placePrediction)
       .filter((p: any) => p?.placeId)
-      .map(
-        (p: any): AddressSuggestion => ({
-          placeId: p.placeId,
-          primaryText: p.structuredFormat?.mainText?.text ?? "",
-          secondaryText: p.structuredFormat?.secondaryText?.text ?? "",
-        }),
-      );
+      .map((p: any): AddressSuggestion => ({
+        placeId: p.placeId,
+        primaryText: p.structuredFormat?.mainText?.text ?? "",
+        secondaryText: p.structuredFormat?.secondaryText?.text ?? "",
+      }));
   },
 
   /** Geocoding API by place_id (research doc §2) — cache refresh + autocomplete input. */

@@ -7,6 +7,17 @@ export const yearsQuery = z.object({ archived: boolQuery });
 
 export const createFinancialYear = z.object({
   name: z.string().trim().min(1), // e.g. "2026–2027"
+  // The year starts whenever the office starts it, not in January; quarter
+  // filters on the overview are relative to this month.
+  startDate: isoDate,
+});
+
+/** Overview/finance period filter. Quarters are relative to the year's start. */
+export const periodQuery = z.object({
+  yearId: uuid.optional(),
+  period: z.enum(["ytd", "q1", "q2", "q3", "q4"]).optional(),
+  from: isoDate.optional(),
+  to: isoDate.optional(),
 });
 
 /** Batch create: 1..n issues, each created Open (no draft state). */
@@ -26,3 +37,6 @@ export const overridePayout = z.object({
 
 /** Reallocate this cell's amount to another captain (finance flow §4g). */
 export const transferPayout = z.object({ toCaptainId: uuid });
+
+/** Assign the captain who covered this issue (existing captains only). */
+export const setSubstitute = z.object({ substituteCaptainId: uuid });
