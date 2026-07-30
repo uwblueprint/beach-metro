@@ -8,13 +8,39 @@ import type {
   updateVolunteer,
   volunteersQuery,
 } from "@/lib/validation/people";
-import type { CaptainRow, CaptainTerritoryRow, VolunteerRow } from "@/types/db";
+import type { CaptainRow, CaptainTerritoryRow, VolunteerRouteRow, VolunteerRow } from "@/types/db";
 
-import { createAddress, getAddressDetail, type AddressDetail } from "./addresses";
-import { volunteerNeedsAttention, volunteerStatus, type VolunteerStatus } from "./derive";
+import {
+  createAddress,
+  getAddressDetail,
+  getAddressDetails,
+  type AddressDetail,
+} from "./addresses";
+import {
+  greedySplit,
+  routeLabel,
+  volunteerNeedsAttention,
+  volunteerStatus,
+  type VolunteerStatus,
+} from "./derive";
+import { createNoteRecord } from "./notes";
 import { db, throwDb, today } from "./shared";
 
-type RouteLite = { id: string; street_name: string; assigned_volunteer_id: string | null };
+type RouteLite = Pick<
+  VolunteerRouteRow,
+  "id" | "street_name" | "assigned_volunteer_id" | "papers" | "start_address_id" | "end_address_id"
+>;
+
+/** What the members table and the side panel both render for one carried route. */
+export interface CarriedRoute {
+  id: string;
+  streetName: string;
+  /** "Queen St E · 2038 → 2190", or just the street when endpoints aren't geocoded. */
+  label: string;
+  papers: number;
+  /** Derived from papers via the greedy split; never stored. */
+  bundleCount: number;
+}
 
 export interface VolunteerSummary {
   id: string;
@@ -25,13 +51,12 @@ export interface VolunteerSummary {
   status: VolunteerStatus;
   needsAttention: boolean;
   territory: { id: string; captainId: string | null; captainName: string | null } | null;
-  routesCarried: Array<{ id: string; streetName: string }>;
+  routesCarried: CarriedRoute[];
   startDate: string;
   endDate: string | null;
   vacationStart: string | null;
   vacationEnd: string | null;
   retiredAt: string | null;
-  notes: string | null;
 }
 
 export interface VolunteerDetail extends VolunteerSummary {
@@ -42,6 +67,8 @@ interface Context {
   routes: RouteLite[];
   territories: CaptainTerritoryRow[];
   captains: Pick<CaptainRow, "id" | "first_name" | "last_name">[];
+  /** Endpoint addresses for every route, so route labels need no extra round trip. */
+  addresses: Map<string, AddressDetail>;
 }
 
 async function fetchContext(): Promise<Context> {
@@ -49,7 +76,7 @@ async function fetchContext(): Promise<Context> {
   const [routesRes, territoriesRes, captainsRes] = await Promise.all([
     client
       .from("volunteer_routes")
-      .select("id, street_name, assigned_volunteer_id")
+      .select("id, street_name, assigned_volunteer_id, papers, start_address_id, end_address_id")
       .is("deleted_at", null),
     client.from("captain_territories").select("*"),
     client.from("captains").select("id, first_name, last_name"),
@@ -57,10 +84,31 @@ async function fetchContext(): Promise<Context> {
   if (routesRes.error) throwDb(routesRes.error);
   if (territoriesRes.error) throwDb(territoriesRes.error);
   if (captainsRes.error) throwDb(captainsRes.error);
+
+  const routes = (routesRes.data ?? []) as RouteLite[];
+  const addressIds = [
+    ...new Set(routes.flatMap((r) => [r.start_address_id, r.end_address_id])),
+  ].filter(Boolean);
+
   return {
-    routes: (routesRes.data ?? []) as RouteLite[],
+    routes,
     territories: (territoriesRes.data ?? []) as CaptainTerritoryRow[],
     captains: (captainsRes.data ?? []) as Pick<CaptainRow, "id" | "first_name" | "last_name">[],
+    addresses: await getAddressDetails(addressIds),
+  };
+}
+
+function toCarriedRoute(r: RouteLite, addresses: Map<string, AddressDetail>): CarriedRoute {
+  return {
+    id: r.id,
+    streetName: r.street_name,
+    label: routeLabel(
+      r.street_name,
+      addresses.get(r.start_address_id)?.formattedAddress ?? null,
+      addresses.get(r.end_address_id)?.formattedAddress ?? null,
+    ),
+    papers: r.papers,
+    bundleCount: greedySplit(r.papers).length,
   };
 }
 
@@ -88,13 +136,12 @@ function toSummary(v: VolunteerRow, ctx: Context, date: string): VolunteerSummar
       : null,
     routesCarried: ctx.routes
       .filter((r) => r.assigned_volunteer_id === v.id)
-      .map((r) => ({ id: r.id, streetName: r.street_name })),
+      .map((r) => toCarriedRoute(r, ctx.addresses)),
     startDate: v.start_date,
     endDate: v.end_date,
     vacationStart: v.vacation_start,
     vacationEnd: v.vacation_end,
     retiredAt: v.retired_at,
-    notes: v.notes,
   };
 }
 
@@ -162,12 +209,15 @@ export async function createVolunteerRecord(
       captain_territory_id: input.captainTerritoryId ?? null,
       start_date: input.startDate,
       end_date: input.endDate ?? null,
-      notes: input.note ?? null,
     })
     .select()
     .single();
   if (error) throwDb(error);
-  return getVolunteer((data as VolunteerRow).id);
+  const volunteer = data as VolunteerRow;
+  // A note supplied at creation becomes the person's first note. Editing notes
+  // afterwards goes through /api/notes, not through PATCH on the volunteer.
+  if (input.note) await createNoteRecord("volunteer", volunteer.id, { text: input.note });
+  return getVolunteer(volunteer.id);
 }
 
 export async function updateVolunteerRecord(
@@ -185,7 +235,6 @@ export async function updateVolunteerRecord(
   if (input.captainTerritoryId !== undefined) patch.captain_territory_id = input.captainTerritoryId;
   if (input.startDate !== undefined) patch.start_date = input.startDate;
   if (input.endDate !== undefined) patch.end_date = input.endDate;
-  if (input.note !== undefined) patch.notes = input.note;
   if (input.address !== undefined) {
     const { address } = await createAddress(input.address, "residential");
     patch.address_id = address.id;
