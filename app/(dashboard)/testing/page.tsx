@@ -572,9 +572,9 @@ function InputsSection() {
       .join(", ") || "Select roles…";
 
   const dropOptions = [
-    { value: "123", label: "123 Queen St", badge: "Lena Morales" },
-    { value: "187", label: "187 Queen St", badge: null },
-    { value: "maya", label: "Maya Chen", badge: "James Chen" },
+    { value: "123", label: "123 Queen St (assigned)", badge: "Lena Morales" },
+    { value: "187", label: "187 Queen St (assigned)", badge: null },
+    { value: "maya", label: "Maya Chen", badge: null },
   ].filter(
     (o) =>
       !dropQuery.trim() ||
@@ -582,13 +582,6 @@ function InputsSection() {
       (o.badge?.toLowerCase().includes(dropQuery.trim().toLowerCase()) ?? false),
   );
 
-  const dropCreate =
-    dropQuery.trim().length > 0 &&
-    !dropOptions.some((o) => o.label.toLowerCase() === dropQuery.trim().toLowerCase())
-      ? /\d/.test(dropQuery.trim()[0])
-        ? "Create new address…"
-        : "Create new volunteer…"
-      : null;
   return (
     <div className="space-y-10">
       <div>
@@ -689,22 +682,6 @@ function InputsSection() {
                 setDropQuery("");
               }}
               options={dropOptions}
-              footer={
-                dropCreate ? (
-                  <button
-                    type="button"
-                    className="flex w-full cursor-pointer items-center rounded-[4px] p-2 text-left text-sm text-primary outline-none transition-colors hover:bg-tag-hover"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
-                      setDropValue(`create:${dropQuery.trim()}`);
-                      setDropLabel(dropQuery.trim());
-                      setDropQuery("");
-                    }}
-                  >
-                    {dropCreate}
-                  </button>
-                ) : null
-              }
             />
           </div>
           <div className="flex flex-col gap-2">

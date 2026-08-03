@@ -15,14 +15,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input, inputFieldClassName } from "@/components/ui/input";
+import { inputFieldClassName } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import {
   useAddCommercialDrop,
   useAssignVolunteerToTerritory,
-  useCreateVolunteerForTerritory,
+  useCommercialDropCandidates,
   useVolunteersList,
 } from "@/features/territory-drops/api";
 
@@ -33,10 +33,8 @@ export type DropSelection =
       addressId: string;
       placeId: string;
       label: string;
-      territoryId: string;
-    }
-  | { kind: "create-address"; label: string }
-  | { kind: "create-volunteer"; label: string };
+      territoryId: string | null;
+    };
 
 export interface NewTerritoryDropDialogProps {
   open: boolean;
@@ -50,28 +48,19 @@ export interface NewTerritoryDropDialogProps {
   onSuccess?: () => void;
 }
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function splitName(raw: string): { firstName: string; lastName: string } {
-  const parts = raw.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return { firstName: "", lastName: "" };
-  if (parts.length === 1) return { firstName: parts[0], lastName: parts[0] };
-  return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
-}
-
-/** Digit → create address; letter (or other) → create volunteer. */
-function createKindForQuery(query: string): "create-address" | "create-volunteer" | null {
-  const trimmed = query.trim();
-  if (!trimmed) return null;
-  const first = trimmed[0];
-  return /\d/.test(first) ? "create-address" : "create-volunteer";
-}
-
-function volunteerLabel(firstName: string, lastName: string, assigned: boolean): string {
+function volunteerLabel(
+  firstName: string,
+  lastName: string,
+  assigned: boolean,
+  retired: boolean,
+): string {
   const name = `${firstName} ${lastName}`;
+  if (retired) return `${name} (retired)`;
   return assigned ? `${name} (assigned)` : name;
+}
+
+function commercialLabel(address: string, assigned: boolean): string {
+  return assigned ? `${address} (assigned)` : address;
 }
 
 function NewTerritoryDropForm({
@@ -88,94 +77,82 @@ function NewTerritoryDropForm({
   onSuccess?: () => void;
 }) {
   const { data: volunteers = [] } = useVolunteersList();
+  const { data: commercialDrops = [] } = useCommercialDropCandidates();
 
   const assignVolunteer = useAssignVolunteerToTerritory();
   const addCommercialDrop = useAddCommercialDrop();
-  const createVolunteer = useCreateVolunteerForTerritory();
 
-  const [query, setQuery] = useState(() =>
-    initialDrop?.kind === "create-address" || initialDrop?.kind === "create-volunteer"
-      ? initialDrop.label
-      : "",
-  );
+  const [query, setQuery] = useState("");
   const [selection, setSelection] = useState<DropSelection | null>(initialDrop);
   const [error, setError] = useState<string | null>(null);
 
-  const [volEmail, setVolEmail] = useState("");
-  const [volPhone, setVolPhone] = useState("");
-  const [volAddress, setVolAddress] = useState("");
-  const [volStartDate, setVolStartDate] = useState(todayIso);
-
-  const currentVolunteers = useMemo(() => {
-    return volunteers
-      .filter((v) => v.status !== "retired")
-      .map((v) => ({
-        id: v.id,
-        firstName: v.firstName,
-        lastName: v.lastName,
-        assigned: v.territory !== null,
-      }))
-      .sort((a, b) => {
-        if (a.assigned !== b.assigned) return a.assigned ? 1 : -1;
-        return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
-      });
-  }, [volunteers]);
-
   const candidateOptions: ComboboxOption[] = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const options: ComboboxOption[] = currentVolunteers.map((v) => ({
-      value: `volunteer:${v.id}`,
-      label: volunteerLabel(v.firstName, v.lastName, v.assigned),
-    }));
-    if (!q) return options;
-    return options.filter((o) => o.label.toLowerCase().includes(q));
-  }, [currentVolunteers, query]);
-
-  const hasExactMatch = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return false;
-    return candidateOptions.some((o) => {
-      const bare = o.label.replace(/\s*\(assigned\)$/i, "").toLowerCase();
-      return o.label.toLowerCase() === q || bare === q;
+    const volunteerOptions: Array<ComboboxOption & { assigned: boolean }> = volunteers.map((v) => {
+      const assigned = v.territory !== null;
+      const retired = v.status === "retired";
+      return {
+        value: `volunteer:${v.id}`,
+        label: volunteerLabel(v.firstName, v.lastName, assigned, retired),
+        assigned: assigned || retired,
+      };
     });
-  }, [candidateOptions, query]);
 
-  const createKind = createKindForQuery(query);
-  const showCreate = createKind !== null && !hasExactMatch && query.trim().length > 0;
+    const addressOptions: Array<ComboboxOption & { assigned: boolean }> = commercialDrops.map(
+      (d) => {
+        const assigned = d.territoryId !== null;
+        return {
+          value: `commercial:${d.addressId}`,
+          label: commercialLabel(d.label, assigned),
+          badge: d.territoryBadge,
+          assigned,
+        };
+      },
+    );
 
-  const displayValue = selection?.label ?? null;
-  const creatingVolunteer = selection?.kind === "create-volunteer";
-  const volunteerFieldsReady =
-    !creatingVolunteer ||
-    (volEmail.trim().length > 0 &&
-      volPhone.trim().length > 0 &&
-      volAddress.trim().length > 0 &&
-      volStartDate.trim().length > 0);
+    const all = [...volunteerOptions, ...addressOptions].sort((a, b) => {
+      if (a.assigned !== b.assigned) return a.assigned ? 1 : -1;
+      return a.label.localeCompare(b.label);
+    });
+
+    const q = query.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter(
+      (o) => o.label.toLowerCase().includes(q) || (o.badge?.toLowerCase().includes(q) ?? false),
+    );
+  }, [volunteers, commercialDrops, query]);
 
   const hasSelection = !!selection;
-  const mutationsPending =
-    assignVolunteer.isPending || addCommercialDrop.isPending || createVolunteer.isPending;
-  const canConfirm = hasSelection && !!territoryId && volunteerFieldsReady && !mutationsPending;
+  const mutationsPending = assignVolunteer.isPending || addCommercialDrop.isPending;
+  const canConfirm = hasSelection && !!territoryId && !mutationsPending;
 
   const confirmBlockedReason = !hasSelection
     ? null
     : !territoryId
       ? "This captain’s territory isn’t available yet, so Confirm stays disabled."
-      : !volunteerFieldsReady
-        ? "Fill in the new volunteer fields to continue."
-        : null;
+      : null;
+
+  const displayValue = selection?.label ?? null;
 
   function selectOption(option: ComboboxOption) {
-    if (!option.value.startsWith("volunteer:")) return;
-    const volunteerId = option.value.slice("volunteer:".length);
-    setSelection({ kind: "volunteer", volunteerId, label: option.label });
-    setQuery("");
-  }
-
-  function selectCreate() {
-    const kind = createKindForQuery(query);
-    if (!kind) return;
-    setSelection({ kind, label: query.trim() });
+    if (option.value.startsWith("volunteer:")) {
+      const volunteerId = option.value.slice("volunteer:".length);
+      setSelection({ kind: "volunteer", volunteerId, label: option.label });
+      setQuery("");
+      return;
+    }
+    if (option.value.startsWith("commercial:")) {
+      const addressId = option.value.slice("commercial:".length);
+      const drop = commercialDrops.find((d) => d.addressId === addressId);
+      if (!drop) return;
+      setSelection({
+        kind: "commercial",
+        addressId: drop.addressId,
+        placeId: drop.placeId,
+        label: option.label,
+        territoryId: drop.territoryId,
+      });
+      setQuery("");
+    }
   }
 
   async function handleConfirm() {
@@ -190,9 +167,13 @@ function NewTerritoryDropForm({
     if (
       initialDrop &&
       selection.kind === initialDrop.kind &&
-      selection.kind === "volunteer" &&
-      initialDrop.kind === "volunteer" &&
-      selection.volunteerId === initialDrop.volunteerId
+      ((selection.kind === "volunteer" &&
+        initialDrop.kind === "volunteer" &&
+        selection.volunteerId === initialDrop.volunteerId) ||
+        (selection.kind === "commercial" &&
+          initialDrop.kind === "commercial" &&
+          selection.addressId === initialDrop.addressId &&
+          selection.territoryId === territoryId))
     ) {
       onOpenChange(false);
       return;
@@ -200,7 +181,6 @@ function NewTerritoryDropForm({
 
     try {
       if (selection.kind === "volunteer") {
-        // Overwrites captain_territory_id — removes the volunteer from any prior captain.
         await assignVolunteer.mutateAsync({
           territoryId,
           volunteerId: selection.volunteerId,
@@ -215,22 +195,6 @@ function NewTerritoryDropForm({
           address: { placeId: selection.placeId },
           previousTerritoryId: selection.territoryId,
           previousAddressId: selection.addressId,
-        });
-      } else if (selection.kind === "create-address") {
-        await addCommercialDrop.mutateAsync({
-          territoryId,
-          address: { addressLines: [selection.label] },
-        });
-      } else if (selection.kind === "create-volunteer") {
-        const { firstName, lastName } = splitName(selection.label);
-        await createVolunteer.mutateAsync({
-          firstName,
-          lastName,
-          email: volEmail.trim(),
-          phone: volPhone.trim(),
-          addressLines: [volAddress.trim()],
-          startDate: volStartDate.trim(),
-          captainTerritoryId: territoryId,
         });
       }
       onSuccess?.();
@@ -267,95 +231,25 @@ function NewTerritoryDropForm({
             value={
               selection?.kind === "volunteer"
                 ? `volunteer:${selection.volunteerId}`
-                : (selection?.kind ?? null)
+                : selection?.kind === "commercial"
+                  ? `commercial:${selection.addressId}`
+                  : null
             }
             displayValue={displayValue}
             query={query}
             onQueryChange={(next) => {
               setQuery(next);
-              if (
-                selection &&
-                selection.kind !== "create-address" &&
-                selection.kind !== "create-volunteer"
-              ) {
-                setSelection(null);
-              }
-              if (selection?.kind === "create-address" || selection?.kind === "create-volunteer") {
-                setSelection({ kind: selection.kind, label: next.trim() });
-              }
+              if (selection) setSelection(null);
             }}
             onSelect={selectOption}
             options={candidateOptions}
             placeholder="Input text"
-            footer={
-              showCreate ? (
-                <button
-                  type="button"
-                  className="flex w-full cursor-pointer items-center rounded-[4px] p-2 text-left text-sm text-primary outline-none transition-colors hover:bg-tag-hover"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={selectCreate}
-                >
-                  {createKind === "create-address"
-                    ? "Create new address…"
-                    : "Create new volunteer…"}
-                </button>
-              ) : null
-            }
           />
         </DialogField>
 
-        {creatingVolunteer ? (
-          <div className="flex flex-col gap-4">
-            <DialogField>
-              <Label htmlFor="ntd-vol-email" className="text-md font-normal text-primary">
-                Email
-              </Label>
-              <Input
-                id="ntd-vol-email"
-                type="email"
-                value={volEmail}
-                onChange={(e) => setVolEmail(e.target.value)}
-                placeholder="name@example.com"
-              />
-            </DialogField>
-            <DialogField>
-              <Label htmlFor="ntd-vol-phone" className="text-md font-normal text-primary">
-                Phone
-              </Label>
-              <Input
-                id="ntd-vol-phone"
-                type="tel"
-                value={volPhone}
-                onChange={(e) => setVolPhone(e.target.value)}
-                placeholder="416-555-0100"
-              />
-            </DialogField>
-            <DialogField>
-              <Label htmlFor="ntd-vol-address" className="text-md font-normal text-primary">
-                Address
-              </Label>
-              <Input
-                id="ntd-vol-address"
-                value={volAddress}
-                onChange={(e) => setVolAddress(e.target.value)}
-                placeholder="Street address"
-              />
-            </DialogField>
-            <DialogField>
-              <Label htmlFor="ntd-vol-start" className="text-md font-normal text-primary">
-                Start date
-              </Label>
-              <Input
-                id="ntd-vol-start"
-                type="date"
-                value={volStartDate}
-                onChange={(e) => setVolStartDate(e.target.value)}
-              />
-            </DialogField>
-          </div>
-        ) : null}
-
-        <DialogDescription>Selecting an assigned drop will re-allocate it.</DialogDescription>
+        <DialogDescription>
+          Selecting a drop with an existing territory will re-allocate it.
+        </DialogDescription>
 
         {error ? <p className="text-md text-destructive">{error}</p> : null}
         {!error && confirmBlockedReason ? (
@@ -389,7 +283,6 @@ function NewTerritoryDropDialog({
               captainName,
               territoryId ?? "",
               initialDrop?.kind ?? "",
-              initialDrop && "label" in initialDrop ? initialDrop.label : "",
               initialDrop && "volunteerId" in initialDrop ? initialDrop.volunteerId : "",
               initialDrop && "addressId" in initialDrop ? initialDrop.addressId : "",
             ].join("|")}

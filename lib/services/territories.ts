@@ -31,6 +31,58 @@ export interface TerritoryDetail extends Omit<
   commercialDrops: AddressDetail[];
 }
 
+/** Every commercial drop in the system, for Drop Details pickers. */
+export interface CommercialDropCandidate {
+  addressId: string;
+  placeId: string;
+  label: string;
+  territoryId: string | null;
+  /** Captain name for the owning territory, when assigned. */
+  territoryBadge: string | null;
+}
+
+export async function listCommercialDropCandidates(): Promise<CommercialDropCandidate[]> {
+  const client = db();
+  const [aRes, tRes, cRes] = await Promise.all([
+    client.from("addresses").select("id, google_maps_id, territory_id").eq("type", "commercial"),
+    client.from("captain_territories").select("id, assigned_captain_id"),
+    client.from("captains").select("id, first_name, last_name"),
+  ]);
+  if (aRes.error) throwDb(aRes.error);
+  if (tRes.error) throwDb(tRes.error);
+  if (cRes.error) throwDb(cRes.error);
+
+  const territories = (tRes.data ?? []) as Pick<
+    CaptainTerritoryRow,
+    "id" | "assigned_captain_id"
+  >[];
+  const captains = (cRes.data ?? []) as Pick<CaptainRow, "id" | "first_name" | "last_name">[];
+  const captainNameById = new Map(
+    captains.map((c) => [c.id, `${c.first_name} ${c.last_name}`] as const),
+  );
+  const badgeByTerritoryId = new Map(
+    territories.map((t) => [
+      t.id,
+      t.assigned_captain_id ? (captainNameById.get(t.assigned_captain_id) ?? null) : null,
+    ]),
+  );
+
+  const rows = (aRes.data ?? []) as Array<{
+    id: string;
+    google_maps_id: string;
+    territory_id: string | null;
+  }>;
+  const details = await getAddressDetails(rows.map((r) => r.id));
+
+  return rows.map((row) => ({
+    addressId: row.id,
+    placeId: row.google_maps_id,
+    label: details.get(row.id)?.formattedAddress ?? "Address not geocoded yet",
+    territoryId: row.territory_id,
+    territoryBadge: row.territory_id ? (badgeByTerritoryId.get(row.territory_id) ?? null) : null,
+  }));
+}
+
 export async function listTerritories(
   filters: z.infer<typeof territoriesQuery>,
 ): Promise<TerritorySummary[]> {

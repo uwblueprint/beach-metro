@@ -196,3 +196,95 @@ export function useSetVacation(volunteerId: string) {
     },
   });
 }
+
+export type CreateVolunteerBody = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: { addressLines: string[] } | { placeId: string };
+  startDate: string;
+  captainTerritoryId?: string | null;
+  endDate?: string | null;
+  note?: string | null;
+};
+
+export type CreateCaptainBody = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  payType: "bundle" | "paper" | "drop";
+  payRate: number;
+  payCadence: "biweekly" | "monthly";
+  startDate: string;
+  endDate?: string | null;
+  note?: string | null;
+};
+
+export function useCreateVolunteer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateVolunteerBody) => api.post<VolunteerDetail>("/api/volunteers", body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: memberKeys.all });
+    },
+  });
+}
+
+export function useCreateCaptain() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateCaptainBody) => api.post<CaptainSummary>("/api/captains", body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: memberKeys.all });
+      queryClient.invalidateQueries({ queryKey: ["territory-drops"] });
+    },
+  });
+}
+
+export type UpdateVolunteerBody = {
+  email?: string;
+  phone?: string;
+  address?: { addressLines: string[] } | { placeId: string };
+  startDate?: string;
+  endDate?: string | null;
+  firstName?: string;
+  lastName?: string;
+  captainTerritoryId?: string | null;
+};
+
+export function useUpdateVolunteer(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: UpdateVolunteerBody) =>
+      api.patch<VolunteerDetail>(`/api/volunteers/${id}`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: memberKeys.all });
+      queryClient.invalidateQueries({ queryKey: memberKeys.volunteer(id) });
+    },
+  });
+}
+
+export type UpdateCaptainBody = {
+  email?: string;
+  phone?: string;
+  payType?: "bundle" | "paper" | "drop";
+  payRate?: number;
+  payCadence?: "biweekly" | "monthly";
+  startDate?: string;
+  endDate?: string | null;
+  firstName?: string;
+  lastName?: string;
+};
+
+export function useUpdateCaptain(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: UpdateCaptainBody) => api.patch<CaptainSummary>(`/api/captains/${id}`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: memberKeys.all });
+      queryClient.invalidateQueries({ queryKey: memberKeys.captain(id) });
+    },
+  });
+}

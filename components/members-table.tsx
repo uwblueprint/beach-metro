@@ -15,8 +15,7 @@ import { cn } from "@/lib/utils";
 
 type MembersTableState = "all" | "captains" | "volunteers";
 
-// TODO: revisit passing full row objects vs UUIDs once a real data layer
-// exists (optimization review).
+// TODO: revisit passing full row objects vs UUIDs if list payloads get heavy.
 interface MembersTableProps {
   state: MembersTableState;
   /** Qualifying members for the current state, already filtered by the parent. */
