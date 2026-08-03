@@ -4,7 +4,11 @@
 import type { z } from "zod";
 
 import { conflict, notFound } from "@/lib/api/errors";
-import type { overridePayout, transferPayout } from "@/lib/validation/finance";
+import type {
+  overridePayout,
+  setPayoutComment as setPayoutCommentSchema,
+  transferPayout,
+} from "@/lib/validation/finance";
 import type {
   CaptainPayoutRow,
   CaptainRow,
@@ -34,6 +38,11 @@ export interface PayoutSummary {
   /** Set when another captain covered this issue; the payment is theirs. */
   substituteCaptainId: string | null;
   substituteCaptainName: string | null;
+  /**
+   * Free-standing note on the cell, separate from `overrideReason`.
+   * PENDING(Q4): the design treats these as two different things.
+   */
+  comment: string | null;
   paid: boolean;
   paidAt: string | null;
 }
@@ -82,6 +91,7 @@ function toSummary(
     frozenAt: p.frozen_at,
     substituteCaptainId: p.substitute_captain_id,
     substituteCaptainName: substituteName ?? null,
+    comment: p.comment,
     paid: p.paid,
     paidAt: p.paid_at,
   };
@@ -230,13 +240,20 @@ export async function clearPayoutOverride(id: string): Promise<PayoutDetail> {
   return getPayout(id);
 }
 
-/** Only toggleable once the issue is Closed; marking paid locks the cell. */
+/**
+ * Marking paid locks the cell against every other edit.
+ *
+ * PENDING(Q2). This used to require the issue to be Closed first, per an early
+ * locked decision ("Paid/unpaid cannot be toggled while an issue is Open"). The
+ * finances design lets the office tick paid whenever, and design is the more
+ * product-informed side here, so the gate is removed. If Q2 comes back as (b),
+ * restore the two-line check below. See docs/finances_pending_decisions.md.
+ *
+ *   const issue = await fetchIssue(p.issue_id);
+ *   if (issue.status !== "closed") throw conflict("...once the issue is closed.");
+ */
 export async function markPayoutPaid(id: string): Promise<PayoutDetail> {
   const p = await fetchPayout(id);
-  const issue = await fetchIssue(p.issue_id);
-  if (issue.status !== "closed") {
-    throw conflict("Payouts can only be marked paid once the issue is closed.");
-  }
   if (p.paid) throw conflict("Payout is already marked paid.");
   const { error } = await db()
     .from("captain_payouts")
@@ -487,4 +504,29 @@ export async function listCaptainPayoutHistory(
       };
     })
     .sort((a, b) => b.issueDate.localeCompare(a.issueDate));
+}
+
+/**
+ * Set or clear the free-standing comment on a cell.
+ *
+ * PENDING(Q4). Deliberately NOT the same field as `override_reason`: a comment has
+ * to survive on a cell that was never overridden, and clearing an override must not
+ * silently delete a note the office left for themselves. If design confirms these
+ * are one thing, this collapses into the override reason and the column goes.
+ *
+ * Allowed while unpaid, like every other cell edit.
+ */
+export async function setPayoutComment(
+  id: string,
+  input: z.infer<typeof setPayoutCommentSchema>,
+): Promise<PayoutDetail> {
+  const p = await fetchPayout(id);
+  assertUnpaid(p);
+  const trimmed = input.comment?.trim() ?? null;
+  const { error } = await db()
+    .from("captain_payouts")
+    .update({ comment: trimmed && trimmed.length > 0 ? trimmed : null })
+    .eq("id", id);
+  if (error) throwDb(error);
+  return getPayout(id);
 }

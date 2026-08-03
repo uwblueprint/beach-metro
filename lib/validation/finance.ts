@@ -40,3 +40,16 @@ export const transferPayout = z.object({ toCaptainId: uuid });
 
 /** Assign the captain who covered this issue (existing captains only). */
 export const setSubstitute = z.object({ substituteCaptainId: uuid });
+
+/**
+ * Free-standing comment on a payout cell. Null or empty clears it.
+ * PENDING(Q4): separate from `overridePayout.reason` on purpose.
+ */
+export const setPayoutComment = z.object({
+  comment: z.string().max(1000).nullish(),
+});
+
+/** Rename a financial year. The start date is fixed once the year exists. */
+export const updateFinancialYear = z.object({
+  name: z.string().trim().min(1),
+});

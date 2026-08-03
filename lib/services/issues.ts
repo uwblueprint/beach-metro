@@ -7,6 +7,7 @@ import type { z } from "zod";
 import { conflict, notFound } from "@/lib/api/errors";
 import type { createIssues, updateIssue } from "@/lib/validation/finance";
 import type {
+  CaptainPayoutRow,
   CaptainRow,
   FinancialYearRow,
   IssueRow,
@@ -18,7 +19,7 @@ import type {
 
 import { greedySplit, volunteerStatus } from "./derive";
 import { recalculateIssue } from "./recalc";
-import { db, throwDb, today } from "./shared";
+import { coercePayoutNumerics, db, throwDb, today } from "./shared";
 
 export interface IssueSummary {
   id: string;
@@ -207,4 +208,69 @@ export async function papersToOrder(issueId: string): Promise<{ issueId: string;
     0,
   );
   return { issueId, total };
+}
+
+/**
+ * Lock an issue: freeze every unpaid cell in it at once.
+ *
+ * PENDING(Q1). The backend models freezing per cell (finance flow §3b): one
+ * captain's amount is snapshotted so later route or carrier edits cannot move it.
+ * The finances design instead puts a single lock on the whole issue row, which is
+ * a better fit for how the office actually works — on bundling day you settle the
+ * whole run, not one captain at a time.
+ *
+ * So this is deliberately a BULK ACTION over the existing per-cell freeze rather
+ * than a new `locked` column on the issue. Nothing is lost either way: if Q1 comes
+ * back saying locking really is per captain, the per-cell endpoints are still
+ * there and this just stops being used.
+ *
+ * Paid cells are skipped, not an error: paid already locks a cell against every
+ * edit, so they are locked by definition and freezing them would be redundant.
+ */
+export async function lockIssue(id: string): Promise<IssueSummary> {
+  const issue = await fetchIssue(id);
+  const client = db();
+
+  const { data, error } = await client.from("captain_payouts").select("*").eq("issue_id", issue.id);
+  if (error) throwDb(error);
+
+  const cells = ((data ?? []) as CaptainPayoutRow[]).map(coercePayoutNumerics);
+  const toFreeze = cells.filter((c) => !c.paid && c.frozen_amount === null);
+  if (cells.length === 0) throw conflict("This issue has no payout cells to lock.");
+
+  const stamp = today();
+  for (const cell of toFreeze) {
+    const { error: freezeError } = await client
+      .from("captain_payouts")
+      .update({ frozen_amount: cell.calculated_amount, frozen_at: stamp })
+      .eq("id", cell.id);
+    if (freezeError) throwDb(freezeError);
+  }
+
+  return getIssue(id);
+}
+
+/** Unlock an issue: unfreeze every frozen, unpaid cell so they track live again. */
+export async function unlockIssue(id: string): Promise<IssueSummary> {
+  const issue = await fetchIssue(id);
+  const client = db();
+
+  const { data, error } = await client.from("captain_payouts").select("*").eq("issue_id", issue.id);
+  if (error) throwDb(error);
+
+  const cells = ((data ?? []) as CaptainPayoutRow[]).map(coercePayoutNumerics);
+  const toThaw = cells.filter((c) => !c.paid && c.frozen_amount !== null);
+
+  for (const cell of toThaw) {
+    const { error: thawError } = await client
+      .from("captain_payouts")
+      .update({ frozen_amount: null, frozen_at: null })
+      .eq("id", cell.id);
+    if (thawError) throwDb(thawError);
+  }
+
+  // Cells that just went back to tracking the live calculation need recomputing,
+  // since the numbers may have moved while they were frozen.
+  await recalculateIssue(id);
+  return getIssue(id);
 }
