@@ -27,6 +27,8 @@ export async function createAddress(
   input: AddressInput,
   type: AddressType,
   territoryId: string | null = null,
+  /** Commercial drops only; ignored for residential addresses. */
+  standingBundles: number | null = null,
 ): Promise<{ address: AddressRow; resolved: ResolvedAddress }> {
   const resolved = await resolveAddress(input);
   const client = db();
@@ -50,7 +52,12 @@ export async function createAddress(
 
   const { data, error } = await client
     .from("addresses")
-    .insert({ google_maps_id: resolved.placeId, type, territory_id: territoryId })
+    .insert({
+      google_maps_id: resolved.placeId,
+      type,
+      territory_id: territoryId,
+      standing_bundles: type === "commercial" ? standingBundles : null,
+    })
     .select()
     .single();
   if (error) throwDb(error);
@@ -65,6 +72,11 @@ export interface AddressDetail {
   formattedAddress: string | null;
   latitude: number | null;
   longitude: number | null;
+  /**
+   * Expected bundles per issue, for commercial drops only. Null means nobody has
+   * told us yet, which the UI shows as an empty state rather than as zero.
+   */
+  standingBundles: number | null;
 }
 
 /** Fetch address rows joined with their cached location, keyed by address id. */
@@ -73,7 +85,7 @@ export async function getAddressDetails(ids: string[]): Promise<Map<string, Addr
   const { data, error } = await db()
     .from("addresses")
     .select(
-      "id, type, google_maps_id, google_maps_locations(cached_formatted_address, cached_latitude, cached_longitude)",
+      "id, type, google_maps_id, standing_bundles, google_maps_locations(cached_formatted_address, cached_latitude, cached_longitude)",
     )
     .in("id", ids);
   if (error) throwDb(error);
@@ -85,6 +97,7 @@ export async function getAddressDetails(ids: string[]): Promise<Map<string, Addr
     id: string;
     type: AddressType;
     google_maps_id: string;
+    standing_bundles: number | null;
     google_maps_locations: {
       cached_formatted_address: string | null;
       cached_latitude: number | null;
@@ -98,6 +111,7 @@ export async function getAddressDetails(ids: string[]): Promise<Map<string, Addr
       formattedAddress: row.google_maps_locations?.cached_formatted_address ?? null,
       latitude: row.google_maps_locations?.cached_latitude ?? null,
       longitude: row.google_maps_locations?.cached_longitude ?? null,
+      standingBundles: row.standing_bundles,
     });
   }
   return map;

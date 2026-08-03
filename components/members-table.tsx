@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { MemberRole, MemberRow } from "@/lib/stubs/members";
+import { useRetireMember, type MemberRole, type MemberRow } from "@/features/members/api";
 import { cn } from "@/lib/utils";
 
 type MembersTableState = "all" | "captains" | "volunteers";
@@ -50,6 +50,28 @@ function RoleTag({ role }: { role: MemberRole }) {
   );
 }
 
+/** "2020-06-03" -> "Jun. 3, 2020". The API returns ISO; display is the UI's job. */
+const MONTHS = [
+  "Jan.",
+  "Feb.",
+  "Mar.",
+  "Apr.",
+  "May",
+  "Jun.",
+  "Jul.",
+  "Aug.",
+  "Sep.",
+  "Oct.",
+  "Nov.",
+  "Dec.",
+];
+
+function formatDate(iso: string): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  if (!year || !month || !day) return iso;
+  return `${MONTHS[month - 1]} ${day}, ${year}`;
+}
+
 const volunteerColumns: Column[] = [
   { key: "name", header: "Name", render: (m) => m.name },
   { key: "routeInfo", header: "Route Info", render: (m) => m.routeInfo },
@@ -57,7 +79,7 @@ const volunteerColumns: Column[] = [
   {
     key: "startDate",
     header: "Start Date",
-    render: (m) => <span className="text-secondary">{m.startDate}</span>,
+    render: (m) => <span className="text-secondary">{formatDate(m.startDate)}</span>,
   },
   {
     key: "role",
@@ -94,7 +116,16 @@ function TableCell({
   );
 }
 
-function RowActions({ member }: { member: MemberRow }) {
+function RowActions({
+  member,
+  onOpenDetails,
+}: {
+  member: MemberRow;
+  onOpenDetails?: (memberId: string) => void;
+}) {
+  const retire = useRetireMember();
+  const alreadyRetired = member.status === "retired";
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -104,10 +135,26 @@ function RowActions({ member }: { member: MemberRow }) {
         <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {/* TODO: wire to the member details view once it exists. */}
-        <DropdownMenuItem>Member details</DropdownMenuItem>
-        {/* TODO: wire to the retire mutation once the data layer exists. */}
-        <DropdownMenuItem variant="destructive">Retire member</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onOpenDetails?.(member.id)}>
+          Member details
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          variant="destructive"
+          disabled={alreadyRetired || retire.isPending}
+          onClick={() => {
+            // Retiring a volunteer vacates their routes, so confirm before doing it.
+            // There is no reactivation endpoint yet (docs/open_items.md), which is
+            // exactly why this asks first.
+            const detail =
+              member.role === "volunteer"
+                ? "Their routes will become vacant."
+                : "Their territory will be left without a captain.";
+            if (!window.confirm(`Retire ${member.name}? ${detail}`)) return;
+            retire.mutate({ id: member.id, role: member.role });
+          }}
+        >
+          {alreadyRetired ? "Already retired" : retire.isPending ? "Retiring…" : "Retire member"}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -139,7 +186,7 @@ function MembersTable({ state, members, selectedId, onRowClick }: MembersTablePr
               {col.render(member)}
             </TableCell>
           ))}
-          <RowActions member={member} />
+          <RowActions member={member} onOpenDetails={onRowClick} />
         </div>
       ))}
     </div>

@@ -4,13 +4,26 @@ import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import type { MemberDetail } from "@/lib/stubs/members";
 import { NotesSection } from "@/components/notes-section";
 import { SidePanelRow } from "@/components/side-panel-row";
 import { SidePanelSection } from "@/components/side-panel-section";
+import {
+  useCaptain,
+  useCaptainPayouts,
+  useTerritory,
+  useVolunteer,
+  type MemberRole,
+} from "@/features/members/api";
+
+/** The row the user clicked. Name comes along so the header renders immediately. */
+export interface MemberSelection {
+  id: string;
+  role: MemberRole;
+  name: string;
+}
 
 interface MemberSidePanelProps {
-  member: MemberDetail | null;
+  member: MemberSelection | null;
   onClose: () => void;
 }
 
@@ -22,6 +35,39 @@ function readCssDurationMs(variable: string, fallback: number): number {
   return parseFloat(raw) || fallback;
 }
 
+const MONTHS = [
+  "Jan.",
+  "Feb.",
+  "Mar.",
+  "Apr.",
+  "May",
+  "Jun.",
+  "Jul.",
+  "Aug.",
+  "Sep.",
+  "Oct.",
+  "Nov.",
+  "Dec.",
+];
+
+function formatDate(iso: string | null): string {
+  if (!iso) return "—";
+  const [year, month, day] = iso.split("-").map(Number);
+  if (!year || !month || !day) return iso;
+  return `${MONTHS[month - 1]} ${day}, ${year}`;
+}
+
+const PAY_TYPE_LABEL: Record<string, string> = {
+  bundle: "by bundle",
+  paper: "by paper",
+  drop: "by drop",
+};
+
+const CADENCE_LABEL: Record<string, string> = {
+  biweekly: "Bi-Weekly",
+  monthly: "Monthly",
+};
+
 function InfoField({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1 rounded-[4px] px-2 pb-2 pt-1">
@@ -31,7 +77,7 @@ function InfoField({ label, value }: { label: string; value: string }) {
   );
 }
 
-function RoleTag({ role }: { role: "volunteer" | "captain" }) {
+function RoleTag({ role }: { role: MemberRole }) {
   return (
     <span className="inline-flex items-center justify-center rounded-lg bg-tag-active px-2 py-1 text-md text-active">
       {role === "captain" ? "Captain" : "Volunteer"}
@@ -39,40 +85,66 @@ function RoleTag({ role }: { role: "volunteer" | "captain" }) {
   );
 }
 
-function VolunteerContent({ member }: { member: Extract<MemberDetail, { role: "volunteer" }> }) {
+function VolunteerContent({ id }: { id: string }) {
+  const { data: volunteer, isPending, isError, error } = useVolunteer(id);
+
+  if (isError) {
+    return (
+      <p className="px-2 text-md text-secondary">
+        {error instanceof Error ? error.message : "Could not load this volunteer."}
+      </p>
+    );
+  }
+  if (isPending || !volunteer) {
+    return <p className="px-2 text-md text-secondary">Loading…</p>;
+  }
+
+  const totalBundles = volunteer.routesCarried.reduce((s, r) => s + r.bundleCount, 0);
+  const totalPapers = volunteer.routesCarried.reduce((s, r) => s + r.papers, 0);
+
   return (
     <>
       <div className="flex flex-col gap-1 px-1 pb-6 pt-1">
-        <InfoField label="Email" value={member.email} />
-        <InfoField label="Phone" value={member.phone} />
-        <InfoField label="Address" value={member.address} />
-        <InfoField label="Start Date" value={member.startDate} />
-        <InfoField label="Captain" value={member.captainName} />
+        <InfoField label="Email" value={volunteer.email} />
+        <InfoField label="Phone" value={volunteer.phone} />
+        <InfoField
+          label="Address"
+          value={volunteer.address.formattedAddress ?? "Not geocoded yet"}
+        />
+        <InfoField label="Start Date" value={formatDate(volunteer.startDate)} />
+        <InfoField label="Captain" value={volunteer.territory?.captainName ?? "No captain"} />
+        <InfoField
+          label="Status"
+          value={
+            volunteer.status === "on-vacation"
+              ? `On vacation until ${formatDate(volunteer.vacationEnd)}`
+              : volunteer.status === "retired"
+                ? `Retired ${formatDate(volunteer.retiredAt)}`
+                : volunteer.needsAttention
+                  ? "Active (end date passed)"
+                  : "Active"
+          }
+        />
       </div>
 
-      <NotesSection notes={member.notes} />
+      <NotesSection role="volunteer" memberId={id} />
 
-      <SidePanelSection title="Route Info" onAdd={() => {}}>
-        {member.routes.length === 0 ? (
+      <SidePanelSection title="Route Info">
+        {volunteer.routesCarried.length === 0 ? (
           <SidePanelRow className="text-secondary">No routes</SidePanelRow>
         ) : (
           <>
-            {member.routes.map((route) => (
-              <SidePanelRow
-                key={route.id}
-                meta={`${route.bundles}B / ${route.papers}P`}
-                onEdit={() => {}}
-              >
+            {volunteer.routesCarried.map((route) => (
+              <SidePanelRow key={route.id} meta={`${route.bundleCount}B / ${route.papers}P`}>
                 <span className="inline-flex items-center rounded-lg bg-secondary-fill px-2 py-1 text-md text-primary">
-                  {route.name}
+                  {route.label}
                 </span>
               </SidePanelRow>
             ))}
             <div className="flex h-8 items-center justify-between px-2 py-1 text-md text-secondary">
               <span>Totals</span>
               <span>
-                {member.routes.reduce((s, r) => s + r.bundles, 0)} Bundles,{" "}
-                {member.routes.reduce((s, r) => s + r.papers, 0)} Papers
+                {totalBundles} Bundles, {totalPapers} Papers
               </span>
             </div>
           </>
@@ -82,43 +154,85 @@ function VolunteerContent({ member }: { member: Extract<MemberDetail, { role: "v
   );
 }
 
-function CaptainContent({ member }: { member: Extract<MemberDetail, { role: "captain" }> }) {
+function CaptainContent({ id }: { id: string }) {
+  const { data: captain, isPending, isError, error } = useCaptain(id);
+  const { data: payouts, isPending: payoutsPending } = useCaptainPayouts(id);
+  const { data: territory } = useTerritory(captain?.territory?.id);
+
+  if (isError) {
+    return (
+      <p className="px-2 text-md text-secondary">
+        {error instanceof Error ? error.message : "Could not load this captain."}
+      </p>
+    );
+  }
+  if (isPending || !captain) {
+    return <p className="px-2 text-md text-secondary">Loading…</p>;
+  }
+
+  const drops = territory?.commercialDrops ?? [];
+
   return (
     <>
       <div className="flex flex-col gap-1 px-1 pb-6 pt-1">
-        <InfoField label="Email" value={member.email} />
-        <InfoField label="Phone" value={member.phone} />
-        <InfoField label="Rate" value={member.rate} />
-        <InfoField label="Cadence" value={member.cadence} />
+        <InfoField label="Email" value={captain.email} />
+        <InfoField label="Phone" value={captain.phone} />
+        <InfoField
+          label="Rate"
+          value={`$${captain.payRate.toFixed(2)} ${PAY_TYPE_LABEL[captain.payType] ?? captain.payType}`}
+        />
+        <InfoField
+          label="Cadence"
+          value={CADENCE_LABEL[captain.payCadence] ?? captain.payCadence}
+        />
+        <InfoField label="Start Date" value={formatDate(captain.startDate)} />
+        <InfoField
+          label="Status"
+          value={
+            captain.status === "retired" ? `Retired ${formatDate(captain.retiredAt)}` : "Active"
+          }
+        />
       </div>
 
-      <NotesSection notes={member.notes} />
+      <NotesSection role="captain" memberId={id} />
 
       <SidePanelSection title="Reimbursements">
-        {member.reimbursements.length === 0 ? (
+        {payoutsPending ? (
+          <SidePanelRow className="text-secondary">Loading…</SidePanelRow>
+        ) : (payouts ?? []).length === 0 ? (
           <SidePanelRow className="text-secondary">No Record of Reimbursement</SidePanelRow>
         ) : (
-          member.reimbursements.map((r) => (
-            <SidePanelRow key={r.id} meta={r.date} onEdit={() => {}}>
+          (payouts ?? []).map((entry) => (
+            <SidePanelRow key={entry.id} meta={formatDate(entry.issueDate)}>
               <span className="text-primary">
-                ${r.amount.toFixed(2)} — {r.description}
+                ${entry.amount.toFixed(2)} · {entry.issueName}
+                {entry.paid ? " · paid" : ""}
+                {entry.substitutedBy ? ` · covered by ${entry.substitutedBy}` : ""}
               </span>
             </SidePanelRow>
           ))
         )}
       </SidePanelSection>
 
-      <SidePanelSection title="Territory Drops" onAdd={() => {}}>
-        {member.territoryDrops.length === 0 ? (
+      <SidePanelSection title="Territory Drops">
+        {!captain.territory ? (
+          <SidePanelRow className="text-secondary">No territory</SidePanelRow>
+        ) : drops.length === 0 ? (
           <SidePanelRow className="text-secondary">No Drops</SidePanelRow>
         ) : (
-          member.territoryDrops.map((drop) => (
+          drops.map((drop) => (
             <SidePanelRow
               key={drop.id}
-              meta={`${drop.bundles} bundle${drop.bundles !== 1 ? "s" : ""}`}
-              onEdit={() => {}}
+              // Null is "nobody has told us yet", which is not the same as zero.
+              meta={
+                drop.standingBundles === null
+                  ? "Count unknown"
+                  : `${drop.standingBundles} bundle${drop.standingBundles === 1 ? "" : "s"}`
+              }
             >
-              <span className="text-primary">{drop.location}</span>
+              <span className="text-primary">
+                {drop.formattedAddress ?? "Address not geocoded yet"}
+              </span>
             </SidePanelRow>
           ))
         )}
@@ -128,7 +242,7 @@ function CaptainContent({ member }: { member: Extract<MemberDetail, { role: "cap
 }
 
 function MemberSidePanel({ member, onClose }: MemberSidePanelProps) {
-  const [displayed, setDisplayed] = useState<MemberDetail | null>(member);
+  const [displayed, setDisplayed] = useState<MemberSelection | null>(member);
   const [open, setOpen] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hadMemberRef = useRef(false);
@@ -202,9 +316,9 @@ function MemberSidePanel({ member, onClose }: MemberSidePanelProps) {
         </div>
         <div className="flex-1 overflow-y-auto p-4">
           {displayed.role === "volunteer" ? (
-            <VolunteerContent key={displayed.id} member={displayed} />
+            <VolunteerContent key={displayed.id} id={displayed.id} />
           ) : (
-            <CaptainContent key={displayed.id} member={displayed} />
+            <CaptainContent key={displayed.id} id={displayed.id} />
           )}
         </div>
       </div>

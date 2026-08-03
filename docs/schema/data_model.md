@@ -106,7 +106,10 @@ export interface Address {
   // (This is the inverse FK that makes a territory's commercial drops queryable.)
   territoryId?: CaptainTerritory["id"] | null;
   // (ideation's `bundleCount` removed — per-issue bundle counts live on RouteDelivery)
-  // SUBJECT TO CHANGE: standing per-drop expectations for commercial drops may need a home.
+  // Expected bundles per issue for a COMMERCIAL drop. Null means unknown, which is
+  // distinct from zero, so the UI can show an empty state instead of a misleading 0.
+  // PROVISIONAL: pending client confirmation that drops carry a standing quantity.
+  standingBundles?: number | null;
 }
 ```
 
@@ -127,10 +130,33 @@ export interface AdminUser {
 }
 ```
 
-> Notes are a plain free-form `notes?: string` field on the entities that have them
-> (Volunteer, Captain, VolunteerRoute) — not a separate entity. The flows only ask
-> for free-form notes with no length limit; author/timestamp tracking was dropped as
-> unneeded for MVP.
+### MemberNote
+
+One note on one person, with its own timestamp. **Supersedes** the earlier decision
+that flattened notes to a single `notes?: string` per entity: the members-page design
+is a full multi-note UI (add, per-note date, per-note edit and delete), so note
+history is required. See [`../design_decisions.md`](../design_decisions.md).
+
+`VolunteerRoute` is the exception and keeps a plain `notes?: string` string — the
+routes page edits it as one field. This table can take a `routeId` later.
+
+```ts
+export interface MemberNote {
+  id: UUID;
+  // Exactly one parent is set (DB-enforced check). Two nullable FKs rather than a
+  // polymorphic parentType/parentId pair, so Postgres keeps referential integrity
+  // and cascades the notes away when the person is deleted.
+  volunteerId?: Volunteer["id"] | null;
+  captainId?: Captain["id"] | null;
+  text: string; // non-blank (DB-enforced)
+  createdAt: Timestamp;
+  updatedAt?: Timestamp | null; // set on edit
+}
+```
+
+> A `note` supplied when creating a volunteer or captain becomes their first
+> MemberNote. `PATCH` on the person does not accept `note` — a single field could not
+> say which note it meant; edits go through the note's own endpoint.
 
 ### Volunteer
 
@@ -146,7 +172,8 @@ export interface Volunteer {
   email: Email;
   phone: Phone;
   addressId: Address["id"]; // volunteer's own (residential) address
-  notes?: string | null;
+  // Notes = MemberNotes whose volunteerId points here (inverse FK). The flattened
+  // `notes` string was dropped; see MemberNote above.
   captainTerritoryId?: CaptainTerritory["id"] | null; // direct assignment; may be unassigned
   // Routes carried = VolunteerRoutes whose assignedVolunteerId points here (inverse FK).
   startDate: DateOnly;
@@ -181,7 +208,8 @@ export interface Captain {
   startDate: DateOnly;
   endDate?: DateOnly | null;
   retiredAt?: DateOnly | null;
-  notes?: string | null;
+  // Notes = MemberNotes whose captainId points here (inverse FK). The flattened
+  // `notes` string was dropped; see MemberNote above.
   // 1:1 territory: the CaptainTerritory whose assignedCaptainId points here (inverse FK).
   // Territory-less captain = no territory points here; captain-less territory is also allowed.
 }
@@ -240,7 +268,7 @@ export interface VolunteerRoute {
   houseCount: number; // manual entry for MVP (auto-calc via Toronto Open Data is post-MVP)
   houseCountOverride?: number | null; // SUBJECT TO CHANGE: only relevant once auto-calc exists
   papers: number; // standing paper count; drives the bundle auto-calc
-  notes?: string | null;
+  notes?: string | null; // still a plain string here, unlike people (see MemberNote)
   deletedAt?: Timestamp | null; // soft delete: hidden from views, row retained so past RouteDelivery still resolves
   // No territoryId: territory/captain derive via assignedVolunteerId -> captainTerritoryId.
 }
