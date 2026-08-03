@@ -36,6 +36,8 @@ export interface AddressRow {
   google_maps_id: string;
   type: AddressType;
   territory_id: string | null;
+  /** Commercial drops only: expected bundles per issue. Null = unknown. */
+  standing_bundles: number | null;
 }
 
 export interface CaptainRow {
@@ -50,7 +52,6 @@ export interface CaptainRow {
   start_date: string;
   end_date: string | null;
   retired_at: string | null;
-  notes: string | null;
 }
 
 export interface VolunteerRow {
@@ -66,7 +67,19 @@ export interface VolunteerRow {
   vacation_start: string | null;
   vacation_end: string | null;
   retired_at: string | null;
-  notes: string | null;
+}
+
+/**
+ * One note on one person. Exactly one of volunteer_id / captain_id is set
+ * (DB-enforced). Routes keep their own plain `notes` string — see the migration.
+ */
+export interface MemberNoteRow {
+  id: string;
+  volunteer_id: string | null;
+  captain_id: string | null;
+  text: string;
+  created_at: string;
+  updated_at: string | null;
 }
 
 export interface VolunteerRouteRow {

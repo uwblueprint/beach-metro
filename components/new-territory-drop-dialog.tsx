@@ -18,7 +18,6 @@ import {
 import { Input, inputFieldClassName } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api/client";
-import { volunteers as stubVolunteers } from "@/lib/stubs/members";
 import { cn } from "@/lib/utils";
 import {
   useAddCommercialDrop,
@@ -108,30 +107,18 @@ function NewTerritoryDropForm({
   const [volStartDate, setVolStartDate] = useState(todayIso);
 
   const currentVolunteers = useMemo(() => {
-    const mapped =
-      volunteers.length > 0
-        ? volunteers
-            .filter((v) => v.status !== "retired")
-            .map((v) => ({
-              id: v.id,
-              firstName: v.firstName,
-              lastName: v.lastName,
-              assigned: v.territory !== null,
-            }))
-        : // Immediate list while / before API responds (members page still stub-driven).
-          stubVolunteers
-            .filter((v) => !v.retiredAt)
-            .map((v) => ({
-              id: v.id,
-              firstName: v.firstName,
-              lastName: v.lastName,
-              assigned: !!v.captainTerritoryId,
-            }));
-
-    return mapped.sort((a, b) => {
-      if (a.assigned !== b.assigned) return a.assigned ? 1 : -1;
-      return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
-    });
+    return volunteers
+      .filter((v) => v.status !== "retired")
+      .map((v) => ({
+        id: v.id,
+        firstName: v.firstName,
+        lastName: v.lastName,
+        assigned: v.territory !== null,
+      }))
+      .sort((a, b) => {
+        if (a.assigned !== b.assigned) return a.assigned ? 1 : -1;
+        return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+      });
   }, [volunteers]);
 
   const candidateOptions: ComboboxOption[] = useMemo(() => {
@@ -368,9 +355,7 @@ function NewTerritoryDropForm({
           </div>
         ) : null}
 
-        <DialogDescription>
-          Selecting an assigned drop will re-allocate it.
-        </DialogDescription>
+        <DialogDescription>Selecting an assigned drop will re-allocate it.</DialogDescription>
 
         {error ? <p className="text-md text-destructive">{error}</p> : null}
         {!error && confirmBlockedReason ? (

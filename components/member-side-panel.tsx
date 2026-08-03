@@ -1,23 +1,33 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
-import type { MemberDetail } from "@/lib/stubs/members";
-import { getStubTerritoryIdForCaptainName } from "@/lib/stubs/members";
 import { NewTerritoryDropDialog, type DropSelection } from "@/components/new-territory-drop-dialog";
 import { NotesSection } from "@/components/notes-section";
-import { ReimbursementsSection } from "@/components/reimbursements-section";
 import { RouteDetailsDialog } from "@/components/route-details-dialog";
 import { SidePanelRow } from "@/components/side-panel-row";
 import { SidePanelSection } from "@/components/side-panel-section";
-import { useCaptainsList, useTerritory } from "@/features/territory-drops/api";
-import { useVolunteerRoutes } from "@/features/routes/api";
-import type { RouteSummary } from "@/lib/services/routes";
+import {
+  memberKeys,
+  useCaptain,
+  useCaptainPayouts,
+  useTerritory,
+  useVolunteer,
+  type MemberRole,
+} from "@/features/members/api";
+
+/** The row the user clicked. Name comes along so the header renders immediately. */
+export interface MemberSelection {
+  id: string;
+  role: MemberRole;
+  name: string;
+}
 
 interface MemberSidePanelProps {
-  member: MemberDetail | null;
+  member: MemberSelection | null;
   onClose: () => void;
 }
 
@@ -29,6 +39,39 @@ function readCssDurationMs(variable: string, fallback: number): number {
   return parseFloat(raw) || fallback;
 }
 
+const MONTHS = [
+  "Jan.",
+  "Feb.",
+  "Mar.",
+  "Apr.",
+  "May",
+  "Jun.",
+  "Jul.",
+  "Aug.",
+  "Sep.",
+  "Oct.",
+  "Nov.",
+  "Dec.",
+];
+
+function formatDate(iso: string | null): string {
+  if (!iso) return "—";
+  const [year, month, day] = iso.split("-").map(Number);
+  if (!year || !month || !day) return iso;
+  return `${MONTHS[month - 1]} ${day}, ${year}`;
+}
+
+const PAY_TYPE_LABEL: Record<string, string> = {
+  bundle: "by bundle",
+  paper: "by paper",
+  drop: "by drop",
+};
+
+const CADENCE_LABEL: Record<string, string> = {
+  biweekly: "Bi-Weekly",
+  monthly: "Monthly",
+};
+
 function InfoField({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1 rounded-[4px] px-2 pb-2 pt-1">
@@ -38,7 +81,7 @@ function InfoField({ label, value }: { label: string; value: string }) {
   );
 }
 
-function RoleTag({ role }: { role: "volunteer" | "captain" }) {
+function RoleTag({ role }: { role: MemberRole }) {
   return (
     <span className="inline-flex items-center justify-center rounded-lg bg-tag-active px-2 py-1 text-md text-active">
       {role === "captain" ? "Captain" : "Volunteer"}
@@ -46,15 +89,25 @@ function RoleTag({ role }: { role: "volunteer" | "captain" }) {
   );
 }
 
-function routeMeta(route: RouteSummary): string {
-  const bundleN = route.bundles.length;
-  return `${bundleN}B / ${route.papers}P`;
-}
-
-function VolunteerContent({ member }: { member: Extract<MemberDetail, { role: "volunteer" }> }) {
-  const { data: routes = [], isPending, refetch } = useVolunteerRoutes(member.id);
+function VolunteerContent({ id }: { id: string }) {
+  const queryClient = useQueryClient();
+  const { data: volunteer, isPending, isError, error } = useVolunteer(id);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
+
+  if (isError) {
+    return (
+      <p className="px-2 text-md text-secondary">
+        {error instanceof Error ? error.message : "Could not load this volunteer."}
+      </p>
+    );
+  }
+  if (isPending || !volunteer) {
+    return <p className="px-2 text-md text-secondary">Loading…</p>;
+  }
+
+  const totalBundles = volunteer.routesCarried.reduce((s, r) => s + r.bundleCount, 0);
+  const totalPapers = volunteer.routesCarried.reduce((s, r) => s + r.papers, 0);
 
   function openCreate() {
     setEditingRouteId(null);
@@ -66,35 +119,47 @@ function VolunteerContent({ member }: { member: Extract<MemberDetail, { role: "v
     setDialogOpen(true);
   }
 
-  const totalBundles = routes.reduce((s, r) => s + r.bundles.length, 0);
-  const totalPapers = routes.reduce((s, r) => s + r.papers, 0);
-
   return (
     <>
       <div className="flex flex-col gap-1 px-1 pb-6 pt-1">
-        <InfoField label="Email" value={member.email} />
-        <InfoField label="Phone" value={member.phone} />
-        <InfoField label="Address" value={member.address} />
-        <InfoField label="Start Date" value={member.startDate} />
-        <InfoField label="Captain" value={member.captainName} />
+        <InfoField label="Email" value={volunteer.email} />
+        <InfoField label="Phone" value={volunteer.phone} />
+        <InfoField
+          label="Address"
+          value={volunteer.address.formattedAddress ?? "Not geocoded yet"}
+        />
+        <InfoField label="Start Date" value={formatDate(volunteer.startDate)} />
+        <InfoField label="Captain" value={volunteer.territory?.captainName ?? "No captain"} />
+        <InfoField
+          label="Status"
+          value={
+            volunteer.status === "on-vacation"
+              ? `On vacation until ${formatDate(volunteer.vacationEnd)}`
+              : volunteer.status === "retired"
+                ? `Retired ${formatDate(volunteer.retiredAt)}`
+                : volunteer.needsAttention
+                  ? "Active (end date passed)"
+                  : "Active"
+          }
+        />
       </div>
 
-      <NotesSection notes={member.notes} />
+      <NotesSection role="volunteer" memberId={id} />
 
       <SidePanelSection title="Route Info" onAdd={openCreate}>
-        {isPending ? null : routes.length === 0 ? (
+        {volunteer.routesCarried.length === 0 ? (
           <SidePanelRow className="text-secondary">No routes</SidePanelRow>
         ) : (
           <>
-            {routes.map((route) => (
+            {volunteer.routesCarried.map((route) => (
               <SidePanelRow
                 key={route.id}
-                meta={routeMeta(route)}
+                meta={`${route.bundleCount}B / ${route.papers}P`}
                 onClick={() => openEdit(route.id)}
                 onEdit={() => openEdit(route.id)}
               >
                 <span className="inline-flex items-center rounded-lg bg-secondary-fill px-2 py-1 text-md text-primary">
-                  {route.streetName}
+                  {route.label}
                 </span>
               </SidePanelRow>
             ))}
@@ -111,33 +176,39 @@ function VolunteerContent({ member }: { member: Extract<MemberDetail, { role: "v
       <RouteDetailsDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        volunteerId={member.id}
+        volunteerId={id}
         routeId={editingRouteId}
-        onSuccess={() => void refetch()}
+        onSuccess={() => {
+          void queryClient.invalidateQueries({ queryKey: memberKeys.volunteer(id) });
+        }}
       />
     </>
   );
 }
 
-function CaptainContent({ member }: { member: Extract<MemberDetail, { role: "captain" }> }) {
-  const { data: captains = [] } = useCaptainsList();
-  const apiCaptain = useMemo(
-    () =>
-      captains.find(
-        (c) => `${c.firstName} ${c.lastName}`.toLowerCase() === member.name.toLowerCase(),
-      ) ?? null,
-    [captains, member.name],
-  );
-  const apiTerritoryId = apiCaptain?.territory?.id ?? null;
-  // Stub fallback so Confirm can enable on the stub members page before API match lands.
-  const territoryId = apiTerritoryId ?? getStubTerritoryIdForCaptainName(member.name);
-  const { data: territory, refetch: refetchTerritory } = useTerritory(apiTerritoryId);
+function CaptainContent({ id }: { id: string }) {
+  const queryClient = useQueryClient();
+  const { data: captain, isPending, isError, error } = useCaptain(id);
+  const { data: payouts, isPending: payoutsPending } = useCaptainPayouts(id);
+  const territoryId = captain?.territory?.id ?? null;
+  const { data: territory, refetch: refetchTerritory } = useTerritory(territoryId);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [initialDrop, setInitialDrop] = useState<DropSelection | null>(null);
 
-  const liveDrops = territory?.commercialDrops;
-  const showingLive = liveDrops !== undefined;
+  if (isError) {
+    return (
+      <p className="px-2 text-md text-secondary">
+        {error instanceof Error ? error.message : "Could not load this captain."}
+      </p>
+    );
+  }
+  if (isPending || !captain) {
+    return <p className="px-2 text-md text-secondary">Loading…</p>;
+  }
+
+  const captainName = `${captain.firstName} ${captain.lastName}`;
+  const drops = territory?.commercialDrops ?? [];
 
   function openAdd() {
     setInitialDrop(null);
@@ -149,58 +220,78 @@ function CaptainContent({ member }: { member: Extract<MemberDetail, { role: "cap
     placeId: string;
     formattedAddress: string | null;
   }) {
+    if (!territoryId) return;
     setInitialDrop({
       kind: "commercial",
       addressId: drop.id,
       placeId: drop.placeId,
       label: drop.formattedAddress ?? "Address not geocoded yet",
-      territoryId: territoryId!,
+      territoryId,
     });
-    setDialogOpen(true);
-  }
-
-  function openEditStub(location: string) {
-    // Stub rows have no placeId — prefill as a create-address draft matching the label.
-    setInitialDrop({ kind: "create-address", label: location });
     setDialogOpen(true);
   }
 
   return (
     <>
       <div className="flex flex-col gap-1 px-1 pb-6 pt-1">
-        <InfoField label="Email" value={member.email} />
-        <InfoField label="Phone" value={member.phone} />
-        <InfoField label="Rate" value={member.rate} />
-        <InfoField label="Cadence" value={member.cadence} />
+        <InfoField label="Email" value={captain.email} />
+        <InfoField label="Phone" value={captain.phone} />
+        <InfoField
+          label="Rate"
+          value={`$${captain.payRate.toFixed(2)} ${PAY_TYPE_LABEL[captain.payType] ?? captain.payType}`}
+        />
+        <InfoField
+          label="Cadence"
+          value={CADENCE_LABEL[captain.payCadence] ?? captain.payCadence}
+        />
+        <InfoField label="Start Date" value={formatDate(captain.startDate)} />
+        <InfoField
+          label="Status"
+          value={
+            captain.status === "retired" ? `Retired ${formatDate(captain.retiredAt)}` : "Active"
+          }
+        />
       </div>
 
-      <NotesSection notes={member.notes} />
+      <NotesSection role="captain" memberId={id} />
 
-      <ReimbursementsSection key={member.id} captainId={member.id} />
+      <SidePanelSection title="Reimbursements">
+        {payoutsPending ? (
+          <SidePanelRow className="text-secondary">Loading…</SidePanelRow>
+        ) : (payouts ?? []).length === 0 ? (
+          <SidePanelRow className="text-secondary">No Record of Reimbursement</SidePanelRow>
+        ) : (
+          (payouts ?? []).map((entry) => (
+            <SidePanelRow key={entry.id} meta={formatDate(entry.issueDate)}>
+              <span className="text-primary">
+                ${entry.amount.toFixed(2)} · {entry.issueName}
+                {entry.paid ? " · paid" : ""}
+                {entry.substitutedBy ? ` · covered by ${entry.substitutedBy}` : ""}
+              </span>
+            </SidePanelRow>
+          ))
+        )}
+      </SidePanelSection>
 
       <SidePanelSection title="Territory Drops" onAdd={openAdd}>
-        {showingLive ? (
-          liveDrops.length === 0 ? (
-            <SidePanelRow className="text-secondary">No Drops</SidePanelRow>
-          ) : (
-            liveDrops.map((drop) => (
-              <SidePanelRow key={drop.id} meta="—" onEdit={() => openEditCommercial(drop)}>
-                <span className="text-primary">
-                  {drop.formattedAddress ?? "Address not geocoded yet"}
-                </span>
-              </SidePanelRow>
-            ))
-          )
-        ) : member.territoryDrops.length === 0 ? (
+        {!captain.territory ? (
+          <SidePanelRow className="text-secondary">No territory</SidePanelRow>
+        ) : drops.length === 0 ? (
           <SidePanelRow className="text-secondary">No Drops</SidePanelRow>
         ) : (
-          member.territoryDrops.map((drop) => (
+          drops.map((drop) => (
             <SidePanelRow
               key={drop.id}
-              meta={`${drop.bundles} bundle${drop.bundles !== 1 ? "s" : ""}`}
-              onEdit={() => openEditStub(drop.location)}
+              meta={
+                drop.standingBundles === null
+                  ? "Count unknown"
+                  : `${drop.standingBundles} bundle${drop.standingBundles === 1 ? "" : "s"}`
+              }
+              onEdit={() => openEditCommercial(drop)}
             >
-              <span className="text-primary">{drop.location}</span>
+              <span className="text-primary">
+                {drop.formattedAddress ?? "Address not geocoded yet"}
+              </span>
             </SidePanelRow>
           ))
         )}
@@ -209,11 +300,15 @@ function CaptainContent({ member }: { member: Extract<MemberDetail, { role: "cap
       <NewTerritoryDropDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        captainName={member.name}
+        captainName={captainName}
         territoryId={territoryId}
         initialDrop={initialDrop}
         onSuccess={() => {
           void refetchTerritory();
+          void queryClient.invalidateQueries({ queryKey: memberKeys.all });
+          if (territoryId) {
+            void queryClient.invalidateQueries({ queryKey: memberKeys.territory(territoryId) });
+          }
         }}
       />
     </>
@@ -221,7 +316,7 @@ function CaptainContent({ member }: { member: Extract<MemberDetail, { role: "cap
 }
 
 function MemberSidePanel({ member, onClose }: MemberSidePanelProps) {
-  const [displayed, setDisplayed] = useState<MemberDetail | null>(member);
+  const [displayed, setDisplayed] = useState<MemberSelection | null>(member);
   const [open, setOpen] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hadMemberRef = useRef(false);
@@ -295,9 +390,9 @@ function MemberSidePanel({ member, onClose }: MemberSidePanelProps) {
         </div>
         <div className="flex-1 overflow-y-auto p-4">
           {displayed.role === "volunteer" ? (
-            <VolunteerContent key={displayed.id} member={displayed} />
+            <VolunteerContent key={displayed.id} id={displayed.id} />
           ) : (
-            <CaptainContent key={displayed.id} member={displayed} />
+            <CaptainContent key={displayed.id} id={displayed.id} />
           )}
         </div>
       </div>

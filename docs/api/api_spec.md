@@ -58,12 +58,75 @@ leaves room to add cursors later without breaking clients.
 `:action` syntax). They exist precisely so invariants stay server-side rather than
 being assembled from raw field writes.
 
-**Notes.** Notes are a plain free-form `notes` string on the parent entity, set
-through its create/update; there is no separate notes resource or entity.
+**Notes.** People (volunteers and captains) have a **notes sub-resource** — many
+notes, each with its own timestamp (see §2). A route still carries a single plain
+`notes` string, set through its own create/update. The split is deliberate and
+recorded in [`design_decisions.md`](../design_decisions.md).
 
 ---
 
 ## 2. People domain
+
+### Members — `/api/members`
+
+The members screen shows volunteers and captains in one table with a role column.
+This is a **read-only merged view** over the two resources below; anything that
+writes goes to the typed resource. Detail views also use the typed resources, whose
+shapes genuinely differ (a volunteer has an address and routes; a captain has pay
+config and a territory).
+
+| Method | Path            | Purpose                                                        | Flow          |
+| ------ | --------------- | -------------------------------------------------------------- | ------------- |
+| GET    | `/api/members`  | Merged list. Filters: `role`, `status`, `needsAttention`, `q`   | people 4b/4h  |
+
+```ts
+// GET /api/members?role=volunteer|captain&status=active|on-vacation|retired&q=…
+type MemberRow = {
+  id: string;
+  role: "volunteer" | "captain";
+  name: string;       // "First Last", formatted server-side so every view agrees
+  routeInfo: string;  // volunteers: route label, "N routes", or "No route"
+                      // captains:   "N volunteers, M drops" (territories have no name)
+  captainName: string; // volunteers: their captain; captains: themselves
+  startDate: string;   // ISO; the UI formats for display
+  status: "active" | "on-vacation" | "retired"; // captains: active | retired only
+  needsAttention: boolean; // volunteers only: end date passed, not retired
+};
+```
+
+Filters are applied server-side so a filtered count is a real query result rather
+than a client-side slice. `on-vacation` only ever matches volunteers.
+
+### Member notes — `/api/notes`
+
+One note per row, each with its own timestamp, editable and deletable individually.
+Supersedes the flattened `notes` string on volunteers and captains (see
+[`design_decisions.md`](../design_decisions.md)). `VolunteerRoute.notes` is
+unaffected and remains a plain string on the route.
+
+| Method | Path                                | Purpose                                  | Flow        |
+| ------ | ----------------------------------- | ---------------------------------------- | ----------- |
+| GET    | `/api/volunteers/{id}/notes`        | List a volunteer's notes, newest first    | people 4c   |
+| POST   | `/api/volunteers/{id}/notes`        | Add a note (`{ text }`)                   | 4c          |
+| GET    | `/api/captains/{id}/notes`          | List a captain's notes, newest first      | people 4i   |
+| POST   | `/api/captains/{id}/notes`          | Add a note (`{ text }`)                   | 4i          |
+| PATCH  | `/api/notes/{id}`                   | Edit the text (stamps `updatedAt`)        | 4c / 4i     |
+| DELETE | `/api/notes/{id}`                   | Remove the note (`204`)                   | 4c / 4i     |
+
+```ts
+type MemberNote = {
+  id: string;
+  text: string;
+  createdAt: string;      // ISO timestamp
+  updatedAt: string | null;
+};
+// POST / PATCH body:
+type NoteInput = { text: string }; // trimmed; blank is a 422
+```
+
+Edit and delete are keyed by the note's own id, independent of which person it hangs
+off, which is why they sit at `/api/notes/{id}`. Notes cascade away with their
+person. Listing notes for an unknown person is a `404`, not an empty list.
 
 ### Volunteers — `/api/volunteers`
 
@@ -72,7 +135,7 @@ through its create/update; there is no separate notes resource or entity.
 | GET    | `/api/volunteers`               | List. Filters: `status` (active/on-vacation/retired), `territoryId`, `hasRoute`, `needsAttention`, `q` | people 4b |
 | POST   | `/api/volunteers`               | Create (validates address, creates `Address` + `GoogleMapsLocation`)                                   | 4a        |
 | GET    | `/api/volunteers/{id}`          | Detail (includes derived status, routes carried, territory)                                            | 4c        |
-| PATCH  | `/api/volunteers/{id}`          | Edit fields / note / territory assignment                                                              | 4d        |
+| PATCH  | `/api/volunteers/{id}`          | Edit fields / territory assignment (notes have their own resource)                                     | 4d        |
 | POST   | `/api/volunteers/{id}/vacation` | Set or clear the vacation window (suspends/auto-resumes routes)                                        | 4e        |
 | POST   | `/api/volunteers/{id}/retire`   | Soft retire (`retiredAt`); detaches routes → they become vacant                                        | 4f        |
 
@@ -117,9 +180,9 @@ type AddressInput =
 | GET    | `/api/captains`             | List. Filters: `status`, `q`                                                       | people 4h |
 | POST   | `/api/captains`             | Create (no address; pay config required; **also creates the 1:1 empty territory**) | 4g        |
 | GET    | `/api/captains/{id}`        | Detail (includes territory)                                                        | 4i        |
-| GET    | `/api/captains/{id}/payouts` | Recent paid payouts where this captain is the payee (own or substitute). Query: `limit` (default 4, max 50). Returns `{ items, hasMore }` | 4i reimbursements |
-| PATCH  | `/api/captains/{id}`        | Edit fields / pay config (type, rate, cadence) / note                              | 4j        |
+| PATCH  | `/api/captains/{id}`        | Edit fields / pay config (type, rate, cadence); notes have their own resource       | 4j        |
 | POST   | `/api/captains/{id}/retire` | Soft retire; leaves the territory captain-less and prompts reassignment            | 4k        |
+| GET    | `/api/captains/{id}/payouts` | This captain's payout across every issue, newest first (read-only)               | people 4i |
 
 ```ts
 // POST /api/captains
@@ -136,21 +199,25 @@ type CreateCaptain = {
   note?: string;
 };
 // 201 -> { data: { captain: Captain, territory: CaptainTerritory } }
+// `note` becomes the captain's FIRST MemberNote. PATCH does NOT accept `note`:
+// a single field could not say which note it meant (see /api/notes above).
 
-// GET /api/captains/{id}/payouts?limit=4
-// Paid cells where this captain is the payee (own territory, no substitute; or
-// substitute on another captain's cell). Ordered by paidAt desc. Fetches
-// limit+1 internally so hasMore is accurate.
-type CaptainReimbursements = {
-  items: Array<{
-    id: string;
-    amount: number;
-    paidAt: string;
-    issue: { id: string; name: string; date: string };
-    kind: "own" | "substitute";
-    coveredForName: string | null;
-  }>;
-  hasMore: boolean;
+// GET /api/captains/{id}/payouts
+// Read-only reimbursement history for the member panel. Amounts use the SAME
+// precedence as the finances screen (override ?? frozen ?? calculated) via the
+// shared derivation, so the two views cannot disagree about what is owed.
+type CaptainPayoutHistoryEntry = {
+  id: string;
+  issueId: string;
+  issueName: string;
+  issueDate: string;
+  issueStatus: "open" | "closed";
+  amount: number;
+  calculationStatus: "calculated" | "frozen" | "overridden";
+  overrideReason: string | null;
+  paid: boolean;
+  paidAt: string | null;
+  substitutedBy: string | null; // name of the captain who covered, when recorded
 };
 ```
 
@@ -166,8 +233,18 @@ two memberships (volunteers, commercial drops) and the map colour.
 | PATCH  | `/api/territories/{id}`                              | Edit colour (and reassign captain)               | people   |
 | POST   | `/api/territories/{id}/volunteers`                   | Assign a volunteer (`{ volunteerId }`)           | 4l-style |
 | DELETE | `/api/territories/{id}/volunteers/{volunteerId}`     | Unassign a volunteer                             |          |
-| POST   | `/api/territories/{id}/commercial-drops`             | Add a commercial drop (`{ address }`, validated) | 4l       |
+| POST   | `/api/territories/{id}/commercial-drops`             | Add a drop (`{ address, standingBundles? }`)      | 4l       |
+| PATCH  | `/api/territories/{id}/commercial-drops/{addressId}` | Set or clear the standing bundle count only      | 4l       |
 | DELETE | `/api/territories/{id}/commercial-drops/{addressId}` | Remove a commercial drop                         | 4l       |
+
+```ts
+// PATCH /api/territories/{id}/commercial-drops/{addressId}
+// Count only, so a count can be filled in later without re-validating (and
+// re-billing) the address through Google. Null means "unknown", deliberately
+// distinct from 0 — the UI shows an empty state for null rather than a misleading 0.
+// PROVISIONAL: pending client confirmation that drops carry a standing quantity.
+type UpdateCommercialDrop = { standingBundles: number | null };
+```
 
 ---
 
@@ -177,10 +254,10 @@ two memberships (volunteers, commercial drops) and the map colour.
 
 | Method | Path                         | Purpose                                                                                                                                          | Flow       |
 | ------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
-| GET    | `/api/routes`                | List. Filters: `vacancy` (vacant/assigned), `territoryId`, `volunteerId`, `needsAttention`, `side`, `q` | route 4b   |
-| POST   | `/api/routes`                | Create (start/end address, street, side; `bundles` and/or `papers`; volunteer optional)               | 4a         |
-| GET    | `/api/routes/{id}`           | Detail (derived lifecycle + suspended flag, house count, standing `bundles`, counts)                  | 4c         |
-| PATCH  | `/api/routes/{id}`           | Edit definition (addresses, street, side, `houseCountOverride`, `bundles`/`papers`, note)             | 4d         |
+| GET    | `/api/routes`                | List. Filters: `vacancy` (vacant/assigned), `territoryId`, `needsAttention`, `side`, `q`                                                         | route 4b   |
+| POST   | `/api/routes`                | Create (start/end address, street, side; volunteer optional)                                                                                     | 4a         |
+| GET    | `/api/routes/{id}`           | Detail (derived lifecycle + suspended flag, house count, counts)                                                                                 | 4c         |
+| PATCH  | `/api/routes/{id}`           | Edit definition (addresses, street, side, `houseCountOverride`, note)                                                                            | 4d         |
 | DELETE | `/api/routes/{id}`           | **Soft delete** (sets `deletedAt`, hidden from all views; the row is retained so past `RouteDelivery` records still resolve; addresses reusable) | route flow |
 | POST   | `/api/routes/{id}/assign`    | Assign a volunteer (`{ volunteerId }`) → Active-Assigned                                                                                         | 4e         |
 | POST   | `/api/routes/{id}/unassign`  | Unassign → Active-Vacant                                                                                                                         | 4f         |
@@ -193,19 +270,6 @@ recompute is `POST /api/routes/{id}/refresh-house-count` (route 4g) — `SUBJECT
 CHANGE`: recompute trigger may be a background job instead.
 
 ```ts
-// POST /api/routes — prefer bundles (papers = sum). Papers alone seeds greedySplit.
-type CreateRoute = {
-  startAddress: AddressInput;
-  endAddress: AddressInput;
-  streetName: string;
-  side?: "NORTH" | "SOUTH" | "EAST" | "WEST" | "BOTH" | null;
-  assignedVolunteerId?: string | null;
-  houseCount?: number; // default 0
-  papers?: number;
-  bundles?: Array<{ papers: number }>; // each >= 1; sum becomes papers when provided
-  note?: string | null;
-};
-
 // GET /api/routes/nearest-vacant?volunteerId=...&limit=5
 // -> { data: Array<{ route: VolunteerRoute, distanceMeters: number, durationSeconds: number }> }
 ```
@@ -417,6 +481,9 @@ the resulting `Address` + `GoogleMapsLocation`. A scheduled refresh job re-resol
   `financial-years`, `issues` (under a year), `payouts` (under an issue),
   `deliveries` (under an issue).
 - **Singleton reads:** `overview` (year aggregates; no collection semantics).
+- **Merged read:** `members` (volunteers + captains in one row shape, read-only).
+- **Sub-resources:** `notes` (under a volunteer or captain to list/create, then by its
+  own id to edit/delete); `payouts` under a captain (read-only history).
 - **Standard methods:** List/Create on the collection; Get/Update on the item;
   Delete only on `routes` (soft — sets `deletedAt`, row retained) and on a payout's
   `substitute` sub-resource — people are soft-retired, finance/delivery rows are

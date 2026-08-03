@@ -19,7 +19,8 @@ insert into google_maps_locations (id, cached_latitude, cached_longitude, cached
   ('seed-place-rt-1e',  43.6705, -79.3080, 'Queen St E & Beech Ave, Toronto, ON, Canada',     now(), null,  'Queen St E',    'Toronto', 'The Beaches', 'ON', null,      'CA', 'RANGE_INTERPOLATED'),
   ('seed-place-rt-2s',  43.6720, -79.3150, 'Kingston Rd & Lee Ave, Toronto, ON, Canada',      now(), null,  'Kingston Rd',   'Toronto', 'The Beaches', 'ON', null,      'CA', 'RANGE_INTERPOLATED'),
   ('seed-place-rt-2e',  43.6728, -79.3110, 'Kingston Rd & Glen Manor Dr, Toronto, ON, Canada',now(), null,  'Kingston Rd',   'Toronto', 'The Beaches', 'ON', null,      'CA', 'RANGE_INTERPOLATED'),
-  ('seed-place-drop-1', 43.6710, -79.3011, '2075 Queen St E, Toronto, ON M4L 1J1, Canada',    now(), '2075','Queen St E',    'Toronto', 'The Beaches', 'ON', 'M4L 1J1', 'CA', 'ROOFTOP');
+  ('seed-place-drop-1', 43.6710, -79.3011, '2075 Queen St E, Toronto, ON M4L 1J1, Canada',    now(), '2075','Queen St E',    'Toronto', 'The Beaches', 'ON', 'M4L 1J1', 'CA', 'ROOFTOP'),
+  ('seed-place-drop-2', 43.6688, -79.2966, '1974 Queen St E, Toronto, ON M4L 1H8, Canada',    now(), '1974','Queen St E',    'Toronto', 'The Beaches', 'ON', 'M4L 1H8', 'CA', 'ROOFTOP');
 
 -- Territories first (captain FK attached after captains insert).
 insert into captain_territories (id, assigned_captain_id, color) values
@@ -27,10 +28,10 @@ insert into captain_territories (id, assigned_captain_id, color) values
   ('a0000000-0000-4000-8000-000000000002', null, '#2563eb'),
   ('a0000000-0000-4000-8000-000000000003', null, '#16a34a');
 
-insert into captains (id, first_name, last_name, email, phone, pay_type, pay_rate, pay_cadence, start_date, end_date, retired_at, notes) values
-  ('c0000000-0000-4000-8000-000000000001', 'Emily',  'Chen',     'emily.chen@example.com',  '416-555-0101', 'bundle', 1.25, 'monthly',    '2023-11-20', null, null, null),
-  ('c0000000-0000-4000-8000-000000000002', 'Oliver', 'Martinez', 'oliver.m@example.com',    '416-555-0102', 'drop',   2.00, 'biweekly', '2024-08-30', null, null, 'Prefers Tuesday pickups'),
-  ('c0000000-0000-4000-8000-000000000003', 'Maya',   'Singh',    'maya.singh@example.com',  '416-555-0103', 'paper',  0.00, 'monthly',   '2024-07-27', null, null, 'Declines reimbursement (donate-back)');
+insert into captains (id, first_name, last_name, email, phone, pay_type, pay_rate, pay_cadence, start_date, end_date, retired_at) values
+  ('c0000000-0000-4000-8000-000000000001', 'Emily',  'Chen',     'emily.chen@example.com',  '416-555-0101', 'bundle', 1.25, 'monthly',    '2023-11-20', null, null),
+  ('c0000000-0000-4000-8000-000000000002', 'Oliver', 'Martinez', 'oliver.m@example.com',    '416-555-0102', 'drop',   2.00, 'biweekly', '2024-08-30', null, null),
+  ('c0000000-0000-4000-8000-000000000003', 'Maya',   'Singh',    'maya.singh@example.com',  '416-555-0103', 'paper',  0.00, 'monthly',   '2024-07-27', null, null);
 
 update captain_territories set assigned_captain_id = 'c0000000-0000-4000-8000-000000000001' where id = 'a0000000-0000-4000-8000-000000000001';
 update captain_territories set assigned_captain_id = 'c0000000-0000-4000-8000-000000000002' where id = 'a0000000-0000-4000-8000-000000000002';
@@ -48,20 +49,25 @@ insert into addresses (id, google_maps_id, type, territory_id) values
   ('b0000000-0000-4000-8000-000000000012', 'seed-place-rt-1e', 'residential', null),
   ('b0000000-0000-4000-8000-000000000013', 'seed-place-rt-2s', 'residential', null),
   ('b0000000-0000-4000-8000-000000000014', 'seed-place-rt-2e', 'residential', null),
-  -- One commercial drop in Emily's territory.
-  ('b0000000-0000-4000-8000-000000000021', 'seed-place-drop-1', 'commercial', 'a0000000-0000-4000-8000-000000000001');
+  -- One commercial drop in Emily's territory, with a standing bundle count, plus
+  -- one with an UNKNOWN count so the panel's empty state is exercised too.
+  ('b0000000-0000-4000-8000-000000000021', 'seed-place-drop-1', 'commercial', 'a0000000-0000-4000-8000-000000000001'),
+  ('b0000000-0000-4000-8000-000000000022', 'seed-place-drop-2', 'commercial', 'a0000000-0000-4000-8000-000000000001');
 
-insert into volunteers (id, first_name, last_name, email, phone, address_id, captain_territory_id, start_date, end_date, vacation_start, vacation_end, retired_at, notes) values
+-- Standing bundle counts: one known, one deliberately left null (unknown).
+update addresses set standing_bundles = 4 where id = 'b0000000-0000-4000-8000-000000000021';
+
+insert into volunteers (id, first_name, last_name, email, phone, address_id, captain_territory_id, start_date, end_date, vacation_start, vacation_end, retired_at) values
   -- Active, assigned to Emily's territory, carries route 1.
-  ('d0000000-0000-4000-8000-000000000001', 'Marcus', 'Smart',    'marcus.smart@example.com', '416-555-0201', 'b0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', '2020-06-03', null, null, null, null, null),
+  ('d0000000-0000-4000-8000-000000000001', 'Marcus', 'Smart',    'marcus.smart@example.com', '416-555-0201', 'b0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', '2020-06-03', null, null, null, null),
   -- Active, Oliver's territory, carries route 2.
-  ('d0000000-0000-4000-8000-000000000002', 'Sofia',  'Gomez',    'sofia.gomez@example.com',  '416-555-0202', 'b0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002', '2024-03-03', null, null, null, null, null),
+  ('d0000000-0000-4000-8000-000000000002', 'Sofia',  'Gomez',    'sofia.gomez@example.com',  '416-555-0202', 'b0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002', '2024-03-03', null, null, null, null),
   -- ON VACATION (window straddles today): their route 3 is suspended (derived).
-  ('d0000000-0000-4000-8000-000000000003', 'Aisha',  'Patel',    'aisha.patel@example.com',  '416-555-0203', 'b0000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000001', '2024-01-10', null, (current_date - 7), (current_date + 7), null, 'Away — back next week'),
+  ('d0000000-0000-4000-8000-000000000003', 'Aisha',  'Patel',    'aisha.patel@example.com',  '416-555-0203', 'b0000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000001', '2024-01-10', null, (current_date - 7), (current_date + 7), null),
   -- RETIRED (soft): no routes.
-  ('d0000000-0000-4000-8000-000000000004', 'Chloe',  'Wilson',   'chloe.wilson@example.com', '416-555-0204', 'b0000000-0000-4000-8000-000000000004', 'a0000000-0000-4000-8000-000000000002', '2024-09-14', '2025-12-31', null, null, '2026-01-15', null),
+  ('d0000000-0000-4000-8000-000000000004', 'Chloe',  'Wilson',   'chloe.wilson@example.com', '416-555-0204', 'b0000000-0000-4000-8000-000000000004', 'a0000000-0000-4000-8000-000000000002', '2024-09-14', '2025-12-31', null, null, '2026-01-15'),
   -- Active but UNASSIGNED (no captain/territory) and end date passed -> needs attention.
-  ('d0000000-0000-4000-8000-000000000005', 'Liam',   'O''Sullivan', 'liam.os@example.com',   '416-555-0205', 'b0000000-0000-4000-8000-000000000005', null, '2024-02-22', (current_date - 30), null, null, null, 'End date passed; retire or extend?');
+  ('d0000000-0000-4000-8000-000000000005', 'Liam',   'O''Sullivan', 'liam.os@example.com',   '416-555-0205', 'b0000000-0000-4000-8000-000000000005', null, '2024-02-22', (current_date - 30), null, null, null);
 
 insert into volunteer_routes (id, start_address_id, end_address_id, street_name, side, assigned_volunteer_id, house_count, house_count_override, papers, bundles, notes, deleted_at) values
   -- Assigned to Marcus (Emily's territory via Marcus).
@@ -80,6 +86,15 @@ insert into volunteer_routes (id, start_address_id, end_address_id, street_name,
   ('e0000000-0000-4000-8000-000000000007', 'b0000000-0000-4000-8000-000000000013', 'b0000000-0000-4000-8000-000000000012', 'Blantyre Ave','SOUTH', null,                                     0,  35,   35,  greedy_split_papers(35),  'Open Data returned 0; manual count 35', null),
   -- SOFT-DELETED: must be hidden from all views but keep resolving historically.
   ('e0000000-0000-4000-8000-000000000008', 'b0000000-0000-4000-8000-000000000011', 'b0000000-0000-4000-8000-000000000012', 'Balsam Ave',  'NORTH', null,                                     30, null, 30,  greedy_split_papers(30),  null, now());
+
+-- Member notes. Multiple notes on one person, each with its own timestamp, so the
+-- side panel has real history to render (and to prove ordering is newest-first).
+insert into member_notes (id, volunteer_id, captain_id, text, created_at) values
+  ('9a000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000003', null, 'Away — back next week', (current_date - 7)),
+  ('9a000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000003', null, 'Prefers morning deliveries', '2024-03-15 12:00:00-04'),
+  ('9a000000-0000-4000-8000-000000000003', 'd0000000-0000-4000-8000-000000000005', null, 'End date passed; retire or extend?', (current_date - 30)),
+  ('9a000000-0000-4000-8000-000000000004', null, 'c0000000-0000-4000-8000-000000000002', 'Prefers Tuesday pickups', '2024-08-30 12:00:00-04'),
+  ('9a000000-0000-4000-8000-000000000005', null, 'c0000000-0000-4000-8000-000000000003', 'Declines reimbursement (donate-back)', '2024-07-27 12:00:00-04');
 
 insert into financial_years (id, name, archived, start_date) values
   ('f0000000-0000-4000-8000-000000000001', '2026–2027', false, '2026-03-01');

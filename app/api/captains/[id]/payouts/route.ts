@@ -1,9 +1,9 @@
-import { parseQuery, route } from "@/lib/api/handler";
+import { route } from "@/lib/api/handler";
 import { ok } from "@/lib/api/respond";
-import { listRecentPaidPayoutsForCaptain } from "@/lib/services/payouts";
-import { captainPayoutsQuery } from "@/lib/validation/people";
+import { listCaptainPayoutHistory } from "@/lib/services/payouts";
 
-export const GET = route(async (req, params) => {
-  const { limit } = parseQuery(req, captainPayoutsQuery);
-  return ok(await listRecentPaidPayoutsForCaptain(params.id, limit));
+// This captain's payout across every issue, newest first. Read-only: the member
+// panel shows reimbursement history, while editing a cell stays on /api/payouts.
+export const GET = route(async (_req, params) => {
+  return ok(await listCaptainPayoutHistory(params.id));
 });

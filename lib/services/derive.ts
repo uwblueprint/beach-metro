@@ -46,6 +46,65 @@ export function greedySplit(paperCount: number): RouteBundle[] {
   return bundles;
 }
 
+/**
+ * Shorten one route endpoint for display: keep the part that distinguishes it and
+ * drop what the route's own street name already repeats.
+ *
+ * Route endpoints come in two shapes and both occur in real data:
+ *   "2038 Queen St E, Toronto, …"        on "Queen St E" -> "2038"
+ *   "Queen St E & Willow Ave, Toronto, …" on "Queen St E" -> "Willow Ave"
+ *
+ * Falls back to the whole first segment when neither pattern matches, which is
+ * always safe if slightly verbose.
+ */
+export function routeEndpointLabel(
+  formattedAddress: string | null,
+  streetName: string,
+): string | null {
+  if (!formattedAddress) return null;
+  const firstSegment = formattedAddress.split(",")[0]?.trim();
+  if (!firstSegment) return null;
+
+  const street = streetName.trim().toLowerCase();
+  const lower = firstSegment.toLowerCase();
+
+  // Intersection: drop whichever side repeats the route's own street.
+  const ampersand = firstSegment.indexOf("&");
+  if (ampersand !== -1) {
+    const left = firstSegment.slice(0, ampersand).trim();
+    const right = firstSegment.slice(ampersand + 1).trim();
+    if (left.toLowerCase() === street && right.length > 0) return right;
+    if (right.toLowerCase() === street && left.length > 0) return left;
+    return firstSegment;
+  }
+
+  // House address: drop the trailing street name, leaving the number.
+  const suffix = ` ${street}`;
+  if (lower.endsWith(suffix)) {
+    const head = firstSegment.slice(0, firstSegment.length - suffix.length).trim();
+    // Guard the case where the segment IS just the street name and nothing else.
+    return head.length > 0 ? head : firstSegment;
+  }
+  return firstSegment;
+}
+
+/**
+ * One-line route label for the members and routes screens, e.g.
+ * "Queen St E · 2038 → 2190". Degrades to just the street name when the endpoint
+ * coordinates have not been geocoded yet, rather than rendering a broken arrow.
+ */
+export function routeLabel(
+  streetName: string,
+  startAddress: string | null,
+  endAddress: string | null,
+): string {
+  const start = routeEndpointLabel(startAddress, streetName);
+  const end = routeEndpointLabel(endAddress, streetName);
+  if (!start || !end) return streetName;
+  if (start === end) return `${streetName} · ${start}`;
+  return `${streetName} · ${start} → ${end}`;
+}
+
 /** Bundle count is DERIVED from the stored per-bundle breakdown. */
 export function bundleCount(bundles: RouteBundle[]): number {
   return bundles.length;

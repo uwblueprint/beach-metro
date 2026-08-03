@@ -5,7 +5,14 @@ import type { z } from "zod";
 
 import { conflict, notFound } from "@/lib/api/errors";
 import type { overridePayout, transferPayout } from "@/lib/validation/finance";
-import type { CaptainPayoutRow, CaptainRow, RouteDeliveryRow, VolunteerRouteRow } from "@/types/db";
+import type {
+  CaptainPayoutRow,
+  CaptainRow,
+  IssueRow,
+  IssueStatus,
+  RouteDeliveryRow,
+  VolunteerRouteRow,
+} from "@/types/db";
 
 import { billableQuantity, calculationStatus, effectiveAmount } from "./derive";
 import { fetchIssue } from "./issues";
@@ -473,4 +480,98 @@ export async function transferPayoutAmount(
   if (recipientUpdateError) throwDb(recipientUpdateError);
 
   return getPayout(id);
+}
+
+/**
+ * One captain's payout history across every issue, newest issue first. Read-only,
+ * for the member side panel's Reimbursements section (people flow §4i).
+ *
+ * Amounts use the same `effectiveAmount` precedence as the finances screen rather
+ * than re-deriving anything, so the two views cannot disagree about what a captain
+ * is owed. Includes cells where someone else covered, flagged via `substitutedBy`,
+ * because the captain's own history should still show the issue they were
+ * responsible for even when the money went elsewhere.
+ */
+export interface CaptainPayoutHistoryEntry {
+  id: string;
+  issueId: string;
+  issueName: string;
+  issueDate: string;
+  issueStatus: IssueStatus;
+  amount: number;
+  calculationStatus: "calculated" | "frozen" | "overridden";
+  overrideReason: string | null;
+  paid: boolean;
+  paidAt: string | null;
+  /** Name of the captain who covered this issue, when one is recorded. */
+  substitutedBy: string | null;
+}
+
+export async function listCaptainPayoutHistory(
+  captainId: string,
+): Promise<CaptainPayoutHistoryEntry[]> {
+  const client = db();
+
+  const { data: captainData, error: captainError } = await client
+    .from("captains")
+    .select("id")
+    .eq("id", captainId)
+    .maybeSingle();
+  if (captainError) throwDb(captainError);
+  if (!captainData) throw notFound("Captain");
+
+  const { data: payoutData, error: payoutError } = await client
+    .from("captain_payouts")
+    .select("*")
+    .eq("captain_id", captainId);
+  if (payoutError) throwDb(payoutError);
+  const payouts = ((payoutData ?? []) as CaptainPayoutRow[]).map(coercePayoutNumerics);
+  if (payouts.length === 0) return [];
+
+  const issueIds = [...new Set(payouts.map((p) => p.issue_id))];
+  const substituteIds = [
+    ...new Set(payouts.map((p) => p.substitute_captain_id).filter((id): id is string => !!id)),
+  ];
+
+  const [issuesRes, substitutesRes] = await Promise.all([
+    client.from("issues").select("id, name, date, status").in("id", issueIds),
+    substituteIds.length > 0
+      ? client.from("captains").select("id, first_name, last_name").in("id", substituteIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (issuesRes.error) throwDb(issuesRes.error);
+  if (substitutesRes.error) throwDb(substitutesRes.error);
+
+  const issues = new Map(
+    ((issuesRes.data ?? []) as Pick<IssueRow, "id" | "name" | "date" | "status">[]).map((i) => [
+      i.id,
+      i,
+    ]),
+  );
+  const substitutes = new Map(
+    ((substitutesRes.data ?? []) as Pick<CaptainRow, "id" | "first_name" | "last_name">[]).map(
+      (c) => [c.id, `${c.first_name} ${c.last_name}`],
+    ),
+  );
+
+  return payouts
+    .map((p) => {
+      const issue = issues.get(p.issue_id);
+      return {
+        id: p.id,
+        issueId: p.issue_id,
+        issueName: issue?.name ?? "Unknown issue",
+        issueDate: issue?.date ?? "",
+        issueStatus: issue?.status ?? "open",
+        amount: effectiveAmount(p),
+        calculationStatus: calculationStatus(p),
+        overrideReason: p.override_reason,
+        paid: p.paid,
+        paidAt: p.paid_at,
+        substitutedBy: p.substitute_captain_id
+          ? (substitutes.get(p.substitute_captain_id) ?? "Unknown captain")
+          : null,
+      };
+    })
+    .sort((a, b) => b.issueDate.localeCompare(a.issueDate));
 }

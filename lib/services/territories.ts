@@ -3,7 +3,12 @@
 import type { z } from "zod";
 
 import { conflict, notFound } from "@/lib/api/errors";
-import type { addCommercialDrop, territoriesQuery, updateTerritory } from "@/lib/validation/people";
+import type {
+  addCommercialDrop,
+  territoriesQuery,
+  updateCommercialDrop,
+  updateTerritory,
+} from "@/lib/validation/people";
 import type { AddressRow, CaptainRow, CaptainTerritoryRow, VolunteerRow } from "@/types/db";
 
 import { createAddress, getAddressDetails, type AddressDetail } from "./addresses";
@@ -219,7 +224,36 @@ export async function addCommercialDropToTerritory(
   input: z.infer<typeof addCommercialDrop>,
 ): Promise<TerritoryDetail> {
   await fetchTerritory(territoryId);
-  await createAddress(input.address, "commercial", territoryId);
+  await createAddress(input.address, "commercial", territoryId, input.standingBundles ?? null);
+  return getTerritory(territoryId);
+}
+
+/**
+ * Edit a drop's standing bundle count only. Separate from add so the office can
+ * fill in a count later without re-validating (and re-billing) the address.
+ */
+export async function updateCommercialDropCount(
+  territoryId: string,
+  addressId: string,
+  input: z.infer<typeof updateCommercialDrop>,
+): Promise<TerritoryDetail> {
+  await fetchTerritory(territoryId);
+  const { data, error } = await db()
+    .from("addresses")
+    .select("id, type, territory_id")
+    .eq("id", addressId)
+    .maybeSingle();
+  if (error) throwDb(error);
+  const address = data as AddressRow | null;
+  if (!address || address.type !== "commercial" || address.territory_id !== territoryId) {
+    throw notFound("Commercial drop");
+  }
+
+  const { error: updateError } = await db()
+    .from("addresses")
+    .update({ standing_bundles: input.standingBundles })
+    .eq("id", addressId);
+  if (updateError) throwDb(updateError);
   return getTerritory(territoryId);
 }
 

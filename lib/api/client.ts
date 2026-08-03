@@ -2,6 +2,9 @@
 //
 // Every handler answers with the same envelope: `{ data }` on success and
 // `{ error: { code, message, details? } }` on failure (see lib/api/respond.ts).
+// These helpers unwrap that in one place so no component has to know the shape,
+// and so a 409 from the service layer reaches the UI as a real message rather
+// than a generic "something went wrong".
 import type { ErrorCode } from "./errors";
 
 /** A failed API call, carrying the server's own message so the UI can show it. */
@@ -27,6 +30,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         : init?.headers,
     });
   } catch (err) {
+    // Offline, DNS, aborted connection: never surfaces as an HTTP status.
     throw new ApiError(
       "network",
       err instanceof Error ? err.message : "Network request failed.",

@@ -21,8 +21,20 @@ Remove entries as they're resolved (and record the decision in
 - **Reporting dashboard metrics.** Blocked on Susan's finalized list; the
   read-only aggregate endpoints don't exist yet. Payout cost figures will read
   from `captain_payouts`.
-- **Commercial-drop standing counts.** Whether commercial drops carry expected
-  per-drop counts (like routes carry `papers`) — not modeled.
+- **Commercial-drop standing counts.** Now modelled **provisionally** as a nullable
+  `addresses.standing_bundles`, because the member panel's Territory Drops section
+  shows a count. Nullable so "unknown" stays distinct from zero. **Still needs the
+  client to confirm** that a commercial drop really carries an expected per-issue
+  quantity; if not, drop the column. → `supabase/migrations/20260730000001_*.sql`.
+- **Territory Drops has no date.** The design shows a date per drop, but a commercial
+  drop is an address, not an event, so there is nothing to date. A real date needs
+  per-issue drop deliveries (the route-delivery equivalent for drops), which do not
+  exist. The panel renders without a date. Decide whether drops need per-issue
+  actuals at all.
+- **Territories have no name or number.** The members table describes a captain's
+  territory by its contents ("4 volunteers, 2 drops") because there is nothing else
+  to show. If the office refers to territories by number, that needs a schema field
+  and a migration. → `lib/services/members.ts`.
 
 ## Product/tech decisions still open
 
@@ -67,6 +79,44 @@ Remove entries as they're resolved (and record the decision in
   login session is available.
 - **Idempotency keys / rate limiting.** API-spec open questions; neither is
   implemented (single-office tool, low risk — revisit before any exposure).
+
+## Surfaced by the members data layer (2026-07)
+
+- **The seed is not idempotent, and there is no reset path.** `supabase/seed.sql` is
+  insert-only, so `pnpm db:seed` fails against a database that already has rows. The
+  only reset tool was `POST /api/playground/reset`, which was removed with the
+  playground (it truncated every table). Anyone needing a clean database currently
+  has to truncate by hand. Options: make the seed idempotent with `on conflict do
+  nothing`, or add a `pnpm db:reset` script. → `supabase/seed.sql`, `scripts/db.sh`.
+- **Migration history had drifted from the schema.** `20260729000000`
+  (finance reconciliation) was applied to the hosted project without being recorded
+  in `supabase_migrations.schema_migrations`, so `supabase db push` refused to run.
+  Recorded it retroactively after verifying its columns really existed. Separately,
+  `20260728000000` (Toronto address points, on the unmerged #23) IS in the remote
+  history with no local file, which will keep `db push` unhappy until #23 merges.
+  Lesson: apply migrations with `pnpm db:push`, not by hand, or the history lies.
+- **Integration tests share one mutable database.** Suites run in parallel against
+  the hosted project, so any assertion comparing two independent reads is flaky, and
+  a test that throws before its cleanup leaks rows into everyone's `/members`. Both
+  happened while writing this. The members suite now asserts only on single-read
+  properties or its own fixture rows, and its `afterAll` sweeps strays by a
+  suite-specific marker (`ITMembers`, deliberately not the plain `IT` the other suite
+  uses — sweeping that deleted rows the other suite was still using). **This is the
+  concrete argument for a separate CI database** before adding
+  `SUPABASE_DB_URL` / `SUPABASE_SECRET_KEY` as Actions secrets.
+- **No reactivation, but retirement is now reachable from the UI.** The members table
+  can retire someone; the people flow allows Retired → Active but no endpoint exists
+  (see above). The row action confirms first and disables itself for someone already
+  retired, but an accidental retirement currently needs a database edit to undo.
+  Worth closing before this ships to the office.
+- **Add Member is still a no-op.** The button has no form and no design. What it
+  needs is written up in the PR description: volunteers need address validation
+  through `POST /api/addresses/validate`; captains need pay type, rate and cadence,
+  and creating one also creates their territory.
+- **Status is not surfaced in the table.** `GET /api/members` returns `status` and
+  `needsAttention` for every row, and the side panel shows status, but the table's
+  pills filter by role only. The people flow §4b asks for status filtering. Needs a
+  design decision (column, second pill row, or badge).
 
 ## Structural follow-ups (backend review)
 

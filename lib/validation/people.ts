@@ -7,6 +7,18 @@ import { addressInput, boolQuery, isoDate, noteField, uuid } from "./common";
 // Volunteers
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Members (the unified volunteer + captain list)
+// ---------------------------------------------------------------------------
+
+export const membersQuery = z.object({
+  role: z.enum(["volunteer", "captain"]).optional(),
+  // "on-vacation" only ever matches volunteers; captains have no vacation state.
+  status: z.enum(["active", "on-vacation", "retired"]).optional(),
+  needsAttention: boolQuery,
+  q: z.string().trim().min(1).optional(),
+});
+
 export const volunteersQuery = z.object({
   status: z.enum(["active", "on-vacation", "retired"]).optional(),
   territoryId: uuid.optional(),
@@ -37,7 +49,8 @@ export const updateVolunteer = z
     captainTerritoryId: uuid.nullable(),
     startDate: isoDate,
     endDate: isoDate.nullable(),
-    note: noteField,
+    // No `note` here: notes are their own resource now (see lib/validation/notes.ts).
+    // A single field on PATCH could not say WHICH note it meant.
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, { message: "No fields to update." });
@@ -90,7 +103,7 @@ export const updateCaptain = z
     payCadence: z.enum(["biweekly", "monthly"]),
     startDate: isoDate,
     endDate: isoDate.nullable(),
-    note: noteField,
+    // No `note` here either — see updateVolunteer above.
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, { message: "No fields to update." });
@@ -114,4 +127,13 @@ export const updateTerritory = z
 
 export const assignTerritoryVolunteer = z.object({ volunteerId: uuid });
 
-export const addCommercialDrop = z.object({ address: addressInput });
+export const addCommercialDrop = z.object({
+  address: addressInput,
+  /** Expected bundles per issue. Optional: unknown is a legitimate state. */
+  standingBundles: z.number().int().min(0).nullish(),
+});
+
+/** Edit a drop's standing count without re-validating its address. */
+export const updateCommercialDrop = z.object({
+  standingBundles: z.number().int().min(0).nullable(),
+});
