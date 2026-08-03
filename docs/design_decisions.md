@@ -4,6 +4,42 @@ Running log of locked design decisions, kept out of the individual specs so they
 stay lean. When a decision is locked (client call, review round, team discussion),
 append it here with a one-line rationale and update the docs that implement it.
 
+## Finances data layer (2026-08)
+
+Wiring the finances and overview screens. **Where the design and the backend
+disagreed, the design won**: the design engineers are closer to how the office
+works, so the backend bent. Six of these are provisional pending design
+confirmation and are tracked in
+[`finances_pending_decisions.md`](finances_pending_decisions.md).
+
+- **Locking is per issue, implemented as a bulk freeze.** PENDING(Q1). The design
+  puts one lock on an issue row; the backend modelled freezing per cell. Rather
+  than add a `locked` column, `POST /api/issues/{id}/lock` freezes every unpaid
+  cell, and the grid derives `locked` from them. Nothing is lost if the answer
+  turns out to be per captain.
+- ~~**Paid can only be toggled once the issue is closed.**~~ **Superseded.**
+  PENDING(Q2). The design ticks paid whenever, so the gate is gone. Keeping it
+  would have shipped a button that fails on click for every open issue.
+- **Paid has no untick in the UI.** PENDING(Q3). The endpoint exists and the
+  mutation is wired; nothing renders it, matching the design. Same
+  no-way-back problem as retiring a member.
+- **A cell comment is its own column, separate from the override reason.**
+  PENDING(Q4). A comment must survive on a cell that was never overridden, and
+  clearing an override must not delete a note the office left itself.
+- **One person may cover several captains.** PENDING(Q6). The design shows one
+  covered name per line; nothing caps it, and the overview lists them all rather
+  than dropping any.
+- **Transfer stays but is not wired.** PENDING(Q7). Recording a substitute
+  replaced it in the design. The endpoint remains for genuine reallocation.
+- **A financial year can be renamed but not re-dated.** New:
+  `PATCH /api/financial-years/{id}` takes a name only. The start date fixes the
+  reporting quarters, so moving it would silently reshuffle the overview.
+- **The seed now creates issues, deliveries and payout cells.** It previously
+  stopped at the financial year so issue creation would be exercised through the
+  API, which left both screens rendering empty. A test checks the seeded amounts
+  against the real formula, so the seed cannot drift into claiming numbers the app
+  would never produce.
+
 ## Members data layer (2026-07)
 
 Decisions made wiring the members screen to the backend.

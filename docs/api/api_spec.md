@@ -285,6 +285,7 @@ CHANGE`: recompute trigger may be a background job instead.
 | GET    | `/api/financial-years`                        | List (filter: `archived`)                                 | finance 4a |
 | POST   | `/api/financial-years`                        | Create (`{ name, startDate }`; snapshots active-captain columns) | 4a   |
 | GET    | `/api/financial-years/{id}`                   | Detail (the table: issues + payouts grid)                 | finance    |
+| PATCH  | `/api/financial-years/{id}`                   | Rename. The start date is fixed once the year exists      | 4a         |
 | POST   | `/api/financial-years/{id}/archive`           | Archive (stays fully accessible)                          | 4i         |
 | GET    | `/api/financial-years/{id}/export?format=csv` | Read-only CSV export of the table or a filtered view      | 4h         |
 
@@ -298,6 +299,8 @@ CHANGE`: recompute trigger may be a background job instead.
 | PATCH  | `/api/issues/{id}`                     | Edit name / date                                                                                                                                  | 4b               |
 | POST   | `/api/issues/{id}/close`               | Open → Closed; **detaches every payout from live calc + locks delivery actuals**; payouts default unpaid                                          | 4e / delivery 4c |
 | POST   | `/api/issues/{id}/reopen`              | Closed → Open (guarded admin correction)                                                                                                          | finance 3a       |
+| POST   | `/api/issues/{id}/lock`                | Freeze every unpaid cell in the issue at once (bundling day)                                                                                      | finance 4j       |
+| POST   | `/api/issues/{id}/unlock`              | Unfreeze the issue's frozen cells and recompute them                                                                                              | finance 4j       |
 
 ```ts
 // POST /api/financial-years
@@ -327,6 +330,7 @@ the same time, and closing is always an explicit `close` call.
 | POST   | `/api/payouts/{id}/unfreeze`       | Drop the snapshot; track the live calculation again                                | 4j         |
 | POST   | `/api/payouts/{id}/substitute`     | Record the captain who covered this issue                                          | 4k         |
 | DELETE | `/api/payouts/{id}/substitute`     | Clear the substitute; payment reverts to the cell's own captain                    | 4k         |
+| PATCH  | `/api/payouts/{id}/comment`        | Set or clear a free-standing note on the cell (null clears)                        | 4d         |
 
 There are no create/delete endpoints for payouts — they are created with their
 issue and removed only with the issue.
@@ -339,9 +343,25 @@ reversible, **closing** the issue detaches every cell in it from live calculatio
 without writing to the cells, and **paid** locks a single cell against every action
 in this table.
 
+**Locking a whole issue.** `POST /api/issues/{id}/lock` is a bulk action over the
+per-cell freeze: it freezes every unpaid cell in the issue. Paid cells are skipped,
+because paid already blocks every edit. `unlock` reverses it and recomputes, since
+the live numbers may have moved meanwhile. The issue's `locked` flag on the year
+grid is derived (every cell paid or frozen), not stored. PROVISIONAL — see
+[`finances_pending_decisions.md`](../finances_pending_decisions.md).
+
+**Marking paid no longer requires a closed issue.** An earlier decision gated it;
+the finances design ticks paid whenever, and the design won. Also provisional.
+
 ```ts
 // POST /api/payouts/{id}/override
 type OverridePayout = { amount: number; reason: string }; // reason required; no prior-value audit
+
+// PATCH /api/payouts/{id}/comment
+// A free-standing note on the cell, deliberately NOT the same field as the reason
+// attached to an override: a comment must survive on a cell that was never
+// overridden, and clearing an override must not delete it. Null or blank clears.
+type SetPayoutComment = { comment: string | null };
 
 // POST /api/payouts/{id}/transfer
 // Moves this issue's effective amount to another captain's cell and zeroes this one
