@@ -20,6 +20,20 @@ export default defineConfig({
     // the integration suite can see SUPABASE_* — it self-skips when they're absent.
     env: loadEnv("", process.cwd(), ""),
     testTimeout: 30_000, // integration tests hit the hosted DB
+    // Run test FILES one at a time.
+    //
+    // The integration suites all point at the same hosted database and genuinely
+    // mutate each other's fixtures: creating an issue creates a payout cell for
+    // every active captain, so one suite adding a financial year changes what
+    // another suite's captain history contains, and a suite deleting a year
+    // cascades away issues another suite is mid-way through using. We chased
+    // several flakes of exactly that shape before giving up on isolating them
+    // assertion by assertion.
+    //
+    // The unit tests are fast enough that serialising costs little, and it removes
+    // the whole class of problem rather than one instance of it. Revisit if CI ever
+    // gets its own database, at which point parallel files become safe again.
+    fileParallelism: false,
   },
   resolve: {
     alias: {

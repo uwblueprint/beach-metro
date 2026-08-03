@@ -319,14 +319,22 @@ describe.skipIf(!RUN)("captain payout history", () => {
     createdYearIds.push(year.id);
 
     // Two issues, so the newest-first ordering has something to order.
-    await issues.createIssuesBatch(year.id, {
+    const madeIssues = await issues.createIssuesBatch(year.id, {
       issues: [
         { name: "Hist A", date: "2026-04-10" },
         { name: "Hist B", date: "2026-05-10" },
       ],
     });
+    const ourIssueIds = new Set(madeIssues.map((i) => i.id));
 
-    const history = await S().payouts.listCaptainPayoutHistory(captain.id);
+    const fullHistory = await S().payouts.listCaptainPayoutHistory(captain.id);
+
+    // ISOLATION: creating an issue anywhere makes a payout cell for EVERY active
+    // captain, so another suite creating a year mid-run adds entries to this
+    // captain's history. Assert only over the issues this test made; the ordering
+    // check below still proves newest-first because it is a subsequence of a
+    // globally date-sorted list.
+    const history = fullHistory.filter((h) => ourIssueIds.has(h.issueId));
     expect(history.length).toBe(2);
 
     // Newest issue date first.

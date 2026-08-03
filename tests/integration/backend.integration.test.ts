@@ -285,9 +285,16 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
     expect(stillEditable.effectiveAmount).toBe(3);
   });
 
-  it("mark-paid requires a closed issue; reopen keeps paid cells frozen", async () => {
+  // PENDING(Q2). This used to assert that mark-paid returned 409 on an open issue.
+  // The finances design ticks paid whenever, so the gate was removed and this now
+  // asserts the opposite. If Q2 comes back as "only once the issue is closed",
+  // restore the check in markPayoutPaid and flip this back to expectServiceError.
+  // See docs/finances_pending_decisions.md.
+  it("mark-paid works on an open issue; reopen keeps paid cells frozen", async () => {
     await S().issues.reopenIssue(issueId);
-    await expectServiceError(S().payouts.markPayoutPaid(bundlePayoutId), 409); // open again
+    const paidWhileOpen = await S().payouts.markPayoutPaid(bundlePayoutId); // open again
+    expect(paidWhileOpen.paid).toBe(true);
+    await S().payouts.unmarkPayoutPaid(bundlePayoutId);
 
     // Paid cell survived the reopen untouched.
     const paidCell = await S().payouts.getPayout(dropPayoutId);
@@ -432,5 +439,22 @@ describe.skipIf(!RUN)("retiring a captain zeros their open-issue cells", () => {
     if (ids.territoryId)
       await client.from("captain_territories").delete().eq("id", ids.territoryId);
     if (ids.captainId) await client.from("captains").delete().eq("id", ids.captainId);
+
+    // Safety net. Deleting by id alone is not enough: creating an issue ANYWHERE
+    // makes a payout cell for every active captain, so another suite's financial
+    // year leaves cells pointing at this suite's captains, and the delete above
+    // then fails the foreign key silently. That leaked 59 rows before this was
+    // added. Sweep by the fixture marker, clearing the references first.
+    const { data: strays } = await client.from("captains").select("id").eq("first_name", "IT");
+    const strayIds = ((strays ?? []) as { id: string }[]).map((c) => c.id);
+    if (strayIds.length > 0) {
+      await client.from("captain_payouts").delete().in("captain_id", strayIds);
+      await client
+        .from("captain_payouts")
+        .update({ substitute_captain_id: null })
+        .in("substitute_captain_id", strayIds);
+      await client.from("captain_territories").delete().in("assigned_captain_id", strayIds);
+      await client.from("captains").delete().in("id", strayIds);
+    }
   });
 });
