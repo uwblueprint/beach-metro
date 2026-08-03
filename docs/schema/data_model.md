@@ -239,7 +239,8 @@ export interface VolunteerRoute {
   // Counts
   houseCount: number; // manual entry for MVP (auto-calc via Toronto Open Data is post-MVP)
   houseCountOverride?: number | null; // SUBJECT TO CHANGE: only relevant once auto-calc exists
-  papers: number; // standing paper count; drives the bundle auto-calc
+  papers: number; // standing paper count; equals sum(bundles[].papers)
+  bundles: RouteBundle[]; // standing per-bundle breakdown (source of truth for labels / issue seed)
   notes?: string | null;
   deletedAt?: Timestamp | null; // soft delete: hidden from views, row retained so past RouteDelivery still resolves
   // No territoryId: territory/captain derive via assignedVolunteerId -> captainTerritoryId.

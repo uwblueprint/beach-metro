@@ -1,13 +1,20 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { MemberDetail } from "@/lib/stubs/members";
+import { getStubTerritoryIdForCaptainName } from "@/lib/stubs/members";
+import { NewTerritoryDropDialog, type DropSelection } from "@/components/new-territory-drop-dialog";
 import { NotesSection } from "@/components/notes-section";
+import { ReimbursementsSection } from "@/components/reimbursements-section";
+import { RouteDetailsDialog } from "@/components/route-details-dialog";
 import { SidePanelRow } from "@/components/side-panel-row";
 import { SidePanelSection } from "@/components/side-panel-section";
+import { useCaptainsList, useTerritory } from "@/features/territory-drops/api";
+import { useVolunteerRoutes } from "@/features/routes/api";
+import type { RouteSummary } from "@/lib/services/routes";
 
 interface MemberSidePanelProps {
   member: MemberDetail | null;
@@ -39,7 +46,29 @@ function RoleTag({ role }: { role: "volunteer" | "captain" }) {
   );
 }
 
+function routeMeta(route: RouteSummary): string {
+  const bundleN = route.bundles.length;
+  return `${bundleN}B / ${route.papers}P`;
+}
+
 function VolunteerContent({ member }: { member: Extract<MemberDetail, { role: "volunteer" }> }) {
+  const { data: routes = [], isPending, refetch } = useVolunteerRoutes(member.id);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
+
+  function openCreate() {
+    setEditingRouteId(null);
+    setDialogOpen(true);
+  }
+
+  function openEdit(routeId: string) {
+    setEditingRouteId(routeId);
+    setDialogOpen(true);
+  }
+
+  const totalBundles = routes.reduce((s, r) => s + r.bundles.length, 0);
+  const totalPapers = routes.reduce((s, r) => s + r.papers, 0);
+
   return (
     <>
       <div className="flex flex-col gap-1 px-1 pb-6 pt-1">
@@ -52,37 +81,90 @@ function VolunteerContent({ member }: { member: Extract<MemberDetail, { role: "v
 
       <NotesSection notes={member.notes} />
 
-      <SidePanelSection title="Route Info" onAdd={() => {}}>
-        {member.routes.length === 0 ? (
+      <SidePanelSection title="Route Info" onAdd={openCreate}>
+        {isPending ? null : routes.length === 0 ? (
           <SidePanelRow className="text-secondary">No routes</SidePanelRow>
         ) : (
           <>
-            {member.routes.map((route) => (
+            {routes.map((route) => (
               <SidePanelRow
                 key={route.id}
-                meta={`${route.bundles}B / ${route.papers}P`}
-                onEdit={() => {}}
+                meta={routeMeta(route)}
+                onClick={() => openEdit(route.id)}
+                onEdit={() => openEdit(route.id)}
               >
                 <span className="inline-flex items-center rounded-lg bg-secondary-fill px-2 py-1 text-md text-primary">
-                  {route.name}
+                  {route.streetName}
                 </span>
               </SidePanelRow>
             ))}
             <div className="flex h-8 items-center justify-between px-2 py-1 text-md text-secondary">
               <span>Totals</span>
               <span>
-                {member.routes.reduce((s, r) => s + r.bundles, 0)} Bundles,{" "}
-                {member.routes.reduce((s, r) => s + r.papers, 0)} Papers
+                {totalBundles} Bundles, {totalPapers} Papers
               </span>
             </div>
           </>
         )}
       </SidePanelSection>
+
+      <RouteDetailsDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        volunteerId={member.id}
+        routeId={editingRouteId}
+        onSuccess={() => void refetch()}
+      />
     </>
   );
 }
 
 function CaptainContent({ member }: { member: Extract<MemberDetail, { role: "captain" }> }) {
+  const { data: captains = [] } = useCaptainsList();
+  const apiCaptain = useMemo(
+    () =>
+      captains.find(
+        (c) => `${c.firstName} ${c.lastName}`.toLowerCase() === member.name.toLowerCase(),
+      ) ?? null,
+    [captains, member.name],
+  );
+  const apiTerritoryId = apiCaptain?.territory?.id ?? null;
+  // Stub fallback so Confirm can enable on the stub members page before API match lands.
+  const territoryId = apiTerritoryId ?? getStubTerritoryIdForCaptainName(member.name);
+  const { data: territory, refetch: refetchTerritory } = useTerritory(apiTerritoryId);
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [initialDrop, setInitialDrop] = useState<DropSelection | null>(null);
+
+  const liveDrops = territory?.commercialDrops;
+  const showingLive = liveDrops !== undefined;
+
+  function openAdd() {
+    setInitialDrop(null);
+    setDialogOpen(true);
+  }
+
+  function openEditCommercial(drop: {
+    id: string;
+    placeId: string;
+    formattedAddress: string | null;
+  }) {
+    setInitialDrop({
+      kind: "commercial",
+      addressId: drop.id,
+      placeId: drop.placeId,
+      label: drop.formattedAddress ?? "Address not geocoded yet",
+      territoryId: territoryId!,
+    });
+    setDialogOpen(true);
+  }
+
+  function openEditStub(location: string) {
+    // Stub rows have no placeId — prefill as a create-address draft matching the label.
+    setInitialDrop({ kind: "create-address", label: location });
+    setDialogOpen(true);
+  }
+
   return (
     <>
       <div className="flex flex-col gap-1 px-1 pb-6 pt-1">
@@ -94,35 +176,46 @@ function CaptainContent({ member }: { member: Extract<MemberDetail, { role: "cap
 
       <NotesSection notes={member.notes} />
 
-      <SidePanelSection title="Reimbursements">
-        {member.reimbursements.length === 0 ? (
-          <SidePanelRow className="text-secondary">No Record of Reimbursement</SidePanelRow>
-        ) : (
-          member.reimbursements.map((r) => (
-            <SidePanelRow key={r.id} meta={r.date} onEdit={() => {}}>
-              <span className="text-primary">
-                ${r.amount.toFixed(2)} — {r.description}
-              </span>
-            </SidePanelRow>
-          ))
-        )}
-      </SidePanelSection>
+      <ReimbursementsSection key={member.id} captainId={member.id} />
 
-      <SidePanelSection title="Territory Drops" onAdd={() => {}}>
-        {member.territoryDrops.length === 0 ? (
+      <SidePanelSection title="Territory Drops" onAdd={openAdd}>
+        {showingLive ? (
+          liveDrops.length === 0 ? (
+            <SidePanelRow className="text-secondary">No Drops</SidePanelRow>
+          ) : (
+            liveDrops.map((drop) => (
+              <SidePanelRow key={drop.id} meta="—" onEdit={() => openEditCommercial(drop)}>
+                <span className="text-primary">
+                  {drop.formattedAddress ?? "Address not geocoded yet"}
+                </span>
+              </SidePanelRow>
+            ))
+          )
+        ) : member.territoryDrops.length === 0 ? (
           <SidePanelRow className="text-secondary">No Drops</SidePanelRow>
         ) : (
           member.territoryDrops.map((drop) => (
             <SidePanelRow
               key={drop.id}
               meta={`${drop.bundles} bundle${drop.bundles !== 1 ? "s" : ""}`}
-              onEdit={() => {}}
+              onEdit={() => openEditStub(drop.location)}
             >
               <span className="text-primary">{drop.location}</span>
             </SidePanelRow>
           ))
         )}
       </SidePanelSection>
+
+      <NewTerritoryDropDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        captainName={member.name}
+        territoryId={territoryId}
+        initialDrop={initialDrop}
+        onSuccess={() => {
+          void refetchTerritory();
+        }}
+      />
     </>
   );
 }

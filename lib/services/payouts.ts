@@ -107,6 +107,93 @@ export async function listPayouts(issueId: string): Promise<PayoutSummary[]> {
   });
 }
 
+/** Paid cell attributed to this captain as payee (own territory or substitute coverage). */
+export interface CaptainReimbursement {
+  id: string;
+  amount: number;
+  paidAt: string;
+  issue: { id: string; name: string; date: string };
+  kind: "own" | "substitute";
+  coveredForName: string | null;
+}
+
+export interface CaptainReimbursementsResult {
+  items: CaptainReimbursement[];
+  hasMore: boolean;
+}
+
+type PayoutWithIssue = CaptainPayoutRow & {
+  issues: { id: string; name: string; date: string };
+};
+
+/**
+ * Recent confirmed reimbursements for a captain: paid payout cells where they
+ * are the payee (own cell with no substitute, or substitute on someone else's).
+ * Fetches limit+1 to report hasMore without a separate count query.
+ */
+export async function listRecentPaidPayoutsForCaptain(
+  captainId: string,
+  limit = 4,
+): Promise<CaptainReimbursementsResult> {
+  const client = db();
+  const { data: captainData, error: captainError } = await client
+    .from("captains")
+    .select("id")
+    .eq("id", captainId)
+    .maybeSingle();
+  if (captainError) throwDb(captainError);
+  if (!captainData) throw notFound("Captain");
+
+  const { data, error } = await client
+    .from("captain_payouts")
+    .select("*, issues!inner(id, name, date)")
+    .eq("paid", true)
+    .or(
+      `and(captain_id.eq.${captainId},substitute_captain_id.is.null),substitute_captain_id.eq.${captainId}`,
+    )
+    .order("paid_at", { ascending: false })
+    .limit(limit + 1);
+  if (error) throwDb(error);
+
+  const rows = (data ?? []) as PayoutWithIssue[];
+  const hasMore = rows.length > limit;
+  const page = rows.slice(0, limit);
+
+  const coveredIds = [
+    ...new Set(page.filter((r) => r.substitute_captain_id === captainId).map((r) => r.captain_id)),
+  ];
+  const nameById = new Map<string, string>();
+  if (coveredIds.length > 0) {
+    const { data: nameData, error: nameError } = await client
+      .from("captains")
+      .select("id, first_name, last_name")
+      .in("id", coveredIds);
+    if (nameError) throwDb(nameError);
+    for (const c of (nameData ?? []) as Pick<CaptainRow, "id" | "first_name" | "last_name">[]) {
+      nameById.set(c.id, `${c.first_name} ${c.last_name}`);
+    }
+  }
+
+  const items: CaptainReimbursement[] = page.map((raw) => {
+    const p = coercePayoutNumerics(raw);
+    const isSubstitute = p.substitute_captain_id === captainId;
+    return {
+      id: p.id,
+      amount: effectiveAmount(p),
+      paidAt: p.paid_at!,
+      issue: {
+        id: raw.issues.id,
+        name: raw.issues.name,
+        date: raw.issues.date,
+      },
+      kind: isSubstitute ? "substitute" : "own",
+      coveredForName: isSubstitute ? (nameById.get(p.captain_id) ?? "Unknown captain") : null,
+    };
+  });
+
+  return { items, hasMore };
+}
+
 /** Detail + the calculation breakdown (quantity × rate; finance flow §4c). */
 export async function getPayout(id: string): Promise<PayoutDetail> {
   const p = await fetchPayout(id);

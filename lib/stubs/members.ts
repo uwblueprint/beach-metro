@@ -162,6 +162,14 @@ const volunteerSeeds: [string, string, string[], number, DateOnly][] = [
 
 const territoryId = (captainIndex: number): UUID => fakeUuid(3, captainIndex);
 
+/** Stub territory id for a captain display name (e.g. "Lena Morales"). */
+export function getStubTerritoryIdForCaptainName(name: string): UUID | null {
+  const index = captainSeeds.findIndex(
+    ([first, last]) => `${first} ${last}`.toLowerCase() === name.trim().toLowerCase(),
+  );
+  return index >= 0 ? territoryId(index) : null;
+}
+
 export const captains: Captain[] = captainSeeds.map(
   ([firstName, lastName, payType, payRate, payCadence, startDate], i) => ({
     id: fakeUuid(1, i),

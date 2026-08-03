@@ -14,6 +14,7 @@ import type {
 import type {
   CaptainRow,
   CaptainTerritoryRow,
+  RouteBundle,
   RouteSide,
   VolunteerRouteRow,
   VolunteerRow,
@@ -25,7 +26,7 @@ import {
   getAddressDetails,
   type AddressDetail,
 } from "./addresses";
-import { volunteerStatus } from "./derive";
+import { greedySplit, volunteerStatus } from "./derive";
 import { db, throwDb, today } from "./shared";
 
 export interface RouteSummary {
@@ -39,6 +40,7 @@ export interface RouteSummary {
   houseCountOverride: number | null;
   effectiveHouseCount: number;
   papers: number;
+  bundles: RouteBundle[];
   notes: string | null;
   assignedVolunteer: { id: string; firstName: string; lastName: string; status: string } | null;
   captain: { id: string; name: string } | null;
@@ -98,6 +100,7 @@ function toSummary(r: VolunteerRouteRow, ctx: Context, date: string): RouteSumma
     houseCountOverride: r.house_count_override,
     effectiveHouseCount: r.house_count_override ?? r.house_count,
     papers: r.papers,
+    bundles: Array.isArray(r.bundles) ? r.bundles : [],
     notes: r.notes,
     assignedVolunteer: volunteer
       ? {
@@ -135,6 +138,9 @@ export async function listRoutes(filters: z.infer<typeof routesQuery>): Promise<
       ctx.volunteers.filter((v) => v.captain_territory_id === filters.territoryId).map((v) => v.id),
     );
     all = all.filter((r) => r.assignedVolunteer && volunteerIds.has(r.assignedVolunteer.id));
+  }
+  if (filters.volunteerId) {
+    all = all.filter((r) => r.assignedVolunteer?.id === filters.volunteerId);
   }
   if (filters.q) {
     const q = filters.q.toLowerCase();
@@ -187,6 +193,11 @@ export async function createRouteRecord(input: z.infer<typeof createRoute>): Pro
     createAddress(input.endAddress, "residential"),
   ]);
 
+  const bundles: RouteBundle[] =
+    input.bundles !== undefined ? input.bundles : greedySplit(input.papers ?? 0);
+  const papers =
+    input.bundles !== undefined ? bundles.reduce((s, b) => s + b.papers, 0) : (input.papers ?? 0);
+
   const { data, error } = await db()
     .from("volunteer_routes")
     .insert({
@@ -195,8 +206,9 @@ export async function createRouteRecord(input: z.infer<typeof createRoute>): Pro
       street_name: input.streetName,
       side: input.side ?? null,
       assigned_volunteer_id: input.assignedVolunteerId ?? null,
-      house_count: input.houseCount,
-      papers: input.papers,
+      house_count: input.houseCount ?? 0,
+      papers,
+      bundles,
       notes: input.note ?? null,
     })
     .select()
@@ -216,13 +228,21 @@ export async function updateRouteRecord(
   if (input.side !== undefined) patch.side = input.side;
   if (input.houseCount !== undefined) patch.house_count = input.houseCount;
   if (input.houseCountOverride !== undefined) patch.house_count_override = input.houseCountOverride;
-  if (input.papers !== undefined) patch.papers = input.papers;
   if (input.note !== undefined) patch.notes = input.note;
   if (input.startAddress !== undefined) {
     patch.start_address_id = (await createAddress(input.startAddress, "residential")).address.id;
   }
   if (input.endAddress !== undefined) {
     patch.end_address_id = (await createAddress(input.endAddress, "residential")).address.id;
+  }
+
+  if (input.bundles !== undefined) {
+    patch.bundles = input.bundles;
+    patch.papers = input.bundles.reduce((s, b) => s + b.papers, 0);
+  } else if (input.papers !== undefined) {
+    patch.papers = input.papers;
+    // Reseed standing split when only papers changes (delivery-style rule).
+    patch.bundles = greedySplit(input.papers);
   }
 
   const { error } = await db().from("volunteer_routes").update(patch).eq("id", id);

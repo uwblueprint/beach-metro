@@ -61,6 +61,11 @@ export const captainsQuery = z.object({
   q: z.string().trim().min(1).optional(),
 });
 
+/** Paid payout history for a captain (people 4i reimbursements / finance cells). */
+export const captainPayoutsQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(4),
+});
+
 export const createCaptain = z.object({
   firstName: z.string().trim().min(1),
   lastName: z.string().trim().min(1),

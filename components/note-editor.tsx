@@ -3,6 +3,7 @@
 import { useRef } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 interface NoteEditorProps {
   /** Existing note text when editing; omitted when adding a new note. */
@@ -32,13 +33,12 @@ function NoteEditor({ initialText = "", onSave, onDelete, onCancel }: NoteEditor
 
   return (
     <div className="flex flex-col gap-1.5 px-1 py-1">
-      <textarea
+      <Textarea
         ref={textareaRef}
         autoFocus
         defaultValue={initialText}
         rows={2}
         placeholder="Add a note"
-        className="w-full resize-y rounded-[4px] border border-ring bg-bg px-2 py-1.5 text-md text-primary outline-none placeholder:text-secondary focus-visible:ring-3 focus-visible:ring-ring/50"
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
