@@ -254,10 +254,10 @@ type UpdateCommercialDrop = { standingBundles: number | null };
 
 | Method | Path                         | Purpose                                                                                                                                          | Flow       |
 | ------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
-| GET    | `/api/routes`                | List. Filters: `vacancy` (vacant/assigned), `territoryId`, `needsAttention`, `side`, `q`                                                         | route 4b   |
-| POST   | `/api/routes`                | Create (start/end address, street, side; volunteer optional)                                                                                     | 4a         |
-| GET    | `/api/routes/{id}`           | Detail (derived lifecycle + suspended flag, house count, counts)                                                                                 | 4c         |
-| PATCH  | `/api/routes/{id}`           | Edit definition (addresses, street, side, `houseCountOverride`, note)                                                                            | 4d         |
+| GET    | `/api/routes`                | List. Filters: `vacancy` (vacant/assigned), `territoryId`, `volunteerId`, `needsAttention`, `side`, `q` | route 4b   |
+| POST   | `/api/routes`                | Create (start/end address, street, side; `bundles` and/or `papers`; volunteer optional)               | 4a         |
+| GET    | `/api/routes/{id}`           | Detail (derived lifecycle + suspended flag, house count, standing `bundles`, counts)                  | 4c         |
+| PATCH  | `/api/routes/{id}`           | Edit definition (addresses, street, side, `houseCountOverride`, `bundles`/`papers`, note)             | 4d         |
 | DELETE | `/api/routes/{id}`           | **Soft delete** (sets `deletedAt`, hidden from all views; the row is retained so past `RouteDelivery` records still resolve; addresses reusable) | route flow |
 | POST   | `/api/routes/{id}/assign`    | Assign a volunteer (`{ volunteerId }`) → Active-Assigned                                                                                         | 4e         |
 | POST   | `/api/routes/{id}/unassign`  | Unassign → Active-Vacant                                                                                                                         | 4f         |
@@ -270,6 +270,19 @@ recompute is `POST /api/routes/{id}/refresh-house-count` (route 4g) — `SUBJECT
 CHANGE`: recompute trigger may be a background job instead.
 
 ```ts
+// POST /api/routes — prefer bundles (papers = sum). Papers alone seeds greedySplit.
+type CreateRoute = {
+  startAddress: AddressInput;
+  endAddress: AddressInput;
+  streetName: string;
+  side?: "NORTH" | "SOUTH" | "EAST" | "WEST" | "BOTH" | null;
+  assignedVolunteerId?: string | null;
+  houseCount?: number; // default 0
+  papers?: number;
+  bundles?: Array<{ papers: number }>; // each >= 1; sum becomes papers when provided
+  note?: string | null;
+};
+
 // GET /api/routes/nearest-vacant?volunteerId=...&limit=5
 // -> { data: Array<{ route: VolunteerRoute, distanceMeters: number, durationSeconds: number }> }
 ```
