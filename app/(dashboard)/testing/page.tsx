@@ -24,6 +24,23 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ListItem } from "@/components/ui/list-item";
+import {
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogField,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogWizardFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Banner } from "@/components/ui/banner";
+import { Checkbox, CheckboxIcon } from "@/components/ui/checkbox";
 
 // ─── Section components ───────────────────────────────────────────────────────
 // To add a new component section:
@@ -403,7 +420,7 @@ function DropdownsSection({
         <section className="space-y-3">
           <h2 className="text-lg font-medium">Radio (checked)</h2>
           <p className="text-secondary text-sm">
-            Selected row uses active-grey — Figma payments years.
+            Selected row uses active-grey; hover uses lighter tag-hover.
           </p>
           <DropdownMenu>
             <DropdownMenuTrigger render={<Button variant="outline" />}>
@@ -425,7 +442,9 @@ function DropdownsSection({
 
         <section className="space-y-3">
           <h2 className="text-lg font-medium">Checkbox</h2>
-          <p className="text-secondary text-sm">Checked items keep active-grey + check mark.</p>
+          <p className="text-secondary text-sm">
+            Left checkbox toggles with selection; row uses hover only (no selected fill).
+          </p>
           <DropdownMenu>
             <DropdownMenuTrigger render={<Button variant="outline" />}>
               Appearance
@@ -524,6 +543,636 @@ function SearchBarSection({ searchValue, setSearchValue }: SearchBarSectionProps
   );
 }
 
+const CAPTAIN_OPTIONS = ["Lena Morales", "James Chen", "Priya Patel", "Sam Okonkwo"] as const;
+const ROLE_OPTIONS = [
+  { value: "captain", label: "Captain" },
+  { value: "volunteer", label: "Volunteer" },
+  { value: "commercial", label: "Commercial drop" },
+] as const;
+
+const inputTriggerClassName =
+  "flex h-auto w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-hairline bg-bg px-3 py-2 text-left text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-bg-secondary disabled:text-disabled disabled:opacity-50";
+
+function InputsSection() {
+  const [captain, setCaptain] = useState<string>(CAPTAIN_OPTIONS[0]);
+  const [roles, setRoles] = useState<string[]>(["captain", "volunteer"]);
+
+  function toggleRole(value: string, checked: boolean) {
+    setRoles((prev) => (checked ? [...prev, value] : prev.filter((v) => v !== value)));
+  }
+
+  const roleLabel =
+    ROLE_OPTIONS.filter((o) => roles.includes(o.value))
+      .map((o) => o.label)
+      .join(", ") || "Select roles…";
+
+  return (
+    <div className="space-y-10">
+      <div>
+        <h1 className="text-2xl font-semibold text-balance">Input</h1>
+        <p className="text-secondary mt-2 text-md text-pretty">
+          Text field, dropdown, and multiselect — Figma Input styling (border/hairline, body/md, 8px
+          radius). Compose with Label for Input Group.
+        </p>
+      </div>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">Text</h2>
+        <div className="grid max-w-md gap-6">
+          <div className="space-y-2">
+            <p className="text-secondary text-sm font-medium">Placeholder</p>
+            <Input
+              id="input-state-default"
+              name="demo-default"
+              aria-label="Placeholder"
+              placeholder="Input text"
+            />
+          </div>
+          <div className="space-y-2">
+            <p className="text-secondary text-sm font-medium">Filled</p>
+            <Input
+              id="input-state-filled"
+              name="demo-filled"
+              aria-label="Filled"
+              defaultValue="Lena Morales"
+            />
+          </div>
+          <div className="space-y-2">
+            <p className="text-secondary text-sm font-medium">Disabled</p>
+            <Input
+              id="input-state-disabled"
+              name="demo-disabled"
+              aria-label="Disabled"
+              placeholder="Input text"
+              disabled
+            />
+          </div>
+          <div className="space-y-2">
+            <p className="text-secondary text-sm font-medium">Invalid</p>
+            <Input
+              id="input-state-invalid"
+              name="demo-invalid"
+              aria-label="Invalid"
+              placeholder="Input text"
+              aria-invalid
+              defaultValue="bad@"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">Dropdown</h2>
+        <p className="text-secondary text-sm">
+          Single-select field trigger — same Input shell, menu from DropdownMenu.
+        </p>
+        <div className="grid max-w-md gap-6">
+          <div className="flex flex-col gap-2">
+            <Label id="input-captain-label" className="text-md font-normal text-primary">
+              Captain
+            </Label>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={<button type="button" className={inputTriggerClassName} />}
+                aria-labelledby="input-captain-label"
+              >
+                <span className="min-w-0 truncate">{captain}</span>
+                <ChevronDown className="size-3 shrink-0 text-primary" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="min-w-[var(--anchor-width)]">
+                <DropdownMenuRadioGroup value={captain} onValueChange={setCaptain}>
+                  {CAPTAIN_OPTIONS.map((name) => (
+                    <DropdownMenuRadioItem key={name} value={name}>
+                      {name}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label id="input-drop-label" className="text-md font-normal text-primary">
+              Drop Details
+            </Label>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={<button type="button" className={inputTriggerClassName} />}
+                aria-labelledby="input-drop-label"
+              >
+                <span className="min-w-0 truncate text-secondary">Input text</span>
+                <ChevronDown className="size-3 shrink-0 text-primary" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="min-w-[var(--anchor-width)]">
+                <DropdownMenuItem>123 Queen St</DropdownMenuItem>
+                <DropdownMenuItem>187 Queen St</DropdownMenuItem>
+                <DropdownMenuItem disabled>Create new address…</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label className="text-md font-normal text-primary">Disabled</Label>
+            <button type="button" className={inputTriggerClassName} disabled>
+              <span className="min-w-0 truncate text-secondary">Input text</span>
+              <ChevronDown className="size-3 shrink-0" />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">Multiselect</h2>
+        <p className="text-secondary text-sm">
+          Left-aligned checkbox on an Input-styled trigger, or PillGroup for inline multi-select.
+        </p>
+        <div className="grid max-w-md gap-6">
+          <div className="flex flex-col gap-2">
+            <Label id="input-roles-label" className="text-md font-normal text-primary">
+              Roles
+            </Label>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={<button type="button" className={inputTriggerClassName} />}
+                aria-labelledby="input-roles-label"
+              >
+                <span
+                  className={`min-w-0 truncate ${roles.length ? "text-primary" : "text-secondary"}`}
+                >
+                  {roleLabel}
+                </span>
+                <ChevronDown className="size-3 shrink-0 text-primary" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="min-w-[var(--anchor-width)]">
+                {ROLE_OPTIONS.map((option) => (
+                  <DropdownMenuCheckboxItem
+                    key={option.value}
+                    checked={roles.includes(option.value)}
+                    onCheckedChange={(checked) => toggleRole(option.value, Boolean(checked))}
+                  >
+                    {option.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <p className="text-secondary text-xs">
+              Selected: {roles.length ? roles.join(", ") : "none"}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label className="text-md font-normal text-primary">Roles (pills)</Label>
+            <PillGroup
+              value={roles}
+              onChange={setRoles}
+              options={ROLE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">Input Group</h2>
+        <p className="text-secondary text-sm">
+          Label + text Input with 8px gap — matches Figma Input Group.
+        </p>
+        <div className="grid max-w-md gap-6">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="input-semantic" className="text-md font-normal text-primary">
+              Semantic Name
+            </Label>
+            <Input
+              id="input-semantic"
+              name="semantic-name"
+              defaultValue="Queen St E · Woodbine → Coxwell"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="input-disabled-labeled" className="text-md font-normal text-primary">
+              Email
+            </Label>
+            <Input
+              id="input-disabled-labeled"
+              name="email-disabled"
+              type="email"
+              placeholder="name@example.com"
+              autoComplete="email"
+              spellCheck={false}
+              disabled
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="input-invalid-labeled" className="text-md font-normal text-primary">
+              Username
+            </Label>
+            <Input
+              id="input-invalid-labeled"
+              name="username"
+              placeholder="username…"
+              aria-invalid
+              aria-describedby="input-invalid-labeled-hint"
+              defaultValue="ab"
+              spellCheck={false}
+              autoComplete="username"
+            />
+            <p id="input-invalid-labeled-hint" className="text-destructive text-xs">
+              Must be at least 3 characters.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">Native types</h2>
+        <div className="grid max-w-md gap-6">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="input-email" className="text-md font-normal text-primary">
+              Email
+            </Label>
+            <Input
+              id="input-email"
+              name="email"
+              type="email"
+              placeholder="name@example.com"
+              autoComplete="email"
+              spellCheck={false}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="input-password" className="text-md font-normal text-primary">
+              Password
+            </Label>
+            <Input
+              id="input-password"
+              name="password"
+              type="password"
+              placeholder="Password…"
+              autoComplete="current-password"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="input-number" className="text-md font-normal text-primary">
+              Number
+            </Label>
+            <Input
+              id="input-number"
+              name="quantity"
+              type="number"
+              inputMode="numeric"
+              placeholder="0"
+              className="tabular-nums"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="input-file" className="text-md font-normal text-primary">
+              File
+            </Label>
+            <Input id="input-file" name="file" type="file" />
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+const WIZARD_TITLES = [
+  "New Member: Basic Details",
+  "New Member: Contact Details",
+  "New Member: Payment Details",
+] as const;
+
+function DialogsSection() {
+  const [wizardStep, setWizardStep] = useState(1);
+  const wizardSteps = WIZARD_TITLES.length;
+
+  return (
+    <div className="space-y-10">
+      <div>
+        <h1 className="text-2xl font-semibold text-balance">Dialog</h1>
+        <p className="text-secondary mt-2 text-md text-pretty">
+          Three-segment modal shell (header / body / footer). Use DialogWizardFooter for multi-step
+          flows — step label left, Cancel/Back + Next/Confirm right.
+        </p>
+      </div>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">New Territory Drop</h2>
+        <Dialog>
+          <DialogTrigger render={<Button variant="outline" />}>Open dialog</DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>New Territory Drop</DialogTitle>
+            </DialogHeader>
+            <DialogBody>
+              <DialogField>
+                <Label htmlFor="dialog-captain" className="text-md font-normal text-primary">
+                  Captain
+                </Label>
+                <div className="relative">
+                  <Input id="dialog-captain" defaultValue="Lena Morales" className="pr-8" />
+                  <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-3 -translate-y-1/2 text-primary" />
+                </div>
+              </DialogField>
+              <DialogField>
+                <Label htmlFor="dialog-drop" className="text-md font-normal text-primary">
+                  Drop Details
+                </Label>
+                <div className="relative">
+                  <Input id="dialog-drop" placeholder="Input text" className="pr-8" />
+                  <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-3 -translate-y-1/2 text-primary" />
+                </div>
+              </DialogField>
+              <DialogDescription>
+                By confirming, any selected drop with an existing territory will be re-allocated.
+                All drop information, such as bundle and paper count, will persist.
+              </DialogDescription>
+            </DialogBody>
+            <DialogFooter>
+              <DialogClose render={<Button variant="default" />}>Cancel</DialogClose>
+              <DialogClose render={<Button variant="primary" />}>Confirm</DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">Confirm only</h2>
+        <Dialog>
+          <DialogTrigger render={<Button variant="danger" />}>Open confirm</DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete route?</DialogTitle>
+            </DialogHeader>
+            <DialogBody>
+              <DialogDescription>
+                Soft-deletes the route from active workflows. The route disappears from lists
+                immediately.
+              </DialogDescription>
+            </DialogBody>
+            <DialogFooter>
+              <DialogClose render={<Button variant="default" />}>Cancel</DialogClose>
+              <DialogClose render={<Button variant="danger" />}>Delete</DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">Wizard (multi-step)</h2>
+        <p className="text-secondary text-sm">
+          Step 1: Cancel + Next · middle: Back + Next · last: Back + Confirm.
+        </p>
+        <Dialog
+          onOpenChange={(open) => {
+            if (open) setWizardStep(1);
+          }}
+        >
+          <DialogTrigger render={<Button variant="outline" />}>Open wizard</DialogTrigger>
+          <DialogContent size="lg">
+            <DialogHeader>
+              <DialogTitle className="text-lg">
+                {WIZARD_TITLES[wizardStep - 1] ?? WIZARD_TITLES[0]}
+              </DialogTitle>
+            </DialogHeader>
+            <DialogBody>
+              {wizardStep === 1 ? (
+                <>
+                  <DialogField>
+                    <Label htmlFor="wizard-role" className="text-md font-normal text-primary">
+                      Role
+                    </Label>
+                    <div className="relative">
+                      <Input id="wizard-role" defaultValue="Volunteer" className="pr-8" />
+                      <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-3 -translate-y-1/2 text-primary" />
+                    </div>
+                  </DialogField>
+                  <DialogField>
+                    <Label htmlFor="wizard-first" className="text-md font-normal text-primary">
+                      First Name
+                    </Label>
+                    <Input id="wizard-first" placeholder="Input text" />
+                  </DialogField>
+                  <DialogField>
+                    <Label htmlFor="wizard-last" className="text-md font-normal text-primary">
+                      Last Name
+                    </Label>
+                    <Input id="wizard-last" placeholder="Input text" />
+                  </DialogField>
+                </>
+              ) : null}
+              {wizardStep === 2 ? (
+                <>
+                  <DialogField>
+                    <Label htmlFor="wizard-email" className="text-md font-normal text-primary">
+                      Email Address
+                    </Label>
+                    <Input
+                      id="wizard-email"
+                      type="email"
+                      placeholder="name@example.com"
+                      autoComplete="email"
+                      spellCheck={false}
+                    />
+                  </DialogField>
+                  <DialogField>
+                    <Label htmlFor="wizard-phone" className="text-md font-normal text-primary">
+                      Phone
+                    </Label>
+                    <Input id="wizard-phone" type="tel" placeholder="Input text" />
+                  </DialogField>
+                </>
+              ) : null}
+              {wizardStep === 3 ? (
+                <>
+                  <DialogField>
+                    <Label htmlFor="wizard-pay-type" className="text-md font-normal text-primary">
+                      Pay Type
+                    </Label>
+                    <Input id="wizard-pay-type" placeholder="Input text" />
+                  </DialogField>
+                  <DialogField>
+                    <Label htmlFor="wizard-pay-rate" className="text-md font-normal text-primary">
+                      Pay Rate
+                    </Label>
+                    <div className="relative">
+                      <Input id="wizard-pay-rate" placeholder="Input text" className="pr-8" />
+                      <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-3 -translate-y-1/2 text-primary" />
+                    </div>
+                  </DialogField>
+                  <DialogField>
+                    <Label htmlFor="wizard-cadence" className="text-md font-normal text-primary">
+                      Cadence
+                    </Label>
+                    <div className="relative">
+                      <Input id="wizard-cadence" placeholder="Input text" className="pr-8" />
+                      <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-3 -translate-y-1/2 text-primary" />
+                    </div>
+                  </DialogField>
+                </>
+              ) : null}
+            </DialogBody>
+            <DialogWizardFooter
+              step={wizardStep}
+              steps={wizardSteps}
+              onBack={() => setWizardStep((s) => Math.max(1, s - 1))}
+              onNext={() => setWizardStep((s) => Math.min(wizardSteps, s + 1))}
+              confirmLabel="Create New Member"
+            />
+          </DialogContent>
+        </Dialog>
+      </section>
+    </div>
+  );
+}
+
+const BANNER_VARIANTS = ["default", "warning", "danger", "active"] as const;
+const BANNER_SAMPLE = "Viewing Mar 2023 - Feb 2024 (archived) • Read-only";
+
+function CheckboxesSection() {
+  const [checked, setChecked] = useState(true);
+  const [unchecked, setUnchecked] = useState(false);
+  const [withLabel, setWithLabel] = useState(false);
+
+  return (
+    <div className="space-y-10">
+      <div>
+        <h1 className="text-2xl font-semibold text-balance">Checkbox</h1>
+        <p className="text-secondary mt-2 text-md text-pretty">
+          Figma Design System checkbox — 16px, 4px radius. Unchecked uses border/divider; checked
+          uses text/secondary border + check. Use CheckboxIcon inside menus where the row handles
+          selection.
+        </p>
+      </div>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">States</h2>
+        <div className="flex flex-wrap items-center gap-6">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="checkbox-checked"
+              checked={checked}
+              onCheckedChange={(value) => setChecked(value === true)}
+            />
+            <Label htmlFor="checkbox-checked" className="text-md font-normal text-primary">
+              Checked
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="checkbox-unchecked"
+              checked={unchecked}
+              onCheckedChange={(value) => setUnchecked(value === true)}
+            />
+            <Label htmlFor="checkbox-unchecked" className="text-md font-normal text-primary">
+              Unchecked
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox id="checkbox-disabled-off" disabled />
+            <Label htmlFor="checkbox-disabled-off" className="text-md font-normal text-primary">
+              Disabled
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox id="checkbox-disabled-on" checked disabled />
+            <Label htmlFor="checkbox-disabled-on" className="text-md font-normal text-primary">
+              Disabled checked
+            </Label>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">With label</h2>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="checkbox-labeled"
+            checked={withLabel}
+            onCheckedChange={(value) => setWithLabel(value === true)}
+          />
+          <Label htmlFor="checkbox-labeled" className="text-md font-normal text-primary">
+            Include commercial drops
+          </Label>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">CheckboxIcon (decorative)</h2>
+        <p className="text-secondary text-sm">
+          Non-interactive graphic for list/menu rows — parent owns the hit target.
+        </p>
+        <div className="flex items-center gap-4">
+          <CheckboxIcon checked />
+          <CheckboxIcon checked={false} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function BannersSection() {
+  const [visible, setVisible] = useState<Record<(typeof BANNER_VARIANTS)[number], boolean>>({
+    default: true,
+    warning: true,
+    danger: true,
+    active: true,
+  });
+  const [pageBannerOpen, setPageBannerOpen] = useState(false);
+
+  return (
+    <div className="space-y-10">
+      <div>
+        <h1 className="text-2xl font-semibold">Banner</h1>
+        <p className="text-secondary mt-2 text-md">
+          Status banner with four color variants. Default placement is inline in page content; use{" "}
+          <code className="text-primary">placement=&quot;page&quot;</code> to pin it over the top of
+          the main column.
+        </p>
+      </div>
+
+      <section className="space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-lg font-medium">Inline (default)</h2>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setVisible({ default: true, warning: true, danger: true, active: true })}
+          >
+            Reset
+          </Button>
+        </div>
+        <div className="flex flex-col gap-3">
+          {BANNER_VARIANTS.map((variant) =>
+            visible[variant] ? (
+              <div key={variant} className="space-y-1">
+                <p className="text-secondary text-sm font-medium">{variant}</p>
+                <Banner
+                  variant={variant}
+                  onDismiss={() => setVisible((v) => ({ ...v, [variant]: false }))}
+                >
+                  {BANNER_SAMPLE}
+                </Banner>
+              </div>
+            ) : null,
+          )}
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">Page (overlay)</h2>
+        <p className="text-secondary text-md">
+          Renders fixed along the top of the main content area (beside the sidebar).
+        </p>
+        <Button variant="outline" onClick={() => setPageBannerOpen(true)} disabled={pageBannerOpen}>
+          Show page banner
+        </Button>
+        {pageBannerOpen ? (
+          <Banner placement="page" variant="active" onDismiss={() => setPageBannerOpen(false)}>
+            {BANNER_SAMPLE}
+          </Banner>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function TestingPage() {
@@ -582,6 +1231,26 @@ export default function TestingPage() {
       value: "search",
       label: "Search bar",
       content: <SearchBarSection searchValue={searchValue} setSearchValue={setSearchValue} />,
+    },
+    {
+      value: "input",
+      label: "Input",
+      content: <InputsSection />,
+    },
+    {
+      value: "checkbox",
+      label: "Checkbox",
+      content: <CheckboxesSection />,
+    },
+    {
+      value: "dialog",
+      label: "Dialog",
+      content: <DialogsSection />,
+    },
+    {
+      value: "banner",
+      label: "Banner",
+      content: <BannersSection />,
     },
   ];
   // ── ─────────────────────────────────────────────────────────────────────────

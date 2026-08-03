@@ -36,7 +36,7 @@ API. (If that changes, role checks slot in as a `403` gate; out of scope now.)
 
 **Response envelope.**
 
-- Success: `{ "data": <payload> }` (lists: `{ "data": T[], "nextCursor"?: string }`).
+- Success: `{ "data": <payload> }` (lists: `{ "data": T[] }`).
 - Error: `{ "error": { "code": string, "message": string, "details"?: unknown } }`.
 
 **Status codes.** `200` OK, `201` Created, `204` No Content, `400`/`422` validation,
@@ -49,8 +49,9 @@ with `details`.
 
 **IDs.** UUID path params, except `GoogleMapsLocation`, keyed by Google `place_id`.
 
-**Lists.** Support `?limit` + `?cursor` (cursor pagination), `?sort`, and
-resource-specific filters (documented per resource).
+**Lists.** No pagination for MVP (decided — internal-tool row counts): lists
+return everything, with resource-specific filters. The `{ data: T[] }` envelope
+leaves room to add cursors later without breaking clients.
 
 **Custom actions.** Non-CRUD transitions are `POST /api/<resource>/{id}/<action>`
 (the AIP custom-method concept, spelled as a sub-path since Next file routing has no
@@ -128,7 +129,7 @@ type CreateCaptain = {
   phone: string;
   payType: "bundle" | "paper" | "drop";
   payRate: number; // 0 is valid (donate-back arrangements)
-  payCadence: "weekly" | "biweekly";
+  payCadence: "biweekly" | "monthly";
   startDate: string;
   endDate?: string | null;
   note?: string;
@@ -188,7 +189,7 @@ CHANGE`: recompute trigger may be a background job instead.
 | Method | Path                                          | Purpose                                                   | Flow       |
 | ------ | --------------------------------------------- | --------------------------------------------------------- | ---------- |
 | GET    | `/api/financial-years`                        | List (filter: `archived`)                                 | finance 4a |
-| POST   | `/api/financial-years`                        | Create (names the year; snapshots active-captain columns) | 4a         |
+| POST   | `/api/financial-years`                        | Create (`{ name, startDate }`; snapshots active-captain columns) | 4a   |
 | GET    | `/api/financial-years/{id}`                   | Detail (the table: issues + payouts grid)                 | finance    |
 | POST   | `/api/financial-years/{id}/archive`           | Archive (stays fully accessible)                          | 4i         |
 | GET    | `/api/financial-years/{id}/export?format=csv` | Read-only CSV export of the table or a filtered view      | 4h         |
@@ -201,10 +202,15 @@ CHANGE`: recompute trigger may be a background job instead.
 | POST   | `/api/financial-years/{yearId}/issues` | Create one or many issues (batch via array body — lay out the year). Created **Open**: payouts + delivery rows auto-populate and live calc starts | 4b / delivery 4a |
 | GET    | `/api/issues/{id}`                     | Detail                                                                                                                                            |                  |
 | PATCH  | `/api/issues/{id}`                     | Edit name / date                                                                                                                                  | 4b               |
-| POST   | `/api/issues/{id}/close`               | Open → Closed; **lock payout values + delivery actuals together**; payouts default unpaid                                                         | 4e / delivery 4c |
+| POST   | `/api/issues/{id}/close`               | Open → Closed; **detaches every payout from live calc + locks delivery actuals**; payouts default unpaid                                          | 4e / delivery 4c |
 | POST   | `/api/issues/{id}/reopen`              | Closed → Open (guarded admin correction)                                                                                                          | finance 3a       |
 
 ```ts
+// POST /api/financial-years
+// startDate is required, not derived from `name`: reporting quarters are measured
+// from it, so a year starting in March has Q1 = Mar–May (finance flow §4a).
+type CreateFinancialYear = { name: string; startDate: string };
+
 // POST /api/financial-years/{yearId}/issues
 type CreateIssues = { issues: Array<{ name: string; date: string }> }; // 1..n, created Open
 ```
@@ -223,9 +229,21 @@ the same time, and closing is always an explicit `close` call.
 | POST   | `/api/payouts/{id}/mark-paid`      | Mark paid (**only if the issue is Closed**, else `409`); locks the cell from edits | 4f         |
 | POST   | `/api/payouts/{id}/unmark-paid`    | Clear paid marker (cell becomes editable again)                                    | 4f         |
 | POST   | `/api/payouts/{id}/transfer`       | Reallocate this cell's amount to another captain (see below)                       | 4g         |
+| POST   | `/api/payouts/{id}/freeze`         | Snapshot the calculated amount (bundling day); not the same as paid                | 4j         |
+| POST   | `/api/payouts/{id}/unfreeze`       | Drop the snapshot; track the live calculation again                                | 4j         |
+| POST   | `/api/payouts/{id}/substitute`     | Record the captain who covered this issue                                          | 4k         |
+| DELETE | `/api/payouts/{id}/substitute`     | Clear the substitute; payment reverts to the cell's own captain                    | 4k         |
 
 There are no create/delete endpoints for payouts — they are created with their
 issue and removed only with the issue.
+
+**Amount precedence.** A cell's effective amount resolves as
+`overrideAmount ?? frozenAmount ?? calculatedAmount`, and its calculation status is
+derived from the same fields (`overridden` / `frozen` / `calculated`). Freeze, close,
+and paid are three separate mechanisms: **freeze** snapshots one cell and is
+reversible, **closing** the issue detaches every cell in it from live calculation
+without writing to the cells, and **paid** locks a single cell against every action
+in this table.
 
 ```ts
 // POST /api/payouts/{id}/override
@@ -233,13 +251,24 @@ type OverridePayout = { amount: number; reason: string }; // reason required; no
 
 // POST /api/payouts/{id}/transfer
 // Moves this issue's effective amount to another captain's cell and zeroes this one
-// (finance flow §4g). SUBJECT TO CHANGE: exact semantics of how the recipient cell
-// records the moved amount.
+// (finance flow §4g). Decided: implemented as PAIRED OVERRIDES — the recipient is
+// overridden up by the amount and the source overridden to 0, both with auto
+// reasons; undo by clearing the overrides (design_decisions.md). Use a SUBSTITUTE,
+// not a transfer, to record that someone covered an issue.
 type TransferPayout = { toCaptainId: string };
+
+// POST /api/payouts/{id}/substitute
+// The cell stays on its own captain — only the attribution of the money changes,
+// which is what makes substitute pay separately reportable (finance flow §4k).
+type SetSubstitute = { substituteCaptainId: string };
 ```
 
-Override / mark-paid / transfer all reject (`409`) when the payout state forbids
-them (e.g. editing a paid cell, or paying on an open issue).
+Every action here requires the cell to be **unpaid** (`409` otherwise). Beyond that:
+mark-paid rejects on an open issue; `freeze` rejects if already frozen and
+`unfreeze` if not frozen; `substitute` rejects a self-substitution or a retired
+captain (`409`) and `404`s an unknown captain; `clear-override` and
+`DELETE substitute` reject when there is nothing to clear. Freeze does **not**
+require the issue to be closed.
 
 ---
 
@@ -270,6 +299,59 @@ type UpdateDelivery = Partial<{
 }>;
 // bundleCount is derived (bundles.length) and is not directly settable.
 ```
+
+### Overview — `/api/overview`
+
+Read-only dashboard aggregates for one financial year. Grouped into a single
+endpoint because the dashboard renders them together, and deriving them client-side
+from four list endpoints would be both wasteful and racy. Nothing here is stored —
+every figure is derived on demand.
+
+| Method | Path            | Purpose                                                             | Flow      |
+| ------ | --------------- | ------------------------------------------------------------------- | --------- |
+| GET    | `/api/overview` | Year aggregates: stats, monthly costs, captain + substitute pay      | reporting |
+
+```ts
+// GET /api/overview?yearId=…&period=ytd|q1|q2|q3|q4
+// GET /api/overview?yearId=…&from=2026-03-01&to=2026-05-31
+// `yearId` defaults to the most recent non-archived year. An explicit from/to wins
+// over `period`. Quarters are relative to the YEAR'S OWN start month, not January.
+type Overview = {
+  year: { id: string; name: string; startDate: string };
+  range: { from: string; to: string };
+  stats: {
+    // Papers on the next dated issue at or after today; null if none scheduled.
+    nextIssue: { id: string; name: string; date: string; papers: number } | null;
+    activeVolunteers: number;
+    totalVolunteers: number;
+    routesMissingCarrier: number;
+    captainCosts: number;
+    issueCount: number;
+  };
+  // Twelve buckets from the year's start month, in the office's own month order.
+  monthlyCosts: Array<{ month: string; amount: number }>;
+  // A captain's own-territory pay. EXCLUDES issues they were covered on, so it
+  // never double-counts against substitutePayments.
+  captainPayments: Array<{
+    captainId: string;
+    captainName: string;
+    payType: string;
+    payCadence: string;
+    amount: number;
+  }>;
+  // Money owed to whoever covered an issue, broken out from captainPayments.
+  substitutePayments: Array<{
+    captainId: string;
+    captainName: string;
+    coveredFor: Array<{ captainId: string; captainName: string; issueCount: number }>;
+    issueCount: number;
+    amount: number;
+  }>;
+  papersPerIssue: Array<{ issueId: string; name: string; date: string; papers: number }>;
+};
+```
+
+Amounts use the payout precedence from §4 (`override ?? frozen ?? calculated`).
 
 ---
 
@@ -304,29 +386,35 @@ the resulting `Address` + `GoogleMapsLocation`. A scheduled refresh job re-resol
 - **Collections:** `volunteers`, `captains`, `territories`, `routes`,
   `financial-years`, `issues` (under a year), `payouts` (under an issue),
   `deliveries` (under an issue).
+- **Singleton reads:** `overview` (year aggregates; no collection semantics).
 - **Standard methods:** List/Create on the collection; Get/Update on the item;
-  Delete only on `routes` (soft — sets `deletedAt`, row retained) — people are
-  soft-retired, finance/delivery rows are lifecycle-bound.
+  Delete only on `routes` (soft — sets `deletedAt`, row retained) and on a payout's
+  `substitute` sub-resource — people are soft-retired, finance/delivery rows are
+  lifecycle-bound.
 - **Custom actions:** volunteer `vacation`/`retire`; captain `retire`; route
   `assign`/`unassign`/`reassign`/`refresh-house-count` + `nearest-vacant`; year
   `archive`/`export`; issue `close`/`reopen`; payout
-  `override`/`clear-override`/`mark-paid`/`unmark-paid`/`transfer`; address
-  `validate`/`geocode`.
+  `override`/`clear-override`/`mark-paid`/`unmark-paid`/`transfer`/`freeze`/
+  `unfreeze`/`substitute`; address `validate`/`geocode`.
 
 ---
 
 ## 8. Open questions
 
-- **Pagination style.** Cursor (recommended) vs page/offset — pick one and apply uniformly.
-- **Batch issue creation.** Array body vs a dedicated `:batchCreate`.
-- **Transfer semantics.** How the recipient cell records a transferred amount
-  (override-style entry vs a dedicated field) — SUBJECT TO CHANGE.
+- ~~Pagination style~~ — decided: no pagination for MVP (see §1 Lists).
+- ~~Transfer semantics~~ — decided: paired overrides (see §4 and design_decisions.md).
+- ~~Substitute captains~~ — decided: a real `substituteCaptainId` on the payout cell,
+  superseding transfer-as-substitute (see §4 and design_decisions.md).
 - **House-count recompute.** A manual endpoint vs a background job (Toronto Open Data
   ingestion) — tied to the infra spec's open question.
+- ~~Reporting endpoints~~ — partly decided: `GET /api/overview` (§4) serves the
+  dashboard's aggregates. Susan's finalized metric list may still add to it.
+- **Batch issue creation.** Array body vs a dedicated `:batchCreate`.
 - **Idempotency.** Whether `POST` creates accept an `Idempotency-Key` header.
 - **Rate limiting.** On the Google-backed endpoints especially (cost guardrail).
 - **Notes.** Confirm the embed-in-parent approach is enough, or promote to a
   sub-resource if multiple notes per entity are needed.
-- **Reporting endpoints.** The reporting dashboard's aggregates (papers to order,
-  active counts, running cost) will add read-only endpoints once that flow is specced;
-  the cost figures read from the payouts here.
+- **Response shapes have no single source of truth.** Requests are Zod-validated, but
+  responses exist only as hand-written interfaces inside each service and are not in
+  this spec — so the frontend re-declares them as a third copy to drift. Tracked in
+  [`open_items.md`](../open_items.md) (structural follow-ups).

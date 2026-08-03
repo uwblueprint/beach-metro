@@ -576,7 +576,9 @@ export default function FinancesPage() {
           {/* Page header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <span className="text-md text-muted-foreground">Finances</span>
+              {/* Same as Overview: the breadcrumb's first segment is the page's
+                  only title, so it carries the h1. Classes unchanged. */}
+              <h1 className="text-md text-muted-foreground">Finances</h1>
               <span className="text-md text-muted-foreground">/</span>
               <div className="inline-flex items-center gap-1">
                 {isEditingTableTitle ? (

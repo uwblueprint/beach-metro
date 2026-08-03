@@ -181,7 +181,9 @@ export default function OverviewPage() {
           {/* Page header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <span className="text-md text-muted-foreground">Overview</span>
+              {/* The breadcrumb's first segment is the page's only title, so it
+                  carries the h1. Same classes, so it renders identically. */}
+              <h1 className="text-md text-muted-foreground">Overview</h1>
               <span className="text-md text-muted-foreground">/</span>
               <Popover open={yearOpen} onOpenChange={setYearOpen}>
                 <PopoverTrigger

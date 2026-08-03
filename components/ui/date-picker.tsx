@@ -177,11 +177,14 @@ function DatePicker({
   const [open, setOpen] = React.useState(false);
   const [viewMonth, setViewMonth] = React.useState(() => parseISODate(value) ?? new Date());
 
-  React.useEffect(() => {
-    if (!open) return;
-
-    setViewMonth(parseISODate(value) ?? new Date());
-  }, [open, value]);
+  // Reset the visible month when the popover opens, in the open handler rather
+  // than an effect: setState inside an effect is a lint error, and doing it here
+  // also avoids yanking the calendar to a new month if `value` changes while the
+  // user is still browsing.
+  function handleOpenChange(next: boolean) {
+    if (next) setViewMonth(parseISODate(value) ?? new Date());
+    setOpen(next);
+  }
 
   function handleSelect(iso: string) {
     onChange(iso);
@@ -189,7 +192,7 @@ function DatePicker({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger
         render={
           <button
