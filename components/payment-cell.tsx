@@ -56,6 +56,7 @@ function PaymentAmountPopover({
   paymentDetail,
   substituteCaptain,
   comment,
+  onDoubleClick,
 }: {
   value: number;
   paid: boolean;
@@ -64,6 +65,7 @@ function PaymentAmountPopover({
   paymentDetail: PaymentDetail;
   substituteCaptain: SubstituteCaptainAssignment;
   comment?: string;
+  onDoubleClick?: () => void;
 }) {
   const [open, setOpen] = React.useState(false);
   const openTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -85,6 +87,17 @@ function PaymentAmountPopover({
     setOpen(false);
   }, [clearOpenTimeout]);
 
+  const handleDoubleClick = React.useCallback(
+    (event: React.MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      clearOpenTimeout();
+      setOpen(false);
+      onDoubleClick?.();
+    },
+    [clearOpenTimeout, onDoubleClick],
+  );
+
   React.useEffect(() => {
     return () => {
       clearOpenTimeout();
@@ -99,23 +112,20 @@ function PaymentAmountPopover({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
+        nativeButton={false}
         render={
           <span
             className={cn(
-              "inline-flex w-fit shrink-0 cursor-default flex-col items-start justify-center text-md tabular-nums",
+              "block min-w-0 cursor-pointer truncate text-md leading-[1.3] tabular-nums",
               paid ? "text-muted-foreground opacity-40" : "text-primary",
             )}
             onMouseEnter={handleAmountMouseEnter}
             onMouseLeave={handleAmountMouseLeave}
             onClick={(event) => event.preventDefault()}
+            onDoubleClick={handleDoubleClick}
           >
-            <span>
-              ${value.toFixed(2)}
-              {overridden && <span aria-hidden>*</span>}
-            </span>
-            {hasSubstitute && (
-              <span className="text-xs text-muted-foreground">{substituteCaptain} (sub)</span>
-            )}
+            ${value.toFixed(2)}
+            {overridden && <span aria-hidden>*</span>}
           </span>
         }
       />
@@ -129,58 +139,68 @@ function PaymentAmountPopover({
           align: "shift",
           fallbackAxisSide: "end",
         }}
-        className="box-border w-max min-w-[200px] max-w-[400px] gap-3 overflow-visible rounded-lg border-[0.5px] border-border bg-bg p-3 text-md shadow-[0px_1px_2.5px_rgba(0,0,0,0.1)]"
+        className="box-border w-auto min-w-[280px] max-w-[min(100vw-2rem,420px)] gap-0 overflow-visible rounded-lg border-[0.5px] border-solid border-[#e8eaef] bg-bg p-3 text-md shadow-[0px_1px_2.5px_rgba(0,0,0,0.1)] ring-0"
+        onMouseEnter={handleAmountMouseEnter}
+        onMouseLeave={handleAmountMouseLeave}
       >
-        <div className="flex w-full min-w-0 flex-col gap-3 whitespace-nowrap">
+        <div
+          className={cn(
+            "flex w-max min-w-[280px] max-w-full flex-col whitespace-normal",
+            override ? "gap-3" : "gap-2",
+          )}
+        >
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-1">
-              <p className="shrink-0 text-md text-primary">
+              <p className="shrink-0 text-md font-semibold text-primary">
                 {hasSubstitute ? substituteCaptain : paymentDetail.captainName}
               </p>
               {hasSubstitute && <ArrowLeftRight className="size-3 shrink-0 text-secondary" />}
             </div>
-            <p className="shrink-0 text-md text-secondary">
+            <p className="whitespace-nowrap text-md text-secondary">
               {paymentDetail.issueLabel} • Last Modified {paymentDetail.lastModified}
             </p>
           </div>
 
-          <div className="border-t border-border" />
+          <div className="border-t-[0.5px] border-[#e8eaef]" />
 
-          <div className="flex flex-col gap-1">
-            <p className="shrink-0 text-md text-secondary">Routes</p>
+          <div className="flex w-full flex-col gap-1">
+            {override && <p className="text-md text-secondary">Routes</p>}
             <div className="flex items-center justify-between gap-3">
-              <span className="shrink-0 text-md text-primary">{paymentDetail.territory}</span>
-              <span className="shrink-0 text-md text-secondary">{bundleLabel}</span>
+              <span className="text-md text-primary">{paymentDetail.territory}</span>
+              <span className="text-md text-secondary">{bundleLabel}</span>
             </div>
           </div>
 
-          <div className="border-t border-border" />
+          <div className="border-t-[0.5px] border-[#e8eaef]" />
 
-          <div className="flex items-center justify-between gap-3">
-            <span className="shrink-0 text-md text-secondary">
+          <div className="flex w-full items-center justify-between gap-3">
+            <span className="text-md text-secondary">
               {bundleLabel} × {formatCurrency(paymentDetail.ratePerBundle)}
             </span>
-            <span className="shrink-0 text-md tabular-nums text-primary">
+            <span className="text-md tabular-nums text-primary">
               {formatCurrency(calculatedValue)}
-              {overridden && <span aria-hidden>*</span>}
             </span>
           </div>
 
-          {hasComment && (
+          {hasComment && !override && (
             <div className="flex w-full flex-col gap-1 rounded-lg bg-bg-secondary p-2">
-              <p className="shrink-0 text-md text-primary">Note</p>
-              <p className="shrink-0 text-md text-primary">{comment}</p>
+              <p className="text-md text-primary">Note</p>
+              <p className="text-md text-primary">{comment}</p>
             </div>
           )}
 
           {override && (
-            <div className="rounded-lg bg-amber-50 p-3">
-              <p className="shrink-0 text-md font-medium text-amber-700">Manually overridden</p>
-              <p className="mt-0.5 shrink-0 text-md text-primary">
-                {formatCurrency(override.originalValue)} → {formatCurrency(value)}
-              </p>
-              <p className="mt-2 shrink-0 text-md font-medium text-amber-700">Note</p>
-              <p className="mt-0.5 shrink-0 text-md text-primary">{override.note}</p>
+            <div className="flex w-full flex-col gap-2 rounded-lg bg-tag-warning p-2">
+              <div className="flex flex-col gap-1">
+                <p className="text-md text-[#92610a]">Manually overridden</p>
+                <p className="text-md text-primary">
+                  {formatCurrency(override.originalValue)} → {formatCurrency(value)}
+                </p>
+              </div>
+              <div className="flex flex-col gap-1">
+                <p className="text-md text-[#92610a]">Note</p>
+                <p className="text-md text-primary">{override.note}</p>
+              </div>
             </div>
           )}
         </div>
@@ -203,7 +223,7 @@ function SubstituteCaptainPicker({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-md text-muted-foreground">Assign substitute captain</p>
+      <p className="text-md font-semibold text-muted-foreground">Assign substitute captain</p>
       <div className="flex flex-col">
         {SUBSTITUTE_CAPTAINS.map((captain) => {
           const isSelected = captain === selectedCaptain;
@@ -371,6 +391,28 @@ export function PaymentCell({
   const hasComment = Boolean(comment?.trim());
   const nonInteractive = readOnly || isLocked;
 
+  const skipBlurSubmitRef = React.useRef(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const blurArmedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!isEditing) {
+      blurArmedRef.current = false;
+      return;
+    }
+
+    blurArmedRef.current = false;
+    const input = inputRef.current;
+    input?.focus();
+    input?.select();
+
+    const armTimer = window.setTimeout(() => {
+      blurArmedRef.current = true;
+    }, 50);
+
+    return () => window.clearTimeout(armTimer);
+  }, [isEditing]);
+
   if (isEditing) {
     return (
       <div
@@ -381,17 +423,31 @@ export function PaymentCell({
       >
         <span className="shrink-0 text-md tabular-nums text-primary">$</span>
         <input
+          ref={inputRef}
           type="text"
           inputMode="decimal"
           value={editValue}
           onChange={(e) => onEditValueChange?.(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") onEditSubmit?.();
-            if (e.key === "Escape") onEditCancel?.();
+            if (e.key === "Enter") {
+              e.preventDefault();
+              skipBlurSubmitRef.current = true;
+              onEditSubmit?.();
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              skipBlurSubmitRef.current = true;
+              onEditCancel?.();
+            }
           }}
-          onBlur={onEditCancel}
-          onFocus={(e) => e.target.select()}
-          autoFocus
+          onBlur={() => {
+            if (skipBlurSubmitRef.current) {
+              skipBlurSubmitRef.current = false;
+              return;
+            }
+            if (!blurArmedRef.current) return;
+            onEditSubmit?.();
+          }}
           aria-label="Edit payment amount"
           className="min-w-0 flex-1 border-0 bg-transparent p-0 text-md tabular-nums text-primary outline-none"
         />
@@ -403,7 +459,8 @@ export function PaymentCell({
     <div
       key={flashTrigger > 0 ? `flash-${flashTrigger}` : "cell"}
       className={cn(
-        "group/cell relative flex h-12 w-full min-w-0 items-center gap-1 px-3 transition-colors",
+        "group/cell relative flex h-12 max-h-12 w-full min-w-0 items-center gap-1 overflow-hidden px-3 transition-colors",
+        isLocked && "cursor-not-allowed",
         !nonInteractive && "hover:bg-bg-secondary",
         flashTrigger > 0 && "payment-cell-flash",
         className,
@@ -418,41 +475,59 @@ export function PaymentCell({
         />
       )}
 
-      {paymentDetail && !nonInteractive ? (
-        <PaymentAmountPopover
-          value={value}
-          paid={paid}
-          overridden={overridden}
-          override={override}
-          paymentDetail={paymentDetail}
-          substituteCaptain={substituteCaptain}
-          comment={comment}
-        />
-      ) : (
-        <span
-          className={cn(
-            "inline-flex w-fit shrink-0 flex-col items-start justify-center text-md tabular-nums",
-            paid ? "text-muted-foreground opacity-40" : "text-primary",
-          )}
-        >
-          <span>
+      <div className="flex min-w-0 flex-1 flex-col justify-center overflow-visible leading-[1.3]">
+        {paymentDetail && !nonInteractive ? (
+          <PaymentAmountPopover
+            value={value}
+            paid={paid}
+            overridden={overridden}
+            override={override}
+            paymentDetail={paymentDetail}
+            substituteCaptain={substituteCaptain}
+            comment={comment}
+            onDoubleClick={onDoubleClick}
+          />
+        ) : (
+          <span
+            className={cn(
+              "block min-w-0 truncate text-md tabular-nums",
+              paid ? "text-muted-foreground opacity-40" : "text-primary",
+            )}
+          >
             ${value.toFixed(2)}
             {overridden && <span aria-hidden>*</span>}
           </span>
-          {hasSubstitute && (
-            <span className="text-xs text-muted-foreground">{substituteCaptain} (sub)</span>
-          )}
-        </span>
-      )}
-
-      <span aria-hidden className="min-w-0 flex-1" />
+        )}
+        {hasSubstitute && (
+          <span
+            className={cn(
+              "block whitespace-nowrap text-md text-secondary",
+              // Idle: use the reserved actions width so the full name can show.
+              // Hover: shrink back and ellipsize so it doesn't collide with controls.
+              !nonInteractive &&
+                (paid
+                  ? "w-[calc(100%+2rem)] group-hover/cell:w-full group-hover/cell:truncate"
+                  : "w-[calc(100%+3.25rem)] group-hover/cell:w-full group-hover/cell:truncate"),
+              nonInteractive && "truncate",
+              paid && "opacity-40",
+            )}
+          >
+            {substituteCaptain} (sub)
+          </span>
+        )}
+      </div>
 
       {nonInteractive ? (
         paid ? (
           <Check aria-hidden className="size-4 shrink-0 text-muted-foreground" strokeWidth={0.5} />
         ) : null
       ) : (
-        <div className={cn("flex w-12 shrink-0 items-center gap-1", paid && "flex-row-reverse")}>
+        <div
+          className={cn(
+            "relative z-10 flex w-12 shrink-0 items-center gap-1 group-hover/cell:bg-bg-secondary",
+            paid && "flex-row-reverse",
+          )}
+        >
           <div className="relative flex size-4 shrink-0 items-center justify-center">
             <button
               type="button"

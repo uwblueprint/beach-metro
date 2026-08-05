@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, Filter, MoreHorizontal, Plus, X } from "lucide-react";
+import { ChevronDown, Filter, MoreHorizontal, Plus } from "lucide-react";
 
 import { PaymentCell } from "@/components/payment-cell";
 import { ArchiveBanner } from "@/components/archive-banner";
@@ -20,8 +20,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogField,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -126,7 +128,7 @@ type FilterSegmentOption<T extends string> = {
 function FilterSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-sm font-medium text-primary">{label}</p>
+      <p className="text-sm text-primary">{label}</p>
       {children}
     </div>
   );
@@ -169,16 +171,13 @@ function FilterSegmentGroup<T extends string>({
   }, [updateIndicator]);
 
   return (
-    <div ref={containerRef} className="relative flex rounded-full bg-[#F3F4F6] p-1">
+    <div ref={containerRef} className="relative flex gap-1 rounded-lg bg-[#F3F4F6] p-1">
       <div
         aria-hidden
-        className="absolute top-1 bottom-1 rounded-full bg-bg transition-[left,width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
+        className="absolute top-1 bottom-1 rounded-[4px] bg-bg transition-[left,width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
         style={{ left: indicator.left, width: indicator.width }}
       />
-      {options.map((option) => {
-        const isSelected = value === option.value;
-
-        return (
+      {options.map((option) => (
           <button
             key={option.value}
             ref={(element) => {
@@ -187,15 +186,11 @@ function FilterSegmentGroup<T extends string>({
             }}
             type="button"
             onClick={() => onChange(option.value)}
-            className={cn(
-              "relative z-10 flex-1 rounded-full px-2 py-1 text-sm transition-colors",
-              isSelected ? "font-medium text-primary" : "text-muted-foreground",
-            )}
+            className="relative z-10 flex-1 rounded-[4px] px-3 py-[7px] text-center text-sm text-primary transition-colors"
           >
             {option.label}
           </button>
-        );
-      })}
+        ))}
     </div>
   );
 }
@@ -227,13 +222,18 @@ export default function FinancesPage() {
   );
   const [flashTriggers, setFlashTriggers] = React.useState<Partial<Record<CellKey, number>>>({});
   const [filters, setFilters] = React.useState<FinancesFilterState>(DEFAULT_FINANCES_FILTERS);
+  const [draftFilters, setDraftFilters] =
+    React.useState<FinancesFilterState>(DEFAULT_FINANCES_FILTERS);
+  const [filtersOpen, setFiltersOpen] = React.useState(false);
+  const filterButtonRef = React.useRef<HTMLButtonElement>(null);
+  const filterPanelRef = React.useRef<HTMLDivElement>(null);
   const [overflowOpen, setOverflowOpen] = React.useState(false);
   const [createTableOpen, setCreateTableOpen] = React.useState(false);
   const [newTableName, setNewTableName] = React.useState("");
   const [showArchiveBanner, setShowArchiveBanner] = React.useState(false);
   const [isEditingTableTitle, setIsEditingTableTitle] = React.useState(false);
   const [tableTitleEditValue, setTableTitleEditValue] = React.useState("");
-  const [lockedIssues, setLockedIssues] = React.useState<Set<number>>(() => new Set([26]));
+  const [lockedIssues, setLockedIssues] = React.useState<Set<number>>(() => new Set());
 
   const selectedTable =
     tableOptions.find((option) => option.id === selectedTableId) ?? tableOptions[0];
@@ -252,12 +252,53 @@ export default function FinancesPage() {
     [issues, filters, paid],
   );
 
-  function updateFilters(patch: Partial<FinancesFilterState>) {
-    setFilters((prev) => ({ ...prev, ...patch }));
+  React.useEffect(() => {
+    if (!filtersOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (filterPanelRef.current?.contains(target)) return;
+      if (filterButtonRef.current?.contains(target)) return;
+      // Date pickers portal outside the panel — keep filters open while using them.
+      if (target.closest('[data-slot="popover-content"]')) return;
+      setFiltersOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setFiltersOpen(false);
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [filtersOpen]);
+
+  function toggleFiltersOpen() {
+    setFiltersOpen((open) => {
+      if (!open) setDraftFilters(filters);
+      return !open;
+    });
+  }
+
+  function updateDraftFilters(patch: Partial<FinancesFilterState>) {
+    setDraftFilters((prev) => ({ ...prev, ...patch }));
+  }
+
+  function clearDraftFilters() {
+    setDraftFilters(DEFAULT_FINANCES_FILTERS);
+  }
+
+  function applyFilters() {
+    setFilters(draftFilters);
+    setFiltersOpen(false);
   }
 
   function toggleCaptainFilter(captain: CaptainName, checked: boolean) {
-    setFilters((prev) => {
+    setDraftFilters((prev) => {
       const next = checked
         ? [...new Set([...prev.captains, captain])]
         : prev.captains.filter((name) => name !== captain);
@@ -289,6 +330,8 @@ export default function FinancesPage() {
     setConfirmDialog(null);
     setOverrideNote("");
     setFilters(DEFAULT_FINANCES_FILTERS);
+    setDraftFilters(DEFAULT_FINANCES_FILTERS);
+    setFiltersOpen(false);
     setIsEditingTableTitle(false);
     setTableTitleEditValue("");
     setLockedIssues(new Set());
@@ -419,7 +462,8 @@ export default function FinancesPage() {
   }
 
   function handleDoubleClick(key: CellKey) {
-    if (isArchivedYear) return;
+    const issueId = Number(key.slice(0, key.indexOf("-")));
+    if (isArchivedYear || paid.has(key) || lockedIssues.has(issueId)) return;
     const value = getCellValue(key);
     setEditingCell(key);
     setEditValue(value.toFixed(2));
@@ -427,15 +471,17 @@ export default function FinancesPage() {
 
   function handleEditSubmit(key: CellKey) {
     const numValue = parseFloat(editValue);
-    if (!isNaN(numValue)) {
-      setOverrideNote("");
-      setConfirmDialog({
-        key,
-        value: editValue,
-        originalValue: editedCells[key]?.originalValue ?? payments[key] ?? 0,
-      });
-    }
+    const currentValue = getCellValue(key);
     setEditingCell(null);
+
+    if (isNaN(numValue) || numValue === currentValue) return;
+
+    setOverrideNote("");
+    setConfirmDialog({
+      key,
+      value: numValue.toFixed(2),
+      originalValue: editedCells[key]?.originalValue ?? payments[key] ?? 0,
+    });
   }
 
   function closeConfirmDialog() {
@@ -580,43 +626,41 @@ export default function FinancesPage() {
                   only title, so it carries the h1. Classes unchanged. */}
               <h1 className="text-md text-muted-foreground">Finances</h1>
               <span className="text-md text-muted-foreground">/</span>
-              <div className="inline-flex items-center gap-1">
-                {isEditingTableTitle ? (
-                  <span className="inline-grid items-center [&>*]:col-start-1 [&>*]:row-start-1">
-                    <span aria-hidden className="invisible whitespace-pre px-0 text-md font-medium">
-                      {tableTitleEditValue || tableDisplayLabel}
-                    </span>
-                    <input
-                      autoFocus
-                      value={tableTitleEditValue}
-                      onChange={(event) => setTableTitleEditValue(event.target.value)}
-                      onKeyDown={handleTableTitleKeyDown}
-                      onBlur={cancelTableTitleEdit}
-                      onFocus={(event) => event.target.select()}
-                      aria-label="Table name"
-                      className="w-full min-w-0 border-0 bg-transparent p-0 text-md font-medium text-primary outline outline-2 outline-active -outline-offset-2"
-                    />
+              {isEditingTableTitle ? (
+                <span className="inline-grid items-center [&>*]:col-start-1 [&>*]:row-start-1">
+                  <span aria-hidden className="invisible whitespace-pre px-0 text-md font-medium">
+                    {tableTitleEditValue || tableDisplayLabel}
                   </span>
-                ) : (
-                  <span
-                    onDoubleClick={startTableTitleEdit}
-                    className={cn(
-                      "text-md font-medium text-primary",
-                      !isArchivedYear && "cursor-text",
-                    )}
-                  >
-                    {tableDisplayLabel}
-                  </span>
-                )}
+                  <input
+                    autoFocus
+                    value={tableTitleEditValue}
+                    onChange={(event) => setTableTitleEditValue(event.target.value)}
+                    onKeyDown={handleTableTitleKeyDown}
+                    onBlur={cancelTableTitleEdit}
+                    onFocus={(event) => event.target.select()}
+                    aria-label="Table name"
+                    className="w-full min-w-0 border-0 bg-transparent p-0 text-md font-medium text-primary outline outline-2 outline-active -outline-offset-2"
+                  />
+                </span>
+              ) : (
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
                       <button
                         type="button"
-                        aria-label="Switch table"
-                        className="inline-flex items-center text-muted-foreground"
+                        aria-label="Switch payment year"
+                        className="inline-flex items-center gap-1 text-md font-medium text-primary"
+                        onDoubleClick={(event) => {
+                          if (isArchivedYear) return;
+                          event.preventDefault();
+                          startTableTitleEdit();
+                        }}
                       >
-                        <ChevronDown className="size-3.5" strokeWidth={2} />
+                        <span>{selectedTable.label}</span>
+                        <ChevronDown
+                          className="size-3.5 shrink-0 text-muted-foreground"
+                          strokeWidth={2}
+                        />
                       </button>
                     }
                   />
@@ -624,32 +668,25 @@ export default function FinancesPage() {
                     align="start"
                     side="bottom"
                     sideOffset={4}
-                    className="min-w-56"
+                    className="min-w-[168px]"
                   >
                     <DropdownMenuRadioGroup
                       value={selectedTableId}
                       onValueChange={handleSelectTable}
                     >
-                      {tableOptions.map((option) => {
-                        const isSelected = option.id === selectedTableId;
-
-                        return (
-                          <DropdownMenuRadioItem
-                            key={option.id}
-                            value={option.id}
-                            className={cn(
-                              "data-checked:font-medium",
-                              option.archived && !isSelected && "text-muted-foreground",
-                            )}
-                          >
-                            {option.label}
-                          </DropdownMenuRadioItem>
-                        );
-                      })}
+                      {tableOptions.map((option) => (
+                        <DropdownMenuRadioItem
+                          key={option.id}
+                          value={option.id}
+                          className="data-checked:font-normal"
+                        >
+                          {option.label}
+                        </DropdownMenuRadioItem>
+                      ))}
                     </DropdownMenuRadioGroup>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
@@ -705,105 +742,136 @@ export default function FinancesPage() {
           )}
 
           {/* Filter + table */}
-          <div className="flex flex-col gap-2">
+          <div className="relative flex flex-col gap-2">
             <div className="flex justify-end">
-              <Popover>
-                <PopoverTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label="Filter"
-                      className={cn(
-                        "flex size-7 shrink-0 items-center justify-center rounded-[8px] border-[0.5px] border-border bg-bg text-muted-foreground transition-[background-color,color,border-color] duration-300 ease-out",
-                        "hover:border-transparent hover:bg-muted hover:text-primary",
-                        "data-popup-open:border-transparent data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:hover:bg-muted data-popup-open:hover:text-primary",
-                      )}
-                    >
-                      <Filter className="size-4" strokeWidth={1.5} />
-                    </button>
-                  }
-                />
-                <PopoverContent
-                  align="end"
-                  side="bottom"
-                  sideOffset={4}
-                  className="w-[280px] gap-4 rounded-xl bg-bg p-4 text-md text-primary shadow-md ring-1 ring-foreground/10"
+              <button
+                ref={filterButtonRef}
+                type="button"
+                aria-label="Filter"
+                aria-expanded={filtersOpen}
+                aria-controls="finances-filter-panel"
+                onClick={toggleFiltersOpen}
+                className={cn(
+                  "flex size-7 shrink-0 items-center justify-center rounded-[8px] border-[0.5px] border-border bg-bg text-muted-foreground transition-[background-color,color,border-color] duration-300 ease-out",
+                  "hover:border-transparent hover:bg-muted hover:text-primary",
+                  filtersOpen && "border-transparent bg-muted text-primary",
+                )}
+              >
+                <Filter className="size-4" strokeWidth={1.5} />
+              </button>
+            </div>
+
+            <div
+              ref={filterPanelRef}
+              id="finances-filter-panel"
+              role="dialog"
+              aria-label="Filters"
+              aria-hidden={!filtersOpen}
+              data-open={filtersOpen ? "true" : "false"}
+              className={cn(
+                "fixed top-28 right-6 z-50 flex w-[284px] flex-col gap-2.5 rounded-lg border-[0.5px] border-[#e8eaef] bg-bg p-3 shadow-[0px_1px_2.5px_rgba(0,0,0,0.1)]",
+                "transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                filtersOpen
+                  ? "translate-x-0 opacity-100"
+                  : "pointer-events-none translate-x-8 opacity-0",
+              )}
+            >
+              <div className="flex w-full flex-col gap-2">
+                <p className="text-sm text-primary">Filters</p>
+
+                <FilterSection label="Issue">
+                  <FilterSegmentGroup<IssueFilterValue>
+                    value={draftFilters.issue}
+                    onChange={(issue) => updateDraftFilters({ issue })}
+                    options={[
+                      { value: "all", label: "All" },
+                      { value: "open", label: "Open" },
+                      { value: "closed", label: "Closed" },
+                    ]}
+                  />
+                </FilterSection>
+
+                <FilterSection label="Payment">
+                  <FilterSegmentGroup<PaymentFilterValue>
+                    value={draftFilters.payment}
+                    onChange={(payment) => updateDraftFilters({ payment })}
+                    options={[
+                      { value: "all", label: "All" },
+                      { value: "paid", label: "Paid" },
+                      { value: "unpaid", label: "Unpaid" },
+                    ]}
+                  />
+                </FilterSection>
+
+                <FilterSection label="Date">
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <DatePicker
+                        label="Start Date"
+                        value={draftFilters.startDate}
+                        onChange={(startDate) => updateDraftFilters({ startDate })}
+                      />
+                    </div>
+                    <span aria-hidden className="shrink-0 text-sm text-muted-foreground">
+                      →
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <DatePicker
+                        label="End Date"
+                        value={draftFilters.endDate}
+                        onChange={(endDate) => updateDraftFilters({ endDate })}
+                      />
+                    </div>
+                  </div>
+                </FilterSection>
+
+                <div className="border-t-[0.5px] border-[#e8eaef]" />
+
+                <FilterSection label="Captain">
+                  <div className="flex flex-col gap-2">
+                    {CAPTAINS.map((captain) => {
+                      const checked = draftFilters.captains.includes(captain);
+
+                      return (
+                        <label
+                          key={captain}
+                          className="flex cursor-pointer items-center gap-2 text-sm text-secondary"
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(nextChecked) =>
+                              toggleCaptainFilter(captain, nextChecked)
+                            }
+                            className="border-border bg-bg data-checked:border-primary data-checked:bg-primary data-checked:text-bg"
+                          />
+                          {captain}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </FilterSection>
+              </div>
+
+              <div className="flex w-full items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="text"
+                  size="xs"
+                  className="px-2 py-1 text-sm"
+                  onClick={clearDraftFilters}
                 >
-                  <p className="text-md font-medium text-primary">Filters</p>
-
-                  <FilterSection label="Issue">
-                    <FilterSegmentGroup<IssueFilterValue>
-                      value={filters.issue}
-                      onChange={(issue) => updateFilters({ issue })}
-                      options={[
-                        { value: "all", label: "All" },
-                        { value: "open", label: "Open" },
-                        { value: "closed", label: "Closed" },
-                      ]}
-                    />
-                  </FilterSection>
-
-                  <FilterSection label="Payment">
-                    <FilterSegmentGroup<PaymentFilterValue>
-                      value={filters.payment}
-                      onChange={(payment) => updateFilters({ payment })}
-                      options={[
-                        { value: "all", label: "All" },
-                        { value: "paid", label: "Paid" },
-                        { value: "unpaid", label: "Unpaid" },
-                      ]}
-                    />
-                  </FilterSection>
-
-                  <FilterSection label="Date">
-                    <div className="flex items-center gap-2">
-                      <div className="min-w-0 flex-1">
-                        <DatePicker
-                          label="Start Date"
-                          value={filters.startDate}
-                          onChange={(startDate) => updateFilters({ startDate })}
-                        />
-                      </div>
-                      <span aria-hidden className="shrink-0 text-sm text-muted-foreground">
-                        →
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <DatePicker
-                          label="End Date"
-                          value={filters.endDate}
-                          onChange={(endDate) => updateFilters({ endDate })}
-                        />
-                      </div>
-                    </div>
-                  </FilterSection>
-
-                  <div className="border-t border-border" />
-
-                  <FilterSection label="Captain">
-                    <div className="flex flex-col gap-2">
-                      {CAPTAINS.map((captain) => {
-                        const checked = filters.captains.includes(captain);
-
-                        return (
-                          <label
-                            key={captain}
-                            className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground"
-                          >
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(nextChecked) =>
-                                toggleCaptainFilter(captain, nextChecked)
-                              }
-                              className="border-border bg-bg data-checked:border-primary data-checked:bg-primary data-checked:text-bg"
-                            />
-                            {captain}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </FilterSection>
-                </PopoverContent>
-              </Popover>
+                  Clear all
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="xs"
+                  className="px-2 py-1 text-sm"
+                  onClick={applyFilters}
+                >
+                  Apply
+                </Button>
+              </div>
             </div>
 
             <div className="overflow-hidden bg-bg">
@@ -982,9 +1050,9 @@ export default function FinancesPage() {
           </div>
 
           <Dialog open={createTableOpen} onOpenChange={(open) => !open && closeCreateTableDialog()}>
-            <DialogContent className="gap-6 border-hairline p-5">
-              <div className="flex flex-col gap-4">
-                <DialogTitle className="text-md font-normal text-primary">
+            <DialogContent className="gap-6 p-5 sm:max-w-[450px]">
+              <div className="flex w-full flex-col gap-4">
+                <DialogTitle className="w-full text-md font-normal leading-[1.3] text-primary">
                   New Finance Table
                 </DialogTitle>
 
@@ -999,11 +1067,10 @@ export default function FinancesPage() {
                     }
                   }}
                   aria-label="Finance table name"
-                  className="h-auto rounded-lg border-hairline bg-bg px-3 py-2 text-md"
                 />
               </div>
 
-              <DialogFooter className="mt-0 gap-4">
+              <DialogFooter className="gap-4 border-0 p-0">
                 <Button type="button" variant="outline" onClick={closeCreateTableDialog}>
                   Cancel
                 </Button>
@@ -1015,40 +1082,38 @@ export default function FinancesPage() {
           </Dialog>
 
           <Dialog open={!!confirmDialog} onOpenChange={(open) => !open && closeConfirmDialog()}>
-            <DialogContent className="gap-0 overflow-hidden p-0">
-              <DialogHeader className="mb-0 flex-row items-start justify-between gap-4 border-b border-border px-6 py-4">
-                <DialogTitle className="text-md font-medium leading-snug">
+            <DialogContent className="gap-0 p-0 sm:max-w-xl">
+              <DialogHeader>
+                <DialogTitle className="text-lg font-semibold leading-[1.3]">
                   Leave a note to override{" "}
                   {confirmDialog
                     ? `${formatCurrency(confirmDialog.originalValue)} to ${formatCurrency(parseFloat(confirmDialog.value))}`
                     : ""}
                 </DialogTitle>
+              </DialogHeader>
+
+              <DialogBody className="gap-2">
+                <DialogField className="gap-2">
+                  <DialogDescription className="text-md text-primary">
+                    This will replace the calculated value with a manual entry.
+                  </DialogDescription>
+                  <Textarea
+                    placeholder="Enter a description…"
+                    value={overrideNote}
+                    onChange={(e) => setOverrideNote(e.target.value)}
+                    aria-label="Override note"
+                    className="min-h-[88px] border-hairline px-3 py-2 text-md placeholder:text-secondary focus-visible:border-active focus-visible:ring-1 focus-visible:ring-active"
+                  />
+                </DialogField>
+              </DialogBody>
+
+              <DialogFooter>
                 <Button
                   type="button"
                   variant="text"
-                  size="icon-sm"
-                  className="shrink-0 text-muted-foreground"
+                  className="bg-active-grey hover:bg-active-grey/80"
                   onClick={closeConfirmDialog}
                 >
-                  <X className="size-4" />
-                  <span className="sr-only">Close</span>
-                </Button>
-              </DialogHeader>
-
-              <div className="flex flex-col gap-3 px-6 py-4">
-                <DialogDescription className="text-md text-primary">
-                  This will replace the calculated value with a manual entry.
-                </DialogDescription>
-                <Textarea
-                  placeholder="Enter a description..."
-                  value={overrideNote}
-                  onChange={(e) => setOverrideNote(e.target.value)}
-                  aria-label="Override note"
-                />
-              </div>
-
-              <DialogFooter className="mt-0 gap-2 border-t border-border px-6 py-4">
-                <Button type="button" variant="outline" onClick={closeConfirmDialog}>
                   Cancel
                 </Button>
                 <Button

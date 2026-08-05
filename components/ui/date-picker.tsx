@@ -113,7 +113,7 @@ function DatePickerCalendar({
         >
           <ChevronLeft className="size-4" strokeWidth={2} />
         </button>
-        <span className="text-sm font-medium text-primary">{getMonthYearLabel(viewMonth)}</span>
+        <span className="text-sm font-semibold text-primary">{getMonthYearLabel(viewMonth)}</span>
         <button
           type="button"
           aria-label="Next month"
@@ -212,7 +212,13 @@ function DatePicker({
         align="start"
         side="bottom"
         sideOffset={4}
-        className="w-auto min-w-[280px] gap-0 rounded-xl border border-border bg-bg p-3 shadow-sm ring-0"
+        collisionPadding={12}
+        collisionAvoidance={{
+          side: "flip",
+          align: "shift",
+          fallbackAxisSide: "end",
+        }}
+        className="w-auto min-w-[280px] max-w-[min(280px,calc(100vw-1.5rem))] gap-0 rounded-xl border border-border bg-bg p-3 shadow-sm ring-0"
       >
         <DatePickerCalendar
           selected={value}

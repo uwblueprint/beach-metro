@@ -432,7 +432,7 @@ export default function OverviewPage() {
             </Button>
           </div>
 
-          <div className="max-h-[60vh] overflow-y-auto">
+          <div className="max-h-[60vh] overflow-y-auto pr-4">
             {PAPERS_PER_ISSUE.map((issue, index) => (
               <div
                 key={issue.issue}

@@ -348,6 +348,16 @@ export const DEFAULT_FINANCES_FILTERS: FinancesFilterState = {
   captains: [],
 };
 
+export function hasActiveFinancesFilters(filters: FinancesFilterState): boolean {
+  return (
+    filters.issue !== DEFAULT_FINANCES_FILTERS.issue ||
+    filters.payment !== DEFAULT_FINANCES_FILTERS.payment ||
+    filters.startDate !== DEFAULT_FINANCES_FILTERS.startDate ||
+    filters.endDate !== DEFAULT_FINANCES_FILTERS.endDate ||
+    filters.captains.length > 0
+  );
+}
+
 export function filterFinancesIssues(
   issues: readonly Issue[],
   filters: FinancesFilterState,
