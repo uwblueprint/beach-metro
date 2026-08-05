@@ -52,6 +52,8 @@ export interface VolunteerSummary {
   needsAttention: boolean;
   territory: { id: string; captainId: string | null; captainName: string | null } | null;
   routesCarried: CarriedRoute[];
+  /** Cached home coordinates for the map (null when the coordinate cache is empty). */
+  home: { latitude: number; longitude: number } | null;
   startDate: string;
   endDate: string | null;
   vacationStart: string | null;
@@ -112,7 +114,13 @@ function toCarriedRoute(r: RouteLite, addresses: Map<string, AddressDetail>): Ca
   };
 }
 
-function toSummary(v: VolunteerRow, ctx: Context, date: string): VolunteerSummary {
+function toSummary(
+  v: VolunteerRow,
+  ctx: Context,
+  date: string,
+  addresses?: Map<string, AddressDetail>,
+): VolunteerSummary {
+  const homeDetail = addresses?.get(v.address_id);
   const territory = v.captain_territory_id
     ? (ctx.territories.find((t) => t.id === v.captain_territory_id) ?? null)
     : null;
@@ -137,6 +145,10 @@ function toSummary(v: VolunteerRow, ctx: Context, date: string): VolunteerSummar
     routesCarried: ctx.routes
       .filter((r) => r.assigned_volunteer_id === v.id)
       .map((r) => toCarriedRoute(r, ctx.addresses)),
+    home:
+      homeDetail && homeDetail.latitude !== null && homeDetail.longitude !== null
+        ? { latitude: homeDetail.latitude, longitude: homeDetail.longitude }
+        : null,
     startDate: v.start_date,
     endDate: v.end_date,
     vacationStart: v.vacation_start,
@@ -153,7 +165,9 @@ export async function listVolunteers(
   const ctx = await fetchContext();
   const date = today();
 
-  let all = ((data ?? []) as VolunteerRow[]).map((v) => toSummary(v, ctx, date));
+  const rows = (data ?? []) as VolunteerRow[];
+  const addresses = await getAddressDetails(rows.map((v) => v.address_id));
+  let all = rows.map((v) => toSummary(v, ctx, date, addresses));
   if (filters.status) all = all.filter((v) => v.status === filters.status);
   if (filters.territoryId) all = all.filter((v) => v.territory?.id === filters.territoryId);
   if (filters.hasRoute !== undefined) {
