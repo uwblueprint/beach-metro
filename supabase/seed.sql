@@ -23,20 +23,20 @@ insert into google_maps_locations (id, cached_latitude, cached_longitude, cached
   ('seed-place-vol-4',  43.6690, -79.2915, '9 Kenilworth Ave, Toronto, ON M4L 3S4, Canada',   now(), '9',   'Kenilworth Ave','Toronto', 'The Beaches', 'ON', 'M4L 3S4', 'CA', 'ROOFTOP'),
   ('seed-place-vol-5',  43.6815, -79.2790, '221 Blantyre Ave, Toronto, ON M1N 2S6, Canada',   now(), '221', 'Blantyre Ave',  'Toronto', 'Birch Cliff', 'ON', 'M1N 2S6', 'CA', 'ROOFTOP'),
   -- Route endpoints: each route's start (…s) and end (…e), both on the same street.
-  ('seed-rt1s', 43.6683, -79.2975, 'Queen St E & Woodbine Ave, Toronto, ON, Canada',   now(), null, 'Queen St E',    'Toronto', 'The Beaches', 'ON', null, 'CA', 'RANGE_INTERPOLATED'),
-  ('seed-rt1e', 43.6690, -79.2905, 'Queen St E & Kenilworth Ave, Toronto, ON, Canada', now(), null, 'Queen St E',    'Toronto', 'The Beaches', 'ON', null, 'CA', 'RANGE_INTERPOLATED'),
-  ('seed-rt2s', 43.6802, -79.2905, 'Kingston Rd & Bingham Ave, Toronto, ON, Canada',   now(), null, 'Kingston Rd',   'Toronto', 'Birch Cliff', 'ON', null, 'CA', 'RANGE_INTERPOLATED'),
-  ('seed-rt2e', 43.6828, -79.2852, 'Kingston Rd & Victoria Park Ave, Toronto, ON, Canada', now(), null, 'Kingston Rd', 'Toronto', 'Birch Cliff', 'ON', null, 'CA', 'RANGE_INTERPOLATED'),
-  ('seed-rt3s', 43.6668, -79.2958, 'Lee Ave & Queen St E, Toronto, ON, Canada',        now(), null, 'Lee Ave',       'Toronto', 'The Beaches', 'ON', null, 'CA', 'RANGE_INTERPOLATED'),
-  ('seed-rt3e', 43.6712, -79.2953, 'Lee Ave & Gerrard St E, Toronto, ON, Canada',      now(), null, 'Lee Ave',       'Toronto', 'The Beaches', 'ON', null, 'CA', 'RANGE_INTERPOLATED'),
-  ('seed-rt4s', 43.6668, -79.2938, 'Beech Ave & Queen St E, Toronto, ON, Canada',      now(), null, 'Beech Ave',     'Toronto', 'The Beaches', 'ON', null, 'CA', 'RANGE_INTERPOLATED'),
-  ('seed-rt4e', 43.6712, -79.2933, 'Beech Ave & Kingston Rd, Toronto, ON, Canada',     now(), null, 'Beech Ave',     'Toronto', 'The Beaches', 'ON', null, 'CA', 'RANGE_INTERPOLATED'),
-  ('seed-rt5s', 43.6668, -79.2948, 'Willow Ave & Queen St E, Toronto, ON, Canada',     now(), null, 'Willow Ave',    'Toronto', 'The Beaches', 'ON', null, 'CA', 'RANGE_INTERPOLATED'),
-  ('seed-rt5e', 43.6714, -79.2944, 'Willow Ave & Gerrard St E, Toronto, ON, Canada',   now(), null, 'Willow Ave',    'Toronto', 'The Beaches', 'ON', null, 'CA', 'RANGE_INTERPOLATED'),
-  ('seed-rt6s', 43.6692, -79.2900, 'Glen Manor Dr & Queen St E, Toronto, ON, Canada',  now(), null, 'Glen Manor Dr', 'Toronto', 'The Beaches', 'ON', null, 'CA', 'RANGE_INTERPOLATED'),
-  ('seed-rt6e', 43.6742, -79.2896, 'Glen Manor Dr W & Kingston Rd, Toronto, ON, Canada', now(), null, 'Glen Manor Dr','Toronto', 'The Beaches', 'ON', null, 'CA', 'RANGE_INTERPOLATED'),
-  ('seed-rt7s', 43.6800, -79.2792, 'Blantyre Ave & Kingston Rd, Toronto, ON, Canada',  now(), null, 'Blantyre Ave',  'Toronto', 'Birch Cliff', 'ON', null, 'CA', 'RANGE_INTERPOLATED'),
-  ('seed-rt7e', 43.6842, -79.2788, 'Blantyre Ave & Gerrard St E, Toronto, ON, Canada', now(), null, 'Blantyre Ave',  'Toronto', 'Birch Cliff', 'ON', null, 'CA', 'RANGE_INTERPOLATED'),
+  ('seed-rt1s', 43.670546, -79.298326, '2038 Queen St E, Toronto, ON, Canada', now(), '2038', 'Queen St E', 'Toronto', 'The Beaches', 'ON', null, 'CA', 'ROOFTOP'),
+  ('seed-rt1e', 43.672234, -79.29036, '2190 Queen St E, Toronto, ON, Canada', now(), '2190', 'Queen St E', 'Toronto', 'The Beaches', 'ON', null, 'CA', 'ROOFTOP'),
+  ('seed-rt2s', 43.679318, -79.297247, '674 Kingston Rd, Toronto, ON, Canada', now(), '674', 'Kingston Rd', 'Toronto', 'The Beaches', 'ON', null, 'CA', 'ROOFTOP'),
+  ('seed-rt2e', 43.680541, -79.288996, '922 Kingston Rd, Toronto, ON, Canada', now(), '922', 'Kingston Rd', 'Toronto', 'The Beaches', 'ON', null, 'CA', 'ROOFTOP'),
+  ('seed-rt3s', 43.672577, -79.299106, '150 Lee Ave, Toronto, ON, Canada', now(), '150', 'Lee Ave', 'Toronto', 'The Beaches', 'ON', null, 'CA', 'ROOFTOP'),
+  ('seed-rt3e', 43.673978, -79.29969, '206 Lee Ave, Toronto, ON, Canada', now(), '206', 'Lee Ave', 'Toronto', 'The Beaches', 'ON', null, 'CA', 'ROOFTOP'),
+  ('seed-rt4s', 43.67447, -79.288705, '144 Beech Ave, Toronto, ON, Canada', now(), '144', 'Beech Ave', 'Toronto', 'The Beaches', 'ON', null, 'CA', 'ROOFTOP'),
+  ('seed-rt4e', 43.675809, -79.288631, '195 Beech Ave, Toronto, ON, Canada', now(), '195', 'Beech Ave', 'Toronto', 'The Beaches', 'ON', null, 'CA', 'ROOFTOP'),
+  ('seed-rt5s', 43.67416, -79.287062, '146 Willow Ave, Toronto, ON, Canada', now(), '146', 'Willow Ave', 'Toronto', 'The Beaches', 'ON', null, 'CA', 'ROOFTOP'),
+  ('seed-rt5e', 43.676025, -79.287942, '206 Willow Ave, Toronto, ON, Canada', now(), '206', 'Willow Ave', 'Toronto', 'The Beaches', 'ON', null, 'CA', 'ROOFTOP'),
+  ('seed-rt6s', 43.670028, -79.292349, '54 Glen Manor Dr, Toronto, ON, Canada', now(), '54', 'Glen Manor Dr', 'Toronto', 'The Beaches', 'ON', null, 'CA', 'ROOFTOP'),
+  ('seed-rt6e', 43.671089, -79.292752, '90 Glen Manor Dr, Toronto, ON, Canada', now(), '90', 'Glen Manor Dr', 'Toronto', 'The Beaches', 'ON', null, 'CA', 'ROOFTOP'),
+  ('seed-rt7s', 43.678801, -79.279958, '115 Blantyre Ave, Toronto, ON, Canada', now(), '115', 'Blantyre Ave', 'Toronto', 'Birch Cliff', 'ON', null, 'CA', 'ROOFTOP'),
+  ('seed-rt7e', 43.680529, -79.281217, '168 Blantyre Ave, Toronto, ON, Canada', now(), '168', 'Blantyre Ave', 'Toronto', 'Birch Cliff', 'ON', null, 'CA', 'ROOFTOP'),
   ('seed-rt8s', 43.6668, -79.2925, 'Balsam Ave & Queen St E, Toronto, ON, Canada',     now(), null, 'Balsam Ave',    'Toronto', 'The Beaches', 'ON', null, 'CA', 'RANGE_INTERPOLATED'),
   ('seed-rt8e', 43.6712, -79.2921, 'Balsam Ave & Kingston Rd, Toronto, ON, Canada',    now(), null, 'Balsam Ave',    'Toronto', 'The Beaches', 'ON', null, 'CA', 'RANGE_INTERPOLATED'),
   -- Commercial drops: one with a standing bundle count, one deliberately UNKNOWN
@@ -116,9 +116,9 @@ insert into volunteer_routes (id, start_address_id, end_address_id, street_name,
   -- Vacant, BOTH sides.
   ('e0000000-0000-4000-8000-000000000005', 'b0000000-0000-4000-8000-000000000109', 'b0000000-0000-4000-8000-000000000110', 'Willow Ave',   'BOTH',  null,                                     130, null, 130, null, null),
   -- Assigned to Marcus (second route).
-  ('e0000000-0000-4000-8000-000000000006', 'b0000000-0000-4000-8000-000000000111', 'b0000000-0000-4000-8000-000000000112', 'Glen Manor Dr','NORTH', 'd0000000-0000-4000-8000-000000000001', 25, null, 25,  null, null),
+  ('e0000000-0000-4000-8000-000000000006', 'b0000000-0000-4000-8000-000000000111', 'b0000000-0000-4000-8000-000000000112', 'Glen Manor Dr','EAST' , 'd0000000-0000-4000-8000-000000000001', 25, null, 25,  null, null),
   -- Vacant with a house-count override on file.
-  ('e0000000-0000-4000-8000-000000000007', 'b0000000-0000-4000-8000-000000000113', 'b0000000-0000-4000-8000-000000000114', 'Blantyre Ave', 'SOUTH', null,                                     0,  35,   35,  'Open Data returned 0; manual count 35', null),
+  ('e0000000-0000-4000-8000-000000000007', 'b0000000-0000-4000-8000-000000000113', 'b0000000-0000-4000-8000-000000000114', 'Blantyre Ave', 'WEST' , null,                                     0,  35,   35,  'Open Data returned 0; manual count 35', null),
   -- SOFT-DELETED: must be hidden from all views but keep resolving historically.
   ('e0000000-0000-4000-8000-000000000008', 'b0000000-0000-4000-8000-000000000115', 'b0000000-0000-4000-8000-000000000116', 'Balsam Ave',   'NORTH', null,                                     30, null, 30,  null, now());
 

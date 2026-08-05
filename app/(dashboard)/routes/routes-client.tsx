@@ -42,6 +42,14 @@ interface VolunteerSummary {
   status: string;
   home: { latitude: number; longitude: number } | null;
 }
+interface HouseCountSuggestion {
+  /** null when the count couldn't be produced — never fall back to 0. */
+  count: number | null;
+  reason: string;
+  numberRange: { from: number; to: number } | null;
+  addresses: string[];
+  attribution: string;
+}
 
 /* ---------- fetch helpers ---------- */
 
@@ -277,6 +285,15 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
     queryKey: ["volunteers", "assignable"],
     queryFn: () => getJson<VolunteerSummary[]>("/api/volunteers?status=active"),
   });
+  // House count from the Toronto address data. Advisory only, so a failure just
+  // means nothing renders — the manual count is unaffected.
+  const suggestion = useQuery({
+    queryKey: ["route-house-count", props.routeId],
+    queryFn: () =>
+      getJson<HouseCountSuggestion>(`/api/routes/${props.routeId}/suggested-house-count`),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
 
   const [streetName, setStreetName] = useState<string | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
@@ -309,6 +326,20 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
     },
     onSuccess: () => {
       setAssignVolunteerId("");
+      detail.refetch();
+      props.onChanged();
+    },
+  });
+  // Accepting writes the suggestion to house_count AND clears any override,
+  // otherwise `effectiveHouseCount` (override ?? house_count) would keep showing
+  // the old override and the button would look like it did nothing.
+  const acceptCount = useMutation({
+    mutationFn: (count: number) =>
+      sendJson(`/api/routes/${props.routeId}`, "PATCH", {
+        houseCount: count,
+        houseCountOverride: null,
+      }),
+    onSuccess: () => {
       detail.refetch();
       props.onChanged();
     },
@@ -369,6 +400,34 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
         <div>
           <Label className="text-xs">House count</Label>
           <p className="text-muted-foreground">{r.effectiveHouseCount}</p>
+          {suggestion.data?.count != null && suggestion.data.count !== r.effectiveHouseCount && (
+            <div className="mt-1 flex flex-col gap-0.5">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground text-xs">
+                  Suggested {suggestion.data.count}
+                </span>
+                <button
+                  type="button"
+                  className="text-xs underline"
+                  disabled={acceptCount.isPending}
+                  onClick={() => acceptCount.mutate(suggestion.data!.count!)}
+                >
+                  Use
+                </button>
+              </div>
+              <details className="text-xs">
+                <summary className="text-muted-foreground cursor-pointer">
+                  {suggestion.data.addresses.length} addresses
+                </summary>
+                <ul className="text-muted-foreground mt-1 max-h-40 overflow-auto">
+                  {suggestion.data.addresses.map((a) => (
+                    <li key={a}>{a}</li>
+                  ))}
+                </ul>
+              </details>
+              <span className="text-muted-foreground text-xs">{suggestion.data.attribution}</span>
+            </div>
+          )}
         </div>
         <div>
           <Label className="text-xs">Papers</Label>

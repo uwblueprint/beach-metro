@@ -23,7 +23,8 @@
     "db:seed": "bash scripts/db.sh seed",
     "db:types": "bash scripts/db.sh types",
     "create-admin": "node --env-file=.env.local scripts/create-admin.ts",
-    "refresh-coords": "node --env-file=.env.local scripts/refresh-coords.ts"
+    "refresh-coords": "node --env-file=.env.local scripts/refresh-coords.ts",
+    "load-addresses": "node --env-file=.env.local scripts/load-toronto-addresses.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

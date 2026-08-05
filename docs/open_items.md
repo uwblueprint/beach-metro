@@ -48,9 +48,19 @@ Remove entries as they're resolved (and record the decision in
   the natural home once deployed).
 - **Places Autocomplete.** Nice-to-have for address entry; billed SKU;
   undecided (research doc §8.2).
-- **House-count auto-calculation.** Manual entry for MVP (locked); Toronto
-  Open Data + PostGIS ingestion is post-MVP. `house_count_override` exists in
-  the schema but only becomes meaningful then.
+- **House-count auto-calculation.** Shipped as an advisory suggestion:
+  `GET /api/routes/{id}/suggested-house-count` counts Toronto Open Data address
+  points between a route's two endpoints, filtered to its side. Computed on read
+  and never stored, so there is no freshness state to track and the
+  `Pending/Ready/Stale/Manual` machine in the route flow §3b was deliberately
+  not built. PostGIS turned out to be unnecessary — the address points carry
+  their own centreline side, so the match is a house-number range plus a
+  bounding box. Reference data is loaded by `pnpm load-addresses`.
+  Still open: **no ground truth.** Accuracy is currently asserted only by
+  self-consistency (one-sided routes must be all-odd or all-even). Real counts
+  for 15–20 routes would let us state an error bar; until then the number stays
+  a suggestion a human accepts, and apartments count as one delivery because the
+  source has one point per building.
 - **Volunteer/captain reactivation.** The people-flow state machine allows
   Retired → Active ("clear retirement") but the API spec never defined an
   endpoint, so none is implemented. Decide whether reactivation ships and add
