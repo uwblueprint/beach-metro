@@ -24,9 +24,15 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // suppressHydrationWarning: browser extensions inject attributes on <html>/<body>
+  // before React hydrates, which is otherwise a false alarm.
   return (
-    <html lang="en" className={`${dmSans.variable} ${dmMono.variable} h-full antialiased`}>
-      <body className="flex h-full min-h-full flex-col">
+    <html
+      lang="en"
+      className={`${dmSans.variable} ${dmMono.variable} h-full antialiased`}
+      suppressHydrationWarning
+    >
+      <body className="flex h-full min-h-full flex-col" suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>
     </html>

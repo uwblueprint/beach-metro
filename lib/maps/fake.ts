@@ -85,6 +85,20 @@ export const fakeMapsProvider: MapsProvider = {
     return resolve(placeId, formatted, input.addressLines[0] ?? "");
   },
 
+  async autocompleteAddress(input) {
+    const trimmed = input.trim();
+    if (trimmed.length < 3) return [];
+    // Deterministic stand-ins so the picker is exercisable without Places.
+    return ["Ave", "St E", "Rd"].map((suffix) => {
+      const primaryText = `${trimmed} ${suffix}`;
+      return {
+        placeId: `fake-pl-${hash(primaryText).toString(36)}`,
+        primaryText,
+        secondaryText: "Toronto, ON, Canada",
+      };
+    });
+  },
+
   async geocodePlaceId(placeId) {
     // Same placeId → same coords; formatted address is synthesized (a real
     // provider returns the canonical one).
@@ -101,5 +115,10 @@ export const fakeMapsProvider: MapsProvider = {
         durationSeconds: Math.round(distanceMeters / AVG_SPEED_MPS),
       };
     });
+  },
+
+  async routePath(origin, destination) {
+    // No road network offline — the straight segment is the honest fallback.
+    return [origin, destination];
   },
 };

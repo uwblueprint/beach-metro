@@ -45,11 +45,29 @@ export interface RouteMatrixEntry {
   durationSeconds: number;
 }
 
+/** One Places Autocomplete suggestion, split for two-line rendering. */
+export interface AddressSuggestion {
+  placeId: string;
+  /** Street line, e.g. "2 Wineva Avenue". */
+  primaryText: string;
+  /** Locality remainder, e.g. "Toronto, ON, Canada". */
+  secondaryText: string;
+}
+
 export interface MapsProvider {
   /** Address Validation: standardize + geocode free-text address input. */
   validateAddress(input: AddressLinesInput): Promise<ResolvedAddress>;
+  /**
+   * Places Autocomplete (New) for address fields. `sessionToken` groups every
+   * keystroke of one address entry into a single billed session (research doc
+   * §4) — callers must reuse one token per field until a suggestion is picked.
+   */
+  autocompleteAddress(input: string, sessionToken: string): Promise<AddressSuggestion[]>;
   /** Resolve a known place_id (autocomplete input, or 30-day cache refresh). */
   geocodePlaceId(placeId: string): Promise<ResolvedAddress>;
   /** Compute Route Matrix: one origin → many destinations, for nearest-vacant. */
   routeMatrix(origin: LatLng, destinations: LatLng[]): Promise<RouteMatrixEntry[]>;
+  /** Compute Routes: the walking path along real streets between two points,
+   * decoded to lat/lng vertices — so the map traces roads, not straight lines. */
+  routePath(origin: LatLng, destination: LatLng): Promise<LatLng[]>;
 }
