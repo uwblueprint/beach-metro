@@ -6,6 +6,7 @@ import { conflict, notFound } from "@/lib/api/errors";
 import type { captainsQuery, createCaptain, updateCaptain } from "@/lib/validation/people";
 import type { CaptainRow, CaptainTerritoryRow, PayCadence, PayType } from "@/types/db";
 
+import { createNoteRecord } from "./notes";
 import { recalculateOpenIssues } from "./recalc";
 import { coerceCaptainNumerics, db, throwDb, today } from "./shared";
 
@@ -22,7 +23,6 @@ export interface CaptainSummary {
   startDate: string;
   endDate: string | null;
   retiredAt: string | null;
-  notes: string | null;
   territory: { id: string; color: string | null } | null;
 }
 
@@ -41,7 +41,6 @@ function toSummary(c: CaptainRow, territories: CaptainTerritoryRow[]): CaptainSu
     startDate: c.start_date,
     endDate: c.end_date,
     retiredAt: c.retired_at,
-    notes: c.notes,
     territory: territory ? { id: territory.id, color: territory.color } : null,
   };
 }
@@ -99,7 +98,6 @@ export async function createCaptainRecord(
       pay_cadence: input.payCadence,
       start_date: input.startDate,
       end_date: input.endDate ?? null,
-      notes: input.note ?? null,
     })
     .select()
     .single();
@@ -114,6 +112,10 @@ export async function createCaptainRecord(
     await client.from("captains").delete().eq("id", captain.id);
     throwDb(territoryError);
   }
+
+  // A note supplied at creation becomes the captain's first note; later edits go
+  // through /api/notes rather than PATCH on the captain.
+  if (input.note) await createNoteRecord("captain", captain.id, { text: input.note });
 
   return getCaptain(captain.id);
 }
@@ -134,7 +136,6 @@ export async function updateCaptainRecord(
   if (input.payCadence !== undefined) patch.pay_cadence = input.payCadence;
   if (input.startDate !== undefined) patch.start_date = input.startDate;
   if (input.endDate !== undefined) patch.end_date = input.endDate;
-  if (input.note !== undefined) patch.notes = input.note;
 
   const { error } = await db().from("captains").update(patch).eq("id", id);
   if (error) throwDb(error);

@@ -4,6 +4,50 @@ Running log of locked design decisions, kept out of the individual specs so they
 stay lean. When a decision is locked (client call, review round, team discussion),
 append it here with a one-line rationale and update the docs that implement it.
 
+## Members data layer (2026-07)
+
+Decisions made wiring the members screen to the backend.
+
+- ~~**Notes are one free-form string per person.**~~ **Superseded.** Notes are a real
+  entity again: `member_notes`, one row per note, each with its own `created_at`,
+  editable and deletable individually. Reason: the members-page design that came
+  through Figma and review is a full multi-note UI (an add button, a date per note,
+  per-note edit and delete), so a single string cannot back the screen. The original
+  decision dropped timestamps as "unneeded for MVP"; the design says otherwise.
+  Parent is two nullable FKs (`volunteer_id` / `captain_id`) with a check that
+  exactly one is set, so Postgres keeps referential integrity and cascades on
+  delete — a polymorphic `parent_type`/`parent_id` pair would silently orphan rows.
+- **`VolunteerRoute.notes` stays a plain string.** Deliberately inconsistent with
+  people, for now: the routes page (#17) edits it as one field and changing it would
+  conflict for no gain. `member_notes` can take a `route_id` later. Tracked in
+  `open_items.md` so the inconsistency reads as a choice, not an oversight.
+- **A note supplied at create becomes the person's first note.** `POST /api/volunteers`
+  and `/api/captains` keep their `note` field. `PATCH` dropped it: a single field on
+  an update could not say *which* note it meant.
+- **Notes are not on the list or summary responses.** They are fetched per person
+  from their own endpoint, so the members list payload stays small and the notes list
+  has one source of truth.
+- **The members list is a unified read; details stay typed per role.**
+  `GET /api/members` merges volunteers and captains into one flat row (with `role`)
+  server-side, because the merge is testable there and the "Showing X of Y" count
+  then reflects a real query. Detail views stay on `/api/volunteers/{id}` and
+  `/api/captains/{id}`, whose shapes genuinely differ.
+- **A captain's territory is described by its contents**, e.g. "4 volunteers, 2 drops".
+  Territories have no name or number in the schema, so `Territory 1` (which the stub
+  faked from array position) is not reproducible. Open question in `open_items.md` if
+  the office really refers to them by number.
+- **Route labels are derived, not stored**: `"Queen St E · 2038 → 2190"`, built from
+  the two endpoint addresses with the route's own street name stripped from each.
+  Handles both endpoint shapes in the data — house addresses and intersections
+  (`"Queen St E & Willow Ave"` → `"Willow Ave"`) — and falls back to the bare street
+  name when an endpoint has not been geocoded.
+- **Commercial drops gain a nullable `standing_bundles`.** PROVISIONAL, pending client
+  confirmation: `open_items.md` had the per-drop count as unmodelled because nobody
+  confirmed drops carry an expected quantity. Nullable so "unknown" stays distinct
+  from "zero" and the panel shows an empty state rather than a misleading 0. The
+  design's per-drop *date* is deliberately not modelled — a drop is an address, not
+  an event, so a date needs per-issue drop deliveries that do not exist.
+
 ## Backend implementation interpretations (feat/backend-api, 2026-07)
 
 Calls made where the specs were silent; each is covered by a test (see
@@ -84,8 +128,10 @@ Calls made where the specs were silent; each is covered by a test (see
 
 ## Pre-code reconciliation (locked 2026-06)
 
-- **`Note` entity removed** in favour of a plain `notes?: string` field on Volunteer /
-  Captain / VolunteerRoute (the flows only need free-form notes).
+- ~~**`Note` entity removed** in favour of a plain `notes?: string` field on Volunteer /
+  Captain / VolunteerRoute (the flows only need free-form notes).~~
+  **Superseded for people (members data layer, 2026-07)** — see below. Still true for
+  `VolunteerRoute`, whose `notes` stays a plain string.
 - **`RouteBundle` / `RouteDelivery.bundles[]` kept** (reversed after review — PR #10):
   we persist each bundle's paper count, not just a count. `bundles` is an embedded
   JSONB array seeded by the greedy split and hand-editable; `bundleCount` is derived
