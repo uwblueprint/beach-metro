@@ -139,6 +139,10 @@ Calls made where the specs were silent; each is covered by a test (see
   `paperCount` reseeds the split unless the bundles were set manually. Rationale: the
   office needs the exact bundle breakdown per issue (to physically make up the bundles
   and preserve irregular splits), which a bare count can't reconstruct.
+- **`VolunteerRoute.bundles[]`** (Aug 2026): standing per-bundle breakdown on the route
+  itself (same JSONB shape / sum===papers invariant). Create/edit UIs set custom
+  splits; issue delivery seed prefers `route.bundles` when non-empty, else
+  `greedySplit(papers)`. Migration `20260803000000` backfills existing rows.
 - **`VolunteerRoute.deletedAt`** added — routes are **soft-deleted** (hidden, row
   retained) so historical `RouteDelivery` records still resolve.
 - **House count** is manual for MVP (`houseCount`); auto-calc via Toronto Open Data +

@@ -41,6 +41,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Banner } from "@/components/ui/banner";
 import { Checkbox, CheckboxIcon } from "@/components/ui/checkbox";
+import { Combobox } from "@/components/ui/combobox";
+import { NewTerritoryDropDialog } from "@/components/new-territory-drop-dialog";
 
 // ─── Section components ───────────────────────────────────────────────────────
 // To add a new component section:
@@ -556,6 +558,9 @@ const inputTriggerClassName =
 function InputsSection() {
   const [captain, setCaptain] = useState<string>(CAPTAIN_OPTIONS[0]);
   const [roles, setRoles] = useState<string[]>(["captain", "volunteer"]);
+  const [dropQuery, setDropQuery] = useState("");
+  const [dropValue, setDropValue] = useState<string | null>(null);
+  const [dropLabel, setDropLabel] = useState<string | null>(null);
 
   function toggleRole(value: string, checked: boolean) {
     setRoles((prev) => (checked ? [...prev, value] : prev.filter((v) => v !== value)));
@@ -565,6 +570,17 @@ function InputsSection() {
     ROLE_OPTIONS.filter((o) => roles.includes(o.value))
       .map((o) => o.label)
       .join(", ") || "Select roles…";
+
+  const dropOptions = [
+    { value: "123", label: "123 Queen St (assigned)", badge: "Lena Morales" },
+    { value: "187", label: "187 Queen St (assigned)", badge: null },
+    { value: "maya", label: "Maya Chen", badge: null },
+  ].filter(
+    (o) =>
+      !dropQuery.trim() ||
+      o.label.toLowerCase().includes(dropQuery.trim().toLowerCase()) ||
+      (o.badge?.toLowerCase().includes(dropQuery.trim().toLowerCase()) ?? false),
+  );
 
   return (
     <div className="space-y-10">
@@ -654,20 +670,19 @@ function InputsSection() {
             <Label id="input-drop-label" className="text-md font-normal text-primary">
               Drop Details
             </Label>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={<button type="button" className={inputTriggerClassName} />}
-                aria-labelledby="input-drop-label"
-              >
-                <span className="min-w-0 truncate text-secondary">Input text</span>
-                <ChevronDown className="size-3 shrink-0 text-primary" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="min-w-[var(--anchor-width)]">
-                <DropdownMenuItem>123 Queen St</DropdownMenuItem>
-                <DropdownMenuItem>187 Queen St</DropdownMenuItem>
-                <DropdownMenuItem disabled>Create new address…</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Combobox
+              aria-labelledby="input-drop-label"
+              value={dropValue}
+              displayValue={dropLabel}
+              query={dropQuery}
+              onQueryChange={setDropQuery}
+              onSelect={(option) => {
+                setDropValue(option.value);
+                setDropLabel(option.label);
+                setDropQuery("");
+              }}
+              options={dropOptions}
+            />
           </div>
           <div className="flex flex-col gap-2">
             <Label className="text-md font-normal text-primary">Disabled</Label>
@@ -840,6 +855,7 @@ const WIZARD_TITLES = [
 
 function DialogsSection() {
   const [wizardStep, setWizardStep] = useState(1);
+  const [territoryDropOpen, setTerritoryDropOpen] = useState(false);
   const wizardSteps = WIZARD_TITLES.length;
 
   return (
@@ -854,42 +870,18 @@ function DialogsSection() {
 
       <section className="space-y-4">
         <h2 className="text-lg font-medium">New Territory Drop</h2>
-        <Dialog>
-          <DialogTrigger render={<Button variant="outline" />}>Open dialog</DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>New Territory Drop</DialogTitle>
-            </DialogHeader>
-            <DialogBody>
-              <DialogField>
-                <Label htmlFor="dialog-captain" className="text-md font-normal text-primary">
-                  Captain
-                </Label>
-                <div className="relative">
-                  <Input id="dialog-captain" defaultValue="Lena Morales" className="pr-8" />
-                  <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-3 -translate-y-1/2 text-primary" />
-                </div>
-              </DialogField>
-              <DialogField>
-                <Label htmlFor="dialog-drop" className="text-md font-normal text-primary">
-                  Drop Details
-                </Label>
-                <div className="relative">
-                  <Input id="dialog-drop" placeholder="Input text" className="pr-8" />
-                  <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-3 -translate-y-1/2 text-primary" />
-                </div>
-              </DialogField>
-              <DialogDescription>
-                By confirming, any selected drop with an existing territory will be re-allocated.
-                All drop information, such as bundle and paper count, will persist.
-              </DialogDescription>
-            </DialogBody>
-            <DialogFooter>
-              <DialogClose render={<Button variant="default" />}>Cancel</DialogClose>
-              <DialogClose render={<Button variant="primary" />}>Confirm</DialogClose>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <p className="text-secondary text-sm">
+          Live dialog — Captain dropdown, typable Drop Details combobox, Confirm hits territory
+          APIs.
+        </p>
+        <Button variant="outline" onClick={() => setTerritoryDropOpen(true)}>
+          Open dialog
+        </Button>
+        <NewTerritoryDropDialog
+          open={territoryDropOpen}
+          onOpenChange={setTerritoryDropOpen}
+          captainName="Lena Morales"
+        />
       </section>
 
       <section className="space-y-4">

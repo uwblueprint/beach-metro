@@ -191,13 +191,14 @@ are in [`api/api_spec.md`](api/api_spec.md); Zod schemas in `lib/validation/`.
 | POST | `/volunteers/{id}/retire` | soft retire; detaches routes |
 | GET/POST | `/captains` | list (status, q) / create (+ empty territory) |
 | GET/PATCH | `/captains/{id}` | detail / edit (pay-config edits recalc open issues) |
+| GET | `/captains/{id}/payouts` | recent paid payee cells (`limit`, default 4; `{ items, hasMore }`) |
 | POST | `/captains/{id}/retire` | soft retire; frees territory |
 | GET | `/territories` | list (hasCaptain, q) |
 | GET/PATCH | `/territories/{id}` | detail (captain, volunteers, drops) / edit colour + reassign captain |
 | POST/DELETE | `/territories/{id}/volunteers[/{volunteerId}]` | assign / unassign a volunteer |
 | POST/DELETE | `/territories/{id}/commercial-drops[/{addressId}]` | add / remove a commercial drop |
-| GET/POST | `/routes` | list (vacancy, territoryId, side, needsAttention, q) / create |
-| GET/PATCH/DELETE | `/routes/{id}` | detail / edit / **soft** delete |
+| GET/POST | `/routes` | list (vacancy, territoryId, volunteerId, side, needsAttention, q) / create (`bundles` and/or `papers`) |
+| GET/PATCH/DELETE | `/routes/{id}` | detail (incl. standing `bundles`) / edit / **soft** delete |
 | POST | `/routes/{id}/assign` `/unassign` `/reassign` | carrier changes |
 | GET | `/routes/nearest-vacant` | rank vacant routes (`?volunteerId=` or `?placeId=`, `?limit=`) |
 | GET/POST | `/financial-years` | list (archived) / create |

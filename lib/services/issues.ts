@@ -104,7 +104,10 @@ export async function createIssuesBatch(
     "id" | "retired_at" | "vacation_start" | "vacation_end"
   >[];
   const carriableRoutes = (
-    (routesRes.data ?? []) as Pick<VolunteerRouteRow, "id" | "papers" | "assigned_volunteer_id">[]
+    (routesRes.data ?? []) as Pick<
+      VolunteerRouteRow,
+      "id" | "papers" | "bundles" | "assigned_volunteer_id"
+    >[]
   ).filter((r) => {
     const v = volunteers.find((x) => x.id === r.assigned_volunteer_id);
     // Skip suspended (volunteer on vacation) and defensive: retired carriers.
@@ -127,14 +130,18 @@ export async function createIssuesBatch(
     try {
       if (carriableRoutes.length > 0) {
         const { error: deliveriesError } = await client.from("route_deliveries").insert(
-          carriableRoutes.map((r) => ({
-            issue_id: issue.id,
-            route_id: r.id,
-            paper_count: r.papers,
-            bundles: greedySplit(r.papers),
-            drop_count: 0,
-            missed_count: 0,
-          })),
+          carriableRoutes.map((r) => {
+            const standing =
+              Array.isArray(r.bundles) && r.bundles.length > 0 ? r.bundles : greedySplit(r.papers);
+            return {
+              issue_id: issue.id,
+              route_id: r.id,
+              paper_count: r.papers,
+              bundles: standing,
+              drop_count: 0,
+              missed_count: 0,
+            };
+          }),
         );
         if (deliveriesError) throwDb(deliveriesError);
       }

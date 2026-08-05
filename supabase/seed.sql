@@ -104,23 +104,23 @@ insert into volunteers (id, first_name, last_name, email, phone, address_id, cap
   -- Active but UNASSIGNED (no captain/territory) and end date passed -> needs attention.
   ('d0000000-0000-4000-8000-000000000005', 'Liam',   'O''Sullivan', 'liam.os@example.com',   '416-555-0205', 'b0000000-0000-4000-8000-000000000005', null, '2024-02-22', (current_date - 30), null, null, null);
 
-insert into volunteer_routes (id, start_address_id, end_address_id, street_name, side, assigned_volunteer_id, house_count, house_count_override, papers, notes, deleted_at) values
+insert into volunteer_routes (id, start_address_id, end_address_id, street_name, side, assigned_volunteer_id, house_count, house_count_override, papers, bundles, notes, deleted_at) values
   -- Assigned to Marcus (Emily's territory via Marcus).
-  ('e0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000101', 'b0000000-0000-4000-8000-000000000102', 'Queen St E',   'NORTH', 'd0000000-0000-4000-8000-000000000001', 62, null, 70,  null, null),
+  ('e0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000101', 'b0000000-0000-4000-8000-000000000102', 'Queen St E',   'NORTH', 'd0000000-0000-4000-8000-000000000001', 62, null, 70,  greedy_split_papers(70),  null, null),
   -- Assigned to Sofia (Oliver's territory via Sofia).
-  ('e0000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000103', 'b0000000-0000-4000-8000-000000000104', 'Kingston Rd',  'SOUTH', 'd0000000-0000-4000-8000-000000000002', 55, null, 55,  null, null),
+  ('e0000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000103', 'b0000000-0000-4000-8000-000000000104', 'Kingston Rd',  'SOUTH', 'd0000000-0000-4000-8000-000000000002', 55, null, 55,  greedy_split_papers(55),  null, null),
   -- Assigned to Aisha, who is on vacation -> derived "suspended".
-  ('e0000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000105', 'b0000000-0000-4000-8000-000000000106', 'Lee Ave',      'EAST',  'd0000000-0000-4000-8000-000000000003', 40, null, 40,  null, null),
+  ('e0000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000105', 'b0000000-0000-4000-8000-000000000106', 'Lee Ave',      'EAST',  'd0000000-0000-4000-8000-000000000003', 40, null, 40,  greedy_split_papers(40),  null, null),
   -- Vacant (no volunteer).
-  ('e0000000-0000-4000-8000-000000000004', 'b0000000-0000-4000-8000-000000000107', 'b0000000-0000-4000-8000-000000000108', 'Beech Ave',    'WEST',  null,                                     48, null, 50,  'Longtime carrier moved away', null),
+  ('e0000000-0000-4000-8000-000000000004', 'b0000000-0000-4000-8000-000000000107', 'b0000000-0000-4000-8000-000000000108', 'Beech Ave',    'WEST',  null,                                     48, null, 50,  greedy_split_papers(50),  'Longtime carrier moved away', null),
   -- Vacant, BOTH sides.
-  ('e0000000-0000-4000-8000-000000000005', 'b0000000-0000-4000-8000-000000000109', 'b0000000-0000-4000-8000-000000000110', 'Willow Ave',   'BOTH',  null,                                     130, null, 130, null, null),
+  ('e0000000-0000-4000-8000-000000000005', 'b0000000-0000-4000-8000-000000000109', 'b0000000-0000-4000-8000-000000000110', 'Willow Ave',   'BOTH',  null,                                     130, null, 130, greedy_split_papers(130), null, null),
   -- Assigned to Marcus (second route).
-  ('e0000000-0000-4000-8000-000000000006', 'b0000000-0000-4000-8000-000000000111', 'b0000000-0000-4000-8000-000000000112', 'Glen Manor Dr','NORTH', 'd0000000-0000-4000-8000-000000000001', 25, null, 25,  null, null),
+  ('e0000000-0000-4000-8000-000000000006', 'b0000000-0000-4000-8000-000000000111', 'b0000000-0000-4000-8000-000000000112', 'Glen Manor Dr','NORTH', 'd0000000-0000-4000-8000-000000000001', 25, null, 25,  greedy_split_papers(25),  null, null),
   -- Vacant with a house-count override on file.
-  ('e0000000-0000-4000-8000-000000000007', 'b0000000-0000-4000-8000-000000000113', 'b0000000-0000-4000-8000-000000000114', 'Blantyre Ave', 'SOUTH', null,                                     0,  35,   35,  'Open Data returned 0; manual count 35', null),
+  ('e0000000-0000-4000-8000-000000000007', 'b0000000-0000-4000-8000-000000000113', 'b0000000-0000-4000-8000-000000000114', 'Blantyre Ave', 'SOUTH', null,                                     0,  35,   35,  greedy_split_papers(35),  'Open Data returned 0; manual count 35', null),
   -- SOFT-DELETED: must be hidden from all views but keep resolving historically.
-  ('e0000000-0000-4000-8000-000000000008', 'b0000000-0000-4000-8000-000000000115', 'b0000000-0000-4000-8000-000000000116', 'Balsam Ave',   'NORTH', null,                                     30, null, 30,  null, now());
+  ('e0000000-0000-4000-8000-000000000008', 'b0000000-0000-4000-8000-000000000115', 'b0000000-0000-4000-8000-000000000116', 'Balsam Ave',   'NORTH', null,                                     30, null, 30,  greedy_split_papers(30),  null, now());
 
 -- Member notes. Multiple notes on one person, each with its own timestamp, so the
 -- side panel has real history to render (and to prove ordering is newest-first).

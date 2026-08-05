@@ -92,6 +92,8 @@ export interface VolunteerRouteRow {
   house_count: number;
   house_count_override: number | null;
   papers: number;
+  /** Standing per-bundle breakdown; sum must equal papers. */
+  bundles: RouteBundle[];
   notes: string | null;
   deleted_at: string | null;
 }

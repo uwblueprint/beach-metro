@@ -14,3 +14,12 @@ Consolidate once the file passes ~100 entries, via `/blueprint-consolidate-learn
 ### YYYY-MM-DD area-tag
 - What happened, what failed, what to do instead next time. One or two lines.
 -->
+
+### 2026-08-03 members-data-layer
+- PR #26 is on main: members page uses real `/api/members` + volunteer/captain detail. Stubs (`lib/stubs/members.ts`) are gone. Territory Drop / Route Details must use real captain `territory.id` and member ids — no name-matching fallbacks.
+
+### 2026-08-03 territory-drops-auth
+- New Territory Drop Confirm hits real APIs (`/api/territories/...`, `/api/volunteers`). You must be signed in (valid session) for changes to persist.
+
+### 2026-08-03 routes-auth
+- Sign-in required to edit route details; API mutations for routes need a valid session or changes won’t persist.
