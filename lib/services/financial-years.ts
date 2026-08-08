@@ -40,8 +40,8 @@ export interface YearDetail {
     status: "open" | "closed";
     /**
      * Derived, not stored: every cell is either frozen or paid, and there is at
-     * least one. PENDING(Q1) — the design locks a whole issue at once, which we
-     * model as a bulk freeze over the per-cell state rather than a new column.
+     * least one. One lock per issue, modelled as a bulk freeze over the per-cell
+     * state rather than a new column.
      */
     locked: boolean;
     cells: Array<{
@@ -53,7 +53,7 @@ export interface YearDetail {
       calculationStatus: "calculated" | "frozen" | "overridden";
       /** Shown in the cell popover next to the amount. */
       overrideReason: string | null;
-      /** Free-standing note, separate from the override reason. PENDING(Q4). */
+      /** Free-standing note, a different thing from the override reason. */
       comment: string | null;
       /** The captain who covered this issue, if one is recorded. */
       substituteCaptainId: string | null;

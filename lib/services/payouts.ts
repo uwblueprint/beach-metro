@@ -1,13 +1,15 @@
-// Captain payouts: the per-cell actions (finance flow §4c–4g).
-// Editability rule (locked): a cell can change while UNPAID (open or closed);
-// marking paid locks it. Transfer = paired overrides (locked decision).
+// Captain payouts: the per-cell actions (finance flow §4c–4f).
+//
+// Editability rule (settled): a cell can change while the issue is OPEN and the
+// cell is UNPAID. Marking paid locks that cell; closing the issue — or archiving
+// its year — settles every cell in it. Paid is final: there is no untick in the UI.
+// The office marks everyone paid and *then* closes the issue.
 import type { z } from "zod";
 
 import { conflict, notFound } from "@/lib/api/errors";
 import type {
   overridePayout,
   setPayoutComment as setPayoutCommentSchema,
-  transferPayout,
 } from "@/lib/validation/finance";
 import type {
   CaptainPayoutRow,
@@ -19,7 +21,7 @@ import type {
 } from "@/types/db";
 
 import { billableQuantity, calculationStatus, effectiveAmount } from "./derive";
-import { fetchIssue } from "./issues";
+import { assertIssueEditable, fetchIssue } from "./issues";
 import { coerceCaptainNumerics, coercePayoutNumerics, db, throwDb, today } from "./shared";
 
 export interface PayoutSummary {
@@ -39,8 +41,8 @@ export interface PayoutSummary {
   substituteCaptainId: string | null;
   substituteCaptainName: string | null;
   /**
-   * Free-standing note on the cell, separate from `overrideReason`.
-   * PENDING(Q4): the design treats these as two different things.
+   * Free-standing note on the cell, separate from `overrideReason` (settled): a
+   * general heads-up about a payment, not a justification for changing a number.
    */
   comment: string | null;
   paid: boolean;
@@ -211,7 +213,7 @@ export async function getPayout(id: string): Promise<PayoutDetail> {
 }
 
 function assertUnpaid(p: CaptainPayoutRow): void {
-  if (p.paid) throw conflict("This payout is marked paid — unmark it before editing.");
+  if (p.paid) throw conflict("This payout is marked paid, and paid is final.");
 }
 
 export async function overridePayoutAmount(
@@ -219,6 +221,7 @@ export async function overridePayoutAmount(
   input: z.infer<typeof overridePayout>,
 ): Promise<PayoutDetail> {
   const p = await fetchPayout(id);
+  await assertIssueEditable(p.issue_id);
   assertUnpaid(p);
   const { error } = await db()
     .from("captain_payouts")
@@ -230,6 +233,7 @@ export async function overridePayoutAmount(
 
 export async function clearPayoutOverride(id: string): Promise<PayoutDetail> {
   const p = await fetchPayout(id);
+  await assertIssueEditable(p.issue_id);
   assertUnpaid(p);
   if (p.override_amount === null) throw conflict("This payout is not overridden.");
   const { error } = await db()
@@ -241,19 +245,18 @@ export async function clearPayoutOverride(id: string): Promise<PayoutDetail> {
 }
 
 /**
- * Marking paid locks the cell against every other edit.
+ * Marking paid locks the cell against every other edit, and is final — nothing in
+ * the UI unticks it.
  *
- * PENDING(Q2). This used to require the issue to be Closed first, per an early
- * locked decision ("Paid/unpaid cannot be toggled while an issue is Open"). The
- * finances design lets the office tick paid whenever, and design is the more
- * product-informed side here, so the gate is removed. If Q2 comes back as (b),
- * restore the two-line check below. See docs/finances_pending_decisions.md.
- *
- *   const issue = await fetchIssue(p.issue_id);
- *   if (issue.status !== "closed") throw conflict("...once the issue is closed.");
+ * This once required the issue to be Closed first, from an early decision
+ * ("Paid/unpaid cannot be toggled while an issue is Open"). That had it backwards:
+ * the office ticks people off as they are paid and closes the issue afterwards, so
+ * the gate is gone and the ordering is enforced from the other end by
+ * `assertIssueEditable` — once closed, nothing changes.
  */
 export async function markPayoutPaid(id: string): Promise<PayoutDetail> {
   const p = await fetchPayout(id);
+  await assertIssueEditable(p.issue_id);
   if (p.paid) throw conflict("Payout is already marked paid.");
   const { error } = await db()
     .from("captain_payouts")
@@ -263,8 +266,14 @@ export async function markPayoutPaid(id: string): Promise<PayoutDetail> {
   return getPayout(id);
 }
 
+/**
+ * Admin-only correction for an accidental tick. Paid is final in the product, so
+ * nothing in the UI calls this and nothing should start without design saying so
+ * — it exists because the alternative to a mis-tick is editing the database by hand.
+ */
 export async function unmarkPayoutPaid(id: string): Promise<PayoutDetail> {
   const p = await fetchPayout(id);
+  await assertIssueEditable(p.issue_id);
   if (!p.paid) throw conflict("Payout is not marked paid.");
   const { error } = await db()
     .from("captain_payouts")
@@ -281,6 +290,7 @@ export async function unmarkPayoutPaid(id: string): Promise<PayoutDetail> {
  */
 export async function freezePayout(id: string): Promise<PayoutDetail> {
   const p = await fetchPayout(id);
+  await assertIssueEditable(p.issue_id);
   assertUnpaid(p);
   if (p.frozen_amount !== null) throw conflict("Payout is already frozen.");
   const { error } = await db()
@@ -294,6 +304,7 @@ export async function freezePayout(id: string): Promise<PayoutDetail> {
 /** Unfreeze: drop the snapshot and track the live calculation again. */
 export async function unfreezePayout(id: string): Promise<PayoutDetail> {
   const p = await fetchPayout(id);
+  await assertIssueEditable(p.issue_id);
   assertUnpaid(p);
   if (p.frozen_amount === null) throw conflict("Payout is not frozen.");
   const { error } = await db()
@@ -309,14 +320,19 @@ export async function unfreezePayout(id: string): Promise<PayoutDetail> {
  * captain so the (issue, captain) grid is unchanged; the payment is attributed
  * to the substitute, which is what lets substitute pay be totalled separately.
  *
- * Supersedes the transfer-as-substitute workaround: transfer moved money between
- * cells and left only free text behind, so it could not be aggregated.
+ * Replaced transfer outright (settled): transfer moved money between cells and
+ * left only free text behind, so substitute pay could not be totalled or filtered.
+ *
+ * One captain may cover several others in the same stretch — nothing caps it here,
+ * and the overview groups every covered captain rather than dropping any past the
+ * first. How the grid should *show* that is still open with design.
  */
 export async function setPayoutSubstitute(
   id: string,
   substituteCaptainId: string,
 ): Promise<PayoutDetail> {
   const p = await fetchPayout(id);
+  await assertIssueEditable(p.issue_id);
   assertUnpaid(p);
   if (substituteCaptainId === p.captain_id) {
     throw conflict("A captain cannot substitute for themselves.");
@@ -343,6 +359,7 @@ export async function setPayoutSubstitute(
 /** Clear the substitute; the payment reverts to the cell's own captain. */
 export async function clearPayoutSubstitute(id: string): Promise<PayoutDetail> {
   const p = await fetchPayout(id);
+  await assertIssueEditable(p.issue_id);
   assertUnpaid(p);
   if (p.substitute_captain_id === null) throw conflict("Payout has no substitute.");
   const { error } = await db()
@@ -353,64 +370,10 @@ export async function clearPayoutSubstitute(id: string): Promise<PayoutDetail> {
   return getPayout(id);
 }
 
-/**
- * Transfer (finance flow §4g), implemented as PAIRED OVERRIDES (locked decision):
- * the recipient's cell is overridden up by this cell's effective amount and this
- * cell is overridden to 0. Both carry auto-generated reasons. Undo by clearing
- * the overrides. The recipient must already have a cell in this issue.
- */
-export async function transferPayoutAmount(
-  id: string,
-  input: z.infer<typeof transferPayout>,
-): Promise<PayoutDetail> {
-  const source = await fetchPayout(id);
-  assertUnpaid(source);
-  if (input.toCaptainId === source.captain_id) {
-    throw conflict("Cannot transfer a payout to its own captain.");
-  }
-
-  const amount = effectiveAmount(source);
-  if (amount <= 0) throw conflict("Nothing to transfer — the effective amount is 0.");
-
-  const client = db();
-  const { data: recipientData, error: recipientError } = await client
-    .from("captain_payouts")
-    .select("*")
-    .eq("issue_id", source.issue_id)
-    .eq("captain_id", input.toCaptainId)
-    .maybeSingle();
-  if (recipientError) throwDb(recipientError);
-  const recipient = recipientData ? coercePayoutNumerics(recipientData as CaptainPayoutRow) : null;
-  if (!recipient) {
-    throw conflict("The receiving captain has no payout cell in this issue.");
-  }
-  if (recipient.paid) {
-    throw conflict("The receiving payout is marked paid — unmark it first.");
-  }
-
-  const [sourceName, recipientName] = await Promise.all([
-    captainName(client, source.captain_id),
-    captainName(client, input.toCaptainId),
-  ]);
-
-  // Ordered source-first so a partial failure underpays rather than double-pays.
-  const { error: sourceUpdateError } = await client
-    .from("captain_payouts")
-    .update({ override_amount: 0, override_reason: `Transferred to ${recipientName}` })
-    .eq("id", source.id);
-  if (sourceUpdateError) throwDb(sourceUpdateError);
-
-  const { error: recipientUpdateError } = await client
-    .from("captain_payouts")
-    .update({
-      override_amount: Math.round((effectiveAmount(recipient) + amount) * 100) / 100,
-      override_reason: `Includes $${amount.toFixed(2)} transferred from ${sourceName}`,
-    })
-    .eq("id", recipient.id);
-  if (recipientUpdateError) throwDb(recipientUpdateError);
-
-  return getPayout(id);
-}
+// Transfer (the old finance flow §4g) is gone: recording a substitute replaced it.
+// It moved money between two cells and left the reason as free text, so substitute
+// pay could not be totalled or filtered on. `setPayoutSubstitute` keeps the cell on
+// its own captain and re-attributes the payment, which is reportable.
 
 /**
  * One captain's payout history across every issue, newest issue first. Read-only,
@@ -509,18 +472,19 @@ export async function listCaptainPayoutHistory(
 /**
  * Set or clear the free-standing comment on a cell.
  *
- * PENDING(Q4). Deliberately NOT the same field as `override_reason`: a comment has
- * to survive on a cell that was never overridden, and clearing an override must not
- * silently delete a note the office left for themselves. If design confirms these
- * are one thing, this collapses into the override reason and the column goes.
+ * Settled: deliberately NOT the same field as `override_reason`. Both show in the
+ * popover but they are different things — a comment has to survive on a cell that
+ * was never overridden, and clearing an override must not silently delete a note
+ * the office left for themselves.
  *
- * Allowed while unpaid, like every other cell edit.
+ * Allowed while unpaid and the issue is open, like every other cell edit.
  */
 export async function setPayoutComment(
   id: string,
   input: z.infer<typeof setPayoutCommentSchema>,
 ): Promise<PayoutDetail> {
   const p = await fetchPayout(id);
+  await assertIssueEditable(p.issue_id);
   assertUnpaid(p);
   const trimmed = input.comment?.trim() ?? null;
   const { error } = await db()

@@ -4,10 +4,9 @@
 // re-declared here, same as features/members/api.ts. Type-only imports, so no
 // server code reaches the bundle.
 //
-// Several mutations here are marked PENDING(Qn) — they encode an assumption about
-// how the office works that design has not confirmed yet. Each one names the
-// question; docs/finances_pending_decisions.md has the full list and what changes
-// when an answer lands.
+// The rules these mutations encode are settled — see docs/design_decisions.md.
+// The one thing still open is how the grid should show a substitute covering more
+// than one captain; the backend already allows it either way.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
@@ -138,11 +137,9 @@ export function useAddIssue(yearId: string | null) {
 }
 
 /**
- * Lock or unlock a whole issue.
- *
- * PENDING(Q1). The design has one lock per issue row; the backend models freezing
- * per cell. This calls a bulk endpoint that freezes every unpaid cell in the issue,
- * so the per-cell endpoints stay available if the answer turns out to be per cell.
+ * Lock or unlock a whole issue. Locking means the numbers are settled and a later
+ * route edit must not move them; it says nothing about anyone having been paid.
+ * Calls a bulk endpoint that freezes every unpaid cell, over the per-cell freeze.
  */
 export function useToggleIssueLock(yearId: string | null) {
   const invalidate = useGridInvalidation(yearId);
@@ -180,10 +177,13 @@ export function useClearOverride(yearId: string | null) {
 }
 
 /**
- * PENDING(Q2 / Q3). The design ticks paid whenever, with no way to untick, so this
- * is what the UI calls. The backend no longer requires the issue to be closed, and
- * `useUnmarkPaid` below stays available even though nothing renders it yet — an
- * accidental tick currently needs a database edit to undo.
+ * Tick paid at any point while the issue is open. Paid is final: there is no
+ * untick, deliberately, so this is a one-way door for the person clicking it.
+ * Closing the issue settles every cell, so this 409s on a closed issue.
+ *
+ * There is no `useUnmarkPaid`. `POST /api/payouts/{id}/unmark-paid` still exists as
+ * an admin correction for a mis-tick, but nothing in the UI may call it without
+ * design signing off — otherwise "final" stops being true.
  */
 export function useMarkPaid(yearId: string | null) {
   const invalidate = useGridInvalidation(yearId);
@@ -193,22 +193,13 @@ export function useMarkPaid(yearId: string | null) {
   });
 }
 
-/** Wired but not surfaced. See PENDING(Q3). */
-export function useUnmarkPaid(yearId: string | null) {
-  const invalidate = useGridInvalidation(yearId);
-  return useMutation({
-    mutationFn: (payoutId: string) =>
-      api.post<PayoutDetail>(`/api/payouts/${payoutId}/unmark-paid`),
-    onSuccess: invalidate,
-  });
-}
-
 /**
  * Record or clear who covered this issue.
  *
- * PENDING(Q6). The design shows one covered captain per line. The backend already
- * allows the same person to cover several different captains, so nothing here caps
- * it; the picker just does not offer that yet.
+ * One person may cover several different captains in the same stretch — confirmed,
+ * and nothing here caps it. Still open with design: how the grid should show that,
+ * since a row currently has room for one covered name. The overview already lists
+ * them all rather than dropping any past the first.
  */
 export function useSetSubstitute(yearId: string | null) {
   const invalidate = useGridInvalidation(yearId);
@@ -228,8 +219,9 @@ export function useSetSubstitute(yearId: string | null) {
 }
 
 /**
- * PENDING(Q4). A free-standing note on a cell, deliberately not the same field as
- * the reason attached to an override. Sending null or blank clears it.
+ * A free-standing note on a cell, deliberately not the same field as the reason
+ * attached to an override: a general heads-up about a payment rather than a
+ * justification for changing a number. Sending null or blank clears it.
  */
 export function useSetCellComment(yearId: string | null) {
   const invalidate = useGridInvalidation(yearId);
@@ -239,14 +231,6 @@ export function useSetCellComment(yearId: string | null) {
     onSuccess: invalidate,
   });
 }
-
-/**
- * PENDING(Q7). Moving a whole payment to another captain still exists on the
- * backend but is deliberately not wired, because the design replaced it with
- * recording a substitute. If Q7 comes back as (b), this is where it hooks in:
- *
- *   api.post(`/api/payouts/${payoutId}/transfer`, { toCaptainId })
- */
 
 /** CSV export is a file download, so it bypasses the JSON client entirely. */
 export function yearCsvUrl(yearId: string): string {

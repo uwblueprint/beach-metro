@@ -369,9 +369,8 @@ export default function OverviewPage() {
                       <PaymentRow
                         key={sub.captainId}
                         name={sub.captainName}
-                        // PENDING(Q6): the design shows one covered captain per
-                        // line. The API allows covering several, so list them all
-                        // rather than silently dropping any.
+                        // One person may cover several captains, so list them
+                        // all rather than silently dropping any past the first.
                         meta={`Covered ${sub.coveredFor.map((c) => c.captainName).join(", ")} • ${sub.issueCount} ${sub.issueCount === 1 ? "issue" : "issues"}`}
                         amount={formatCurrency(sub.amount)}
                       />

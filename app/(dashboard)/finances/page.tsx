@@ -270,8 +270,8 @@ export default function FinancesPage() {
 
   /**
    * Who can be picked as a substitute: every captain with a column, plus "None".
-   * PENDING(Q6) — the backend allows one person to cover several captains, so this
-   * is not capped; the design just shows one covered name per line.
+   * One person may cover several captains, so this is not capped. How the grid
+   * should show that is still open with design; a row shows one covered name.
    */
   const substituteOptions = React.useMemo(
     () => [NO_SUBSTITUTE, ...allCaptains.map((c) => c.name)],
@@ -368,9 +368,9 @@ export default function FinancesPage() {
   }
 
   /**
-   * PENDING(Q6). The picker offers every other captain plus "None". Choosing the
-   * column's own captain clears the substitute, since a captain covering for
-   * themselves is the same as nobody covering.
+   * The picker offers every other captain plus "None". Choosing the column's own
+   * captain clears the substitute, since a captain covering for themselves is the
+   * same as nobody covering.
    */
   function handleSubstituteChange(key: CellKey, columnCaptainId: string, nextName: string) {
     const target = allCaptains.find((c) => c.name === nextName);
@@ -379,7 +379,7 @@ export default function FinancesPage() {
     setSubstitute.mutate({ payoutId: key, substituteCaptainId });
   }
 
-  /** PENDING(Q2 / Q3): allowed on an open issue, and there is no untick in the UI. */
+  /** Allowed any time the issue is open. One way: paid is final, there is no untick. */
   function handleMarkPaid(key: CellKey) {
     if (isArchivedYear) return;
     markPaid.mutate(key);
@@ -459,7 +459,7 @@ export default function FinancesPage() {
     commitDraftIssue();
   }
 
-  /** PENDING(Q1): one lock per issue, applied as a bulk freeze over its cells. */
+  /** One lock per issue ("these numbers are settled"), a bulk freeze over its cells. */
   function toggleIssueLock(issueId: string, locked: boolean) {
     if (isArchivedYear) return;
     if (editingCell && cellsByPayoutId.get(editingCell)?.payoutId) setEditingCell(null);

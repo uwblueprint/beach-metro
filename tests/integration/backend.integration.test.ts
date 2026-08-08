@@ -233,7 +233,7 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
     expect(cell.breakdown.totalQuantity).toBe(1);
   });
 
-  it("override and transfer follow the paid/unpaid editability rules", async () => {
+  it("override follows the paid/unpaid editability rules", async () => {
     const overridden = await S().payouts.overridePayoutAmount(bundlePayoutId, {
       amount: 10,
       reason: "IT override",
@@ -241,24 +241,30 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
     expect(overridden.effectiveAmount).toBe(10);
     expect(overridden.calculationStatus).toBe("overridden");
 
-    // Transfer to the drop captain: paired overrides.
-    const source = await S().payouts.transferPayoutAmount(bundlePayoutId, {
-      toCaptainId: dropCaptainId,
-    });
-    expect(source.effectiveAmount).toBe(0);
-    expect(source.overrideReason).toContain("Transferred to");
-    const recipient = await S().payouts.getPayout(dropPayoutId);
-    expect(recipient.effectiveAmount).toBe(10);
-    expect(recipient.overrideReason).toContain("transferred from");
+    const cleared = await S().payouts.clearPayoutOverride(bundlePayoutId);
+    expect(cleared.calculationStatus).not.toBe("overridden");
+    // Clearing twice is a conflict, not a silent no-op.
+    await expectServiceError(S().payouts.clearPayoutOverride(bundlePayoutId), 409);
 
-    // Nothing left to transfer back (source is 0 now).
-    await expectServiceError(
-      S().payouts.transferPayoutAmount(bundlePayoutId, { toCaptainId: dropCaptainId }),
-      409,
-    );
+    // Put it back so the later close/paid assertions have a known amount.
+    await S().payouts.overridePayoutAmount(bundlePayoutId, { amount: 10, reason: "IT override" });
   });
 
-  it("close locks deliveries and enables paid; paid locks the cell", async () => {
+  // Settled: paid may be ticked whenever, and closing the issue settles everything.
+  // The office ticks people off as they are paid, then closes.
+  it("paid can be ticked while the issue is open, and paid locks the cell", async () => {
+    const paid = await S().payouts.markPayoutPaid(dropPayoutId); // still open
+    expect(paid.paid).toBe(true);
+    await expectServiceError(
+      S().payouts.overridePayoutAmount(dropPayoutId, { amount: 1, reason: "x" }),
+      409,
+    ); // paid cell locked
+    await expectServiceError(S().payouts.markPayoutPaid(dropPayoutId), 409); // already paid
+  });
+
+  // Settled: once an issue is closed, payments no longer change — including cells
+  // that were never paid. This reverses the older "unpaid stays editable" rule.
+  it("closing settles every cell; reopen is the way back", async () => {
     await S().issues.closeIssue(issueId);
     await expectServiceError(S().issues.closeIssue(issueId), 409); // already closed
     await expectServiceError(
@@ -266,43 +272,28 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
       409,
     ); // actuals locked
 
-    const paid = await S().payouts.markPayoutPaid(dropPayoutId);
-    expect(paid.paid).toBe(true);
+    // The UNPAID cell is now frozen too, purely because the issue is closed.
     await expectServiceError(
-      S().payouts.overridePayoutAmount(dropPayoutId, { amount: 1, reason: "x" }),
-      409,
-    ); // paid cell locked
-    await expectServiceError(
-      S().payouts.transferPayoutAmount(dropPayoutId, { toCaptainId: bundleCaptainId }),
+      S().payouts.overridePayoutAmount(bundlePayoutId, { amount: 3, reason: "post-close" }),
       409,
     );
+    await expectServiceError(S().payouts.markPayoutPaid(bundlePayoutId), 409);
+    await expectServiceError(S().payouts.freezePayout(bundlePayoutId), 409);
+    await expectServiceError(S().issues.lockIssue(issueId), 409);
 
-    // Unpaid cell IS still editable while closed (locked decision).
-    const stillEditable = await S().payouts.overridePayoutAmount(bundlePayoutId, {
-      amount: 3,
-      reason: "post-close correction",
-    });
-    expect(stillEditable.effectiveAmount).toBe(3);
-  });
-
-  // PENDING(Q2). This used to assert that mark-paid returned 409 on an open issue.
-  // The finances design ticks paid whenever, so the gate was removed and this now
-  // asserts the opposite. If Q2 comes back as "only once the issue is closed",
-  // restore the check in markPayoutPaid and flip this back to expectServiceError.
-  // See docs/finances_pending_decisions.md.
-  it("mark-paid works on an open issue; reopen keeps paid cells frozen", async () => {
+    // Reopening is the supported correction, and edits work again afterwards.
     await S().issues.reopenIssue(issueId);
-    const paidWhileOpen = await S().payouts.markPayoutPaid(bundlePayoutId); // open again
-    expect(paidWhileOpen.paid).toBe(true);
-    await S().payouts.unmarkPayoutPaid(bundlePayoutId);
+    const editable = await S().payouts.overridePayoutAmount(bundlePayoutId, {
+      amount: 3,
+      reason: "post-reopen correction",
+    });
+    expect(editable.effectiveAmount).toBe(3);
 
-    // Paid cell survived the reopen untouched.
+    // Paid cell survived the close/reopen round trip untouched.
     const paidCell = await S().payouts.getPayout(dropPayoutId);
     expect(paidCell.paid).toBe(true);
     expect(paidCell.effectiveAmount).toBe(10);
 
-    const unmarked = await S().payouts.unmarkPayoutPaid(dropPayoutId);
-    expect(unmarked.paid).toBe(false);
     await S().issues.closeIssue(issueId); // leave closed for cleanup realism
   });
 

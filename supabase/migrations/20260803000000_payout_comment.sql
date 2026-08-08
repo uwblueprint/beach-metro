@@ -1,6 +1,6 @@
 -- A standalone comment on a payout cell, separate from the override reason.
 --
--- PENDING(Q4). The finances design has two distinct things on a cell:
+-- A cell carries two distinct things, confirmed with design:
 --   * the reason you type when you change an amount (already modelled as
 --     captain_payouts.override_reason, required whenever an override is set)
 --   * a free-standing comment like "Captain switching to monthly", which is not
@@ -11,9 +11,8 @@
 -- overridden, and clearing an override must not silently delete a note the
 -- office left for themselves.
 --
--- If design confirms these are really one thing (Q4 answer b), drop this column
--- and point the UI's comment field at override_reason instead. See
--- docs/finances_pending_decisions.md.
+-- The column comment written here was later corrected by
+-- 20260805000000_payout_comment_settled.sql once design confirmed it.
 
 alter table captain_payouts
   add column comment text check (comment is null or length(btrim(comment)) > 0);

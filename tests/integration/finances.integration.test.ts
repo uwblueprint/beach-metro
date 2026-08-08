@@ -176,7 +176,8 @@ describe.skipIf(!RUN)("seeded finance data", () => {
 });
 
 describe.skipIf(!RUN)("locking an issue", () => {
-  // PENDING(Q1): modelled as a bulk freeze over the per-cell state.
+  // Settled: locking means "these numbers are settled", not "everyone was paid".
+  // Modelled as a bulk freeze over the per-cell state.
   it("freezes every unpaid cell, and unlocking thaws and recomputes them", async () => {
     const { issueId } = await makeYearWithIssue();
 
@@ -219,8 +220,8 @@ describe.skipIf(!RUN)("locking an issue", () => {
 });
 
 describe.skipIf(!RUN)("marking paid", () => {
-  // PENDING(Q2): the closed-issue gate was removed because the design lets the
-  // office tick paid whenever. If that comes back, this test flips to expecting 409.
+  // Settled: paid can be ticked whenever while the issue is open. The ordering is
+  // enforced from the other end instead — closing the issue settles everything.
   it("is allowed while the issue is still open", async () => {
     const { issueId } = await makeYearWithIssue();
     const [cell] = await S().payouts.listPayouts(issueId);
@@ -261,8 +262,55 @@ describe.skipIf(!RUN)("marking paid", () => {
   });
 });
 
+// Settled: the office ticks people off as they are paid and closes the issue
+// afterwards, so closing is what settles the numbers. This is the guard that
+// enforces the ordering, since mark-paid itself no longer requires a closed issue.
+describe.skipIf(!RUN)("a closed issue or archived year settles its payments", () => {
+  it("refuses every cell edit once the issue is closed, until it is reopened", async () => {
+    const { issueId } = await makeYearWithIssue();
+    const [cell] = await S().payouts.listPayouts(issueId);
+
+    await S().issues.closeIssue(issueId);
+
+    await expectServiceError(
+      S().payouts.overridePayoutAmount(cell.id, { amount: 5, reason: "too late" }),
+      409,
+    );
+    await expectServiceError(S().payouts.markPayoutPaid(cell.id), 409);
+    await expectServiceError(S().payouts.freezePayout(cell.id), 409);
+    await expectServiceError(S().payouts.setPayoutComment(cell.id, { comment: "late" }), 409);
+    await expectServiceError(S().issues.lockIssue(issueId), 409);
+
+    // Reopening is the supported correction path, not a database edit.
+    await S().issues.reopenIssue(issueId);
+    const edited = await S().payouts.overridePayoutAmount(cell.id, {
+      amount: 5,
+      reason: "after reopen",
+    });
+    expect(edited.effectiveAmount).toBe(5);
+  });
+
+  it("refuses cell edits once the year is archived, even with the issue open", async () => {
+    const { yearId, issueId } = await makeYearWithIssue();
+    const [cell] = await S().payouts.listPayouts(issueId);
+
+    // Prove the cell is editable first, so the failure below is the archive alone.
+    await S().payouts.setPayoutComment(cell.id, { comment: "before archive" });
+    await S().years.archiveYear(yearId);
+
+    const issue = await S().issues.getIssue(issueId);
+    expect(issue.status).toBe("open"); // archived the year, not the issue
+
+    await expectServiceError(S().payouts.markPayoutPaid(cell.id), 409);
+    await expectServiceError(
+      S().payouts.overridePayoutAmount(cell.id, { amount: 2, reason: "nope" }),
+      409,
+    );
+  });
+});
+
 describe.skipIf(!RUN)("cell comments", () => {
-  // PENDING(Q4): deliberately separate from the override reason.
+  // Settled: a comment and an override reason are two different things.
   it("survives independently of the override reason", async () => {
     const { issueId } = await makeYearWithIssue();
     const [cell] = await S().payouts.listPayouts(issueId);

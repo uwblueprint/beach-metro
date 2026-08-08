@@ -323,9 +323,8 @@ the same time, and closing is always an explicit `close` call.
 | GET    | `/api/payouts/{id}`                | Detail + calculation breakdown                                                     | 4c         |
 | POST   | `/api/payouts/{id}/override`       | Manual override (`{ amount, reason }`) → Overridden                                | 4d         |
 | POST   | `/api/payouts/{id}/clear-override` | Revert to auto-calculated                                                          | 4d         |
-| POST   | `/api/payouts/{id}/mark-paid`      | Mark paid (**only if the issue is Closed**, else `409`); locks the cell from edits | 4f         |
-| POST   | `/api/payouts/{id}/unmark-paid`    | Clear paid marker (cell becomes editable again)                                    | 4f         |
-| POST   | `/api/payouts/{id}/transfer`       | Reallocate this cell's amount to another captain (see below)                       | 4g         |
+| POST   | `/api/payouts/{id}/mark-paid`      | Mark paid (any time the issue is Open); locks the cell, and paid is final          | 4f         |
+| POST   | `/api/payouts/{id}/unmark-paid`    | Admin-only correction for a mis-tick; **not wired into the UI**                    | 4f         |
 | POST   | `/api/payouts/{id}/freeze`         | Snapshot the calculated amount (bundling day); not the same as paid                | 4j         |
 | POST   | `/api/payouts/{id}/unfreeze`       | Drop the snapshot; track the live calculation again                                | 4j         |
 | POST   | `/api/payouts/{id}/substitute`     | Record the captain who covered this issue                                          | 4k         |
@@ -339,19 +338,29 @@ issue and removed only with the issue.
 `overrideAmount ?? frozenAmount ?? calculatedAmount`, and its calculation status is
 derived from the same fields (`overridden` / `frozen` / `calculated`). Freeze, close,
 and paid are three separate mechanisms: **freeze** snapshots one cell and is
-reversible, **closing** the issue detaches every cell in it from live calculation
-without writing to the cells, and **paid** locks a single cell against every action
-in this table.
+reversible, **closing** the issue settles every cell in it, and **paid** locks a
+single cell against every action in this table.
+
+**A closed issue or archived year refuses every payout edit.** `409` from
+`override`, `clear-override`, `mark-paid`, `unmark-paid`, `freeze`, `unfreeze`,
+`substitute`, `comment`, and issue `lock`/`unlock`. This applies to unpaid cells
+too — it is the issue's state that settles them, not the cell's. `POST
+/api/issues/{id}/reopen` is the supported way back.
+
+This reverses an earlier rule that an unpaid cell stayed editable while the issue
+was closed.
 
 **Locking a whole issue.** `POST /api/issues/{id}/lock` is a bulk action over the
 per-cell freeze: it freezes every unpaid cell in the issue. Paid cells are skipped,
 because paid already blocks every edit. `unlock` reverses it and recomputes, since
 the live numbers may have moved meanwhile. The issue's `locked` flag on the year
-grid is derived (every cell paid or frozen), not stored. PROVISIONAL — see
-[`finances_pending_decisions.md`](../finances_pending_decisions.md).
+grid is derived (every cell paid or frozen), not stored. Locking means the numbers
+are settled, not that anyone has been paid.
 
-**Marking paid no longer requires a closed issue.** An earlier decision gated it;
-the finances design ticks paid whenever, and the design won. Also provisional.
+**Marking paid does not require a closed issue.** Tick it any time the issue is
+open; the office ticks people off as they are paid and closes afterwards. Paid is
+final — `unmark-paid` exists as an admin correction only and is deliberately not
+wired into the UI.
 
 ```ts
 // POST /api/payouts/{id}/override
@@ -363,13 +372,6 @@ type OverridePayout = { amount: number; reason: string }; // reason required; no
 // overridden, and clearing an override must not delete it. Null or blank clears.
 type SetPayoutComment = { comment: string | null };
 
-// POST /api/payouts/{id}/transfer
-// Moves this issue's effective amount to another captain's cell and zeroes this one
-// (finance flow §4g). Decided: implemented as PAIRED OVERRIDES — the recipient is
-// overridden up by the amount and the source overridden to 0, both with auto
-// reasons; undo by clearing the overrides (design_decisions.md). Use a SUBSTITUTE,
-// not a transfer, to record that someone covered an issue.
-type TransferPayout = { toCaptainId: string };
 
 // POST /api/payouts/{id}/substitute
 // The cell stays on its own captain — only the attribution of the money changes,
@@ -511,15 +513,16 @@ the resulting `Address` + `GoogleMapsLocation`. A scheduled refresh job re-resol
 - **Custom actions:** volunteer `vacation`/`retire`; captain `retire`; route
   `assign`/`unassign`/`reassign`/`refresh-house-count` + `nearest-vacant`; year
   `archive`/`export`; issue `close`/`reopen`; payout
-  `override`/`clear-override`/`mark-paid`/`unmark-paid`/`transfer`/`freeze`/
-  `unfreeze`/`substitute`; address `validate`/`geocode`.
+  `override`/`clear-override`/`mark-paid`/`unmark-paid`/`freeze`/
+  `unfreeze`/`substitute`/`comment`; address `validate`/`geocode`.
 
 ---
 
 ## 8. Open questions
 
 - ~~Pagination style~~ — decided: no pagination for MVP (see §1 Lists).
-- ~~Transfer semantics~~ — decided: paired overrides (see §4 and design_decisions.md).
+- ~~Transfer semantics~~ — **removed entirely.** Recording a substitute replaced it;
+  the endpoint, service and schema are deleted (see design_decisions.md).
 - ~~Substitute captains~~ — decided: a real `substituteCaptainId` on the payout cell,
   superseding transfer-as-substitute (see §4 and design_decisions.md).
 - **House-count recompute.** A manual endpoint vs a background job (Toronto Open Data

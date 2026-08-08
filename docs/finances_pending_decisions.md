@@ -1,164 +1,140 @@
-# Finances wiring — decisions still with design
+# Finances wiring — the six questions, answered
 
-The finances and overview screens are wired to the real API. Six places encode an
-assumption about how the office works that design has not confirmed yet.
+The finances and overview screens were wired with six places encoding an assumption
+about how the office works. Design has now answered all six. This file records what
+was asked, what came back, and what changed in response.
 
-**The rule applied everywhere below: where the design and the backend disagreed, the
-design won.** The design engineers are closer to how the office actually works, so
-the backend bent to match rather than the other way round. Each entry records what
-was assumed, what it cost, and exactly what to change when the answer lands.
+**Five of six confirmed the assumption**, so most of this was deleting `PENDING(Qn)`
+markers rather than rewriting logic. Two things did change: transfer is gone, and
+closing an issue now settles its payments.
 
-Every spot is also marked in code as `PENDING(Qn)`, so `grep -rn "PENDING(Q1)"`
-finds every site for a given question.
-
-| | Question | Assumed | Cost to reverse |
+| | Question | Answer | Result |
 | --- | --- | --- | --- |
-| Q1 | What does locking an issue mean? | One lock per issue, as a bulk freeze | Low |
-| Q2 | Can you mark paid before the issue closes? | Yes, no gate | Low |
-| Q3 | Can you untick paid? | UI does not offer it; endpoint exists | Low |
-| Q4 | Is a cell comment separate from the override reason? | Separate, own column | Medium (migration) |
-| Q6 | Can one person cover several captains? | Yes, not capped | None |
-| Q7 | Is moving a payment still a thing? | Replaced by substitutes, not wired | None |
+| Q1 | What does locking an issue mean? | The numbers are settled, not "everyone was paid" | As built |
+| Q2 | Can you mark paid before the issue closes? | Yes, no rules — **but closed means no more edits** | Gate added |
+| Q3 | Can you untick paid? | No, paid is final and that is deliberate | Dead hook removed |
+| Q4 | Is a cell comment separate from the override reason? | Two different things, keep both | As built |
+| Q6 | Can one person cover several captains? | Yes. How to show it is still with design | As built |
+| Q7 | Is moving a payment still a thing? | Covering replaced it, drop it | **Deleted** |
 
 ---
 
-## Q1. What does locking an issue mean?
+## Q1 — Locking settles the numbers
 
-**Design:** one lock button per issue row, toggling the whole row.
-**Backend before:** freezing was per payout cell (finance flow §3b).
+> "these numbers are settled, stop them changing if someone edits a route later"
 
-**Assumed:** the design is right and the office settles a whole run at once on
-bundling day. Implemented as a **bulk action over the existing per-cell freeze**
-rather than a new `locked` column on the issue, so nothing is thrown away if the
-answer turns out to be per captain after all.
+Confirmed as built, including the issue-level lock being the better model. Locking
+is not a claim that anyone has been paid.
 
-Locking freezes every unpaid cell in the issue. Paid cells are skipped rather than
-erroring, because paid already blocks every edit, so they are locked by definition.
-The issue's `locked` flag on the grid is derived: every cell is paid or frozen, and
-there is at least one.
-
-- `lib/services/issues.ts` — `lockIssue`, `unlockIssue`
-- `app/api/issues/[id]/lock/route.ts`, `.../unlock/route.ts`
-- `lib/services/financial-years.ts` — the derived `locked` on `YearDetail`
-- `features/finances/api.ts` — `useToggleIssueLock`
-- `app/(dashboard)/finances/page.tsx` — `toggleIssueLock`
-
-**If the answer is (b) "we have paid everyone":** locking should call mark-paid on
-every cell instead of freezing, and the lock icon becomes a view of `paid`.
-**If (d) per captain after all:** stop calling the bulk endpoints and point the UI
-at `POST /api/payouts/{id}/freeze`, which still exists and is still tested.
+Still implemented as a bulk freeze over the per-cell `freeze`/`unfreeze`, so the
+per-captain endpoints stay available underneath if that is ever wanted.
 
 ---
 
-## Q2. Can you mark paid before the issue is wrapped up?
+## Q2 — Tick paid whenever, but closing settles everything
 
-**Design:** tick paid whenever.
-**Backend before:** `markPayoutPaid` threw 409 unless the issue was Closed, from an
-early locked decision ("Paid/unpaid cannot be toggled while an issue is Open").
+Two halves, and the second one was new information:
 
-**Assumed:** the design is right and the gate was invented. **Removed the check.**
-Without this the UI would have offered a button that fails on click for every open
-issue, which is the worst of both.
+> "tick it whenever, no rules"
+> "the typical flow would be mark everyone as paid, then close the issue. But once
+> an issue is closed/archived, we don't allow edits to payments."
 
-- `lib/services/payouts.ts` — `markPayoutPaid`, the removed check is in the doc
-  comment ready to paste back
-- `tests/integration/finances.integration.test.ts` — "is allowed while the issue is
-  still open" flips to expecting a 409
+The first half confirmed removing the old "must be closed first" gate. The second
+half is the same ordering rule enforced from the opposite end, and **it was not
+implemented** — nothing checked issue status on any payout mutation.
 
-Everything else about paid is unchanged: it still locks the cell against override,
-freeze, substitute and transfer, and it still refuses to pay twice.
+Added `assertIssueEditable` in `lib/services/issues.ts`, called by every payout
+mutation and by lock/unlock. A closed issue, or an issue in an archived year,
+refuses:
 
----
+`override`, `clear-override`, `mark-paid`, `unmark-paid`, `freeze`, `unfreeze`,
+`substitute`, `clear-substitute`, `comment`, and issue `lock`/`unlock`.
 
-## Q3. Can you untick paid?
+**This reverses an older locked decision.** The rule used to be "an unpaid cell is
+editable whether the issue is Open or Closed". It is now "a closed issue is
+settled". `POST /api/issues/{id}/reopen` is the supported correction, so a run
+closed too early is not a dead end.
 
-**Design:** the tick is one way. No untick anywhere.
-**Backend:** `POST /api/payouts/{id}/unmark-paid` exists and works.
-
-**Assumed:** the design reflects intent, so nothing renders an untick. The mutation
-is wired up and exported (`useUnmarkPaid`) but unused, so surfacing it is a UI change
-only, no backend work.
-
-**Worth flagging regardless of the answer:** an accidental tick currently needs a
-database edit to undo. Same shape as the retire-with-no-reactivate problem on the
-members page.
-
-- `features/finances/api.ts` — `useUnmarkPaid`, wired, not rendered
+Worth knowing: the comment field is covered by the guard too. A comment does not
+move any money, so it could reasonably stay editable after close — "closed means
+frozen" was chosen because it is easier to explain than a partial rule. One line to
+change if the office wants to annotate settled issues.
 
 ---
 
-## Q4. Is a cell comment separate from the override reason?
+## Q3 — Paid is final
 
-**Design:** a cell has both a comment ("Captain switching to monthly") and, when you
-change an amount, a separate note explaining the change.
-**Backend before:** only `override_reason`, which is required whenever an override
-is set and cleared when the override is cleared.
+> "that's on purpose, paid is final"
 
-**Assumed:** they are two different things, so **added a `comment` column**. The
-deciding argument: a comment has to survive on a cell that was never overridden, and
-clearing an override must not silently delete a note the office left itself. An
-integration test pins exactly that.
+Confirmed. Removed `useUnmarkPaid` from `features/finances/api.ts`, which was
+exported but rendered nowhere.
 
-This is the only entry with a migration, so it is the most expensive to reverse.
-
-- `supabase/migrations/20260803000000_payout_comment.sql`
-- `lib/services/payouts.ts` — `setPayoutComment`
-- `app/api/payouts/[id]/comment/route.ts`
-- `lib/validation/finance.ts` — `setPayoutComment`
-- `features/finances/api.ts` — `useSetCellComment`
-
-**If the answer is (b) "same thing":** drop the column, point the comment field at
-`override_reason`, and delete the endpoint. The UI change is one prop.
+`POST /api/payouts/{id}/unmark-paid` is **kept** as an admin correction for a
+mis-tick, because the alternative to a wrong click is editing the database by hand.
+It is documented as not-for-UI: wiring it up would make "final" untrue. It is now
+also subject to the Q2 guard, so it cannot resurrect a closed issue's payment.
 
 ---
 
-## Q6. Can one person cover several captains in the same stretch?
+## Q4 — A comment and an override reason are different things
 
-**Design:** one covered captain per line in the overview's substitute list.
-**Backend:** already supports one person covering many, and the overview groups
-`coveredFor` as an array.
+> "Both appear in the popover, but are separate things. It's correct that the
+> comment is just a general heads up related to a specific payment, not tied to
+> changing a number"
 
-**Assumed:** the design's single name is a layout simplification, not a rule, so
-**nothing caps it**. The overview lists every covered captain joined by commas
-rather than silently dropping any past the first.
+Confirmed as built, including the reasoning that a comment must survive on a cell
+that was never overridden. The `comment` column stays. An integration test pins
+that clearing an override leaves the comment alone.
 
-- `lib/services/overview.ts` — `substitutePayments[].coveredFor`
-- `app/(dashboard)/overview/page.tsx` — the joined list
-- `features/finances/api.ts` — `useSetSubstitute`
-
-**If the answer is (a) one only:** add a check in `setPayoutSubstitute` rejecting a
-second distinct covered captain in the same period. No schema change either way.
+`20260805000000_payout_comment_settled.sql` corrects the column's own comment,
+which had been written as PROVISIONAL.
 
 ---
 
-## Q7. Is moving a payment to another captain still a thing?
+## Q6 — One person can cover several captains
 
-**Design:** absent. Recording a substitute replaced it.
-**Backend:** `POST /api/payouts/{id}/transfer` exists, is tested, and works.
+> "they can cover for a few different people, nothing made for it yet"
+> "I'm going to explore what this looks like in figma and get back to you"
 
-**Assumed:** covering replaced it, so transfer is **deliberately not wired**. It is
-left in place rather than deleted, because the finance flow still describes it as
-the tool for genuine money reallocation, which is a different thing from someone
-covering a shift.
+The backend behaviour is confirmed: nothing caps it, and the overview lists every
+covered captain rather than dropping any past the first.
 
-- `features/finances/api.ts` — the commented hook point, with the exact call
-
-**If the answer is (b) still needed:** the design needs a control for it first;
-the endpoint needs no work.
+**Still open, and the only open item left:** how the grid should *show* one person
+covering several captains. A row has space for one covered name today. No backend
+work is expected either way — this is a layout question.
 
 ---
 
-## Not a question, but decided here
+## Q7 — Transfer is gone
 
-Two things the design has no field for, where the wiring had to pick something:
+> "covering replaced it, drop the other one"
 
-- **A new finance table's start date.** The dialog only asks for a name, but the
-  start date fixes the reporting quarters. New tables start on the **first of the
-  current month**, which is the least surprising reading of "I am starting a year
-  now". If the office wants a specific month the dialog needs a date field.
-- **A new issue's date.** The inline draft row only takes a name, so a new issue is
-  **dated today**. That decides which quarter it lands in on the overview.
+Deleted, not left dormant:
 
-Both are in `app/(dashboard)/finances/page.tsx` (`handleCreateTable`,
-`commitDraftIssue`) and worth confirming, since they are silently load-bearing for
-the overview's quarter filters.
+- `app/api/payouts/[id]/transfer/route.ts`
+- `transferPayoutAmount` in `lib/services/payouts.ts`
+- `transferPayout` in `lib/validation/finance.ts`
+- its integration test in `tests/integration/backend.integration.test.ts`
+
+Recording a substitute is the one way to say someone covered an issue. It keeps the
+cell on its own captain and re-attributes the payment, which is what makes
+substitute pay totallable — transfer moved money between cells and left free text,
+so it could not be aggregated.
+
+**The product specs still describe transfer as a live feature** and were left alone,
+since rewriting them is a product-owner call rather than a wiring change. Stale
+references: `docs/flows/finances_flow.md` (§4g and the state-model notes),
+`docs/product/beach_metro_PRD.md`, `docs/flows/people_management_flow.md` (captain
+vacation is described as being handled by transfer).
+
+---
+
+## Not questions, but decided here
+
+Two things the design has no field for, unchanged and still worth confirming:
+
+- **A new finance table's start date** — first of the current month.
+- **A new issue's date** — today.
+
+Both silently decide which quarter things land in on the overview. Both are in
+`app/(dashboard)/finances/page.tsx` (`handleCreateTable`, `commitDraftIssue`).

@@ -35,15 +35,13 @@ export const overridePayout = z.object({
   reason: z.string().trim().min(1), // required; no prior-value audit
 });
 
-/** Reallocate this cell's amount to another captain (finance flow §4g). */
-export const transferPayout = z.object({ toCaptainId: uuid });
-
 /** Assign the captain who covered this issue (existing captains only). */
 export const setSubstitute = z.object({ substituteCaptainId: uuid });
 
 /**
  * Free-standing comment on a payout cell. Null or empty clears it.
- * PENDING(Q4): separate from `overridePayout.reason` on purpose.
+ * Separate from `overridePayout.reason` on purpose (settled): a comment is a
+ * general heads-up, not a justification for changing an amount.
  */
 export const setPayoutComment = z.object({
   comment: z.string().max(1000).nullish(),

@@ -46,6 +46,30 @@ export async function fetchIssue(id: string): Promise<IssueRow> {
   return data as IssueRow;
 }
 
+/**
+ * Payments settle when the issue closes. A closed issue — or an archived year —
+ * refuses every payout edit, mark-paid included, because the office ticks everyone
+ * off as they are paid and closes the issue afterwards.
+ *
+ * Not a dead end: `POST /api/issues/{id}/reopen` puts an issue back to open, which
+ * is the supported way to correct a run that was closed too early.
+ */
+export async function assertIssueEditable(id: string): Promise<void> {
+  const issue = await fetchIssue(id);
+  if (issue.status === "closed") {
+    throw conflict("This issue is closed — reopen it to change payments.");
+  }
+  const { data, error } = await db()
+    .from("financial_years")
+    .select("archived")
+    .eq("id", issue.financial_year_id)
+    .maybeSingle();
+  if (error) throwDb(error);
+  if ((data as { archived: boolean } | null)?.archived) {
+    throw conflict("This financial year is archived — payments can no longer be edited.");
+  }
+}
+
 export async function listIssues(yearId: string): Promise<IssueSummary[]> {
   const { data, error } = await db()
     .from("issues")
@@ -213,22 +237,20 @@ export async function papersToOrder(issueId: string): Promise<{ issueId: string;
 /**
  * Lock an issue: freeze every unpaid cell in it at once.
  *
- * PENDING(Q1). The backend models freezing per cell (finance flow §3b): one
- * captain's amount is snapshotted so later route or carrier edits cannot move it.
- * The finances design instead puts a single lock on the whole issue row, which is
- * a better fit for how the office actually works — on bundling day you settle the
- * whole run, not one captain at a time.
+ * Settled: locking means "these numbers are settled, stop them moving if someone
+ * edits a route later". It is not a statement that anyone has been paid. One lock
+ * covers the whole issue, which matches how the office works — on bundling day you
+ * settle the whole run, not one captain at a time.
  *
- * So this is deliberately a BULK ACTION over the existing per-cell freeze rather
- * than a new `locked` column on the issue. Nothing is lost either way: if Q1 comes
- * back saying locking really is per captain, the per-cell endpoints are still
- * there and this just stops being used.
+ * Implemented as a BULK ACTION over the existing per-cell freeze rather than a
+ * `locked` column on the issue, so per-cell freezing still works underneath.
  *
  * Paid cells are skipped, not an error: paid already locks a cell against every
  * edit, so they are locked by definition and freezing them would be redundant.
  */
 export async function lockIssue(id: string): Promise<IssueSummary> {
   const issue = await fetchIssue(id);
+  await assertIssueEditable(id);
   const client = db();
 
   const { data, error } = await client.from("captain_payouts").select("*").eq("issue_id", issue.id);
@@ -253,6 +275,7 @@ export async function lockIssue(id: string): Promise<IssueSummary> {
 /** Unlock an issue: unfreeze every frozen, unpaid cell so they track live again. */
 export async function unlockIssue(id: string): Promise<IssueSummary> {
   const issue = await fetchIssue(id);
+  await assertIssueEditable(id);
   const client = db();
 
   const { data, error } = await client.from("captain_payouts").select("*").eq("issue_id", issue.id);

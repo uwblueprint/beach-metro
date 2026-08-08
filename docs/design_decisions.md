@@ -8,29 +8,36 @@ append it here with a one-line rationale and update the docs that implement it.
 
 Wiring the finances and overview screens. **Where the design and the backend
 disagreed, the design won**: the design engineers are closer to how the office
-works, so the backend bent. Six of these are provisional pending design
-confirmation and are tracked in
+works, so the backend bent. All six have since been confirmed by design; the
+answers and what each one changed are recorded in
 [`finances_pending_decisions.md`](finances_pending_decisions.md).
 
-- **Locking is per issue, implemented as a bulk freeze.** PENDING(Q1). The design
-  puts one lock on an issue row; the backend modelled freezing per cell. Rather
-  than add a `locked` column, `POST /api/issues/{id}/lock` freezes every unpaid
-  cell, and the grid derives `locked` from them. Nothing is lost if the answer
-  turns out to be per captain.
+- **Locking is per issue, implemented as a bulk freeze.** Settled: locking means
+  the numbers are settled so a later route edit cannot move them, *not* that anyone
+  has been paid. Rather than add a `locked` column, `POST /api/issues/{id}/lock`
+  freezes every unpaid cell and the grid derives `locked` from them, so the
+  per-cell endpoints still work underneath.
 - ~~**Paid can only be toggled once the issue is closed.**~~ **Superseded.**
-  PENDING(Q2). The design ticks paid whenever, so the gate is gone. Keeping it
-  would have shipped a button that fails on click for every open issue.
-- **Paid has no untick in the UI.** PENDING(Q3). The endpoint exists and the
-  mutation is wired; nothing renders it, matching the design. Same
-  no-way-back problem as retiring a member.
-- **A cell comment is its own column, separate from the override reason.**
-  PENDING(Q4). A comment must survive on a cell that was never overridden, and
-  clearing an override must not delete a note the office left itself.
-- **One person may cover several captains.** PENDING(Q6). The design shows one
-  covered name per line; nothing caps it, and the overview lists them all rather
-  than dropping any.
-- **Transfer stays but is not wired.** PENDING(Q7). Recording a substitute
-  replaced it in the design. The endpoint remains for genuine reallocation.
+  Settled: tick paid whenever the issue is open. The office ticks people off as
+  they are paid and closes afterwards.
+- **A closed issue or archived year settles its payments.** Settled, and this
+  *reverses* the earlier "an unpaid cell stays editable while closed" rule. Every
+  payout mutation and issue lock/unlock now goes through `assertIssueEditable`.
+  `POST /api/issues/{id}/reopen` is the way back.
+- **Paid has no untick, and paid is final.** Settled and deliberate. The UI hook
+  was removed. `unmark-paid` survives as an admin-only correction for a mis-tick
+  and must not be wired into the UI without design agreeing.
+- **A cell comment is its own column, separate from the override reason.** Settled:
+  two different things. A comment must survive on a cell that was never overridden,
+  and clearing an override must not delete a note the office left itself.
+- **One person may cover several captains.** Settled: nothing caps it, and the
+  overview lists them all rather than dropping any. *Open:* how the grid should
+  show more than one covered captain per row — design is exploring it, no backend
+  work expected either way.
+- **Transfer is deleted.** Settled: recording a substitute replaced it. The service
+  function, endpoint, schema and test are gone. A substitute keeps the cell on its
+  own captain and re-attributes the payment, which is what makes substitute pay
+  reportable at all.
 - **A financial year can be renamed but not re-dated.** New:
   `PATCH /api/financial-years/{id}` takes a name only. The start date fixes the
   reporting quarters, so moving it would silently reshuffle the overview.
