@@ -98,3 +98,75 @@ insert into member_notes (id, volunteer_id, captain_id, text, created_at) values
 
 insert into financial_years (id, name, archived, start_date) values
   ('f0000000-0000-4000-8000-000000000001', '2026–2027', false, '2026-03-01');
+
+-- ---------------------------------------------------------------------------
+-- Issues, delivery actuals and payout cells.
+--
+-- Previously the seed stopped at the financial year, on the grounds that issues
+-- should be created through the API so the auto-population logic gets exercised.
+-- That left the finances grid and the overview chart rendering empty on a fresh
+-- database, which made both screens impossible to check by looking at them.
+--
+-- These rows mirror exactly what POST /api/financial-years/{id}/issues would
+-- produce, then add the delivery actuals the office would type in afterwards.
+-- Amounts below are the real output of the payout formula for these inputs, not
+-- decoration: scripts verify them against a live recalculate, so if the maths
+-- ever changes the seed fails rather than quietly lying.
+--
+-- Rollup for reference: delivery -> route -> volunteer -> territory -> captain.
+--   route 1 (70p) + route 6 (25p) are Marcus's  -> Emily's territory
+--   route 2 (55p)                 is Sofia's    -> Oliver's territory
+--   route 3 is Aisha's, who is on vacation, so it is never carried (no rows)
+--   Maya has no volunteers, so her cells are always zero
+-- Emily is paid per bundle at $1.25, Oliver per drop at $2.00, Maya per paper at $0.
+-- ---------------------------------------------------------------------------
+
+insert into issues (id, financial_year_id, name, date, status) values
+  ('11000000-0000-4000-8000-000000000001', 'f0000000-0000-4000-8000-000000000001', 'Issue 01, March 10th', '2026-03-10', 'closed'),
+  ('11000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000001', 'Issue 02, April 7th',  '2026-04-07', 'closed'),
+  ('11000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000001', 'Issue 03, May 5th',    '2026-05-05', 'open'),
+  ('11000000-0000-4000-8000-000000000004', 'f0000000-0000-4000-8000-000000000001', 'Issue 04, June 2nd',   '2026-06-02', 'open');
+
+-- Delivery actuals. `bundles` is the greedy split of paper_count (50s, then 25s,
+-- then the remainder), which is what the auto-calc seeds and the office edits.
+insert into route_deliveries (issue_id, route_id, paper_count, bundles, drop_count, missed_count) values
+  -- I01: a clean run.
+  ('11000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', 70, '[{"papers":50},{"papers":20}]', 1, 0),
+  ('11000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000002', 55, '[{"papers":50},{"papers":5}]',  1, 0),
+  ('11000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000006', 25, '[{"papers":25}]',               1, 0),
+  -- I02: heavier run, and one missed bundle on route 1 so the deduction is visible.
+  ('11000000-0000-4000-8000-000000000002', 'e0000000-0000-4000-8000-000000000001', 80, '[{"papers":50},{"papers":25},{"papers":5}]', 1, 1),
+  ('11000000-0000-4000-8000-000000000002', 'e0000000-0000-4000-8000-000000000002', 60, '[{"papers":50},{"papers":10}]', 1, 0),
+  ('11000000-0000-4000-8000-000000000002', 'e0000000-0000-4000-8000-000000000006', 30, '[{"papers":25},{"papers":5}]',  1, 0),
+  -- I03: same shape as I01; this issue is LOCKED (every cell frozen).
+  ('11000000-0000-4000-8000-000000000003', 'e0000000-0000-4000-8000-000000000001', 70, '[{"papers":50},{"papers":20}]', 1, 0),
+  ('11000000-0000-4000-8000-000000000003', 'e0000000-0000-4000-8000-000000000002', 55, '[{"papers":50},{"papers":5}]',  1, 0),
+  ('11000000-0000-4000-8000-000000000003', 'e0000000-0000-4000-8000-000000000006', 25, '[{"papers":25}]',               1, 0),
+  -- I04: the live one, still tracking the formula.
+  ('11000000-0000-4000-8000-000000000004', 'e0000000-0000-4000-8000-000000000001', 90, '[{"papers":50},{"papers":25},{"papers":15}]', 1, 0),
+  ('11000000-0000-4000-8000-000000000004', 'e0000000-0000-4000-8000-000000000002', 40, '[{"papers":25},{"papers":15}]', 1, 0),
+  ('11000000-0000-4000-8000-000000000004', 'e0000000-0000-4000-8000-000000000006', 50, '[{"papers":50}]',               1, 0);
+
+-- Payout cells: one per captain per issue, exactly as issue creation makes them.
+-- Between them they cover every state the finances grid can render: paid, unpaid,
+-- frozen (locked), overridden with a reason, substituted, and commented.
+insert into captain_payouts
+  (issue_id, captain_id, calculated_amount, override_amount, override_reason, frozen_amount, frozen_at, substitute_captain_id, comment, paid, paid_at) values
+  -- I01 closed, everyone paid. Emily: (2+1) bundles x $1.25. Oliver: 1 drop x $2.
+  ('11000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 3.75, null, null, null, null, null, null, true,  '2026-03-14'),
+  ('11000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000002', 2.00, null, null, null, null, null, null, true,  '2026-03-14'),
+  ('11000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000003', 0.00, null, null, null, null, null, null, true,  '2026-03-14'),
+  -- I02 closed, only Emily paid. Emily: route 1 is 3 bundles less 1 missed = 2,
+  -- plus route 6's 2 bundles, so 4 x $1.25.
+  ('11000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000001', 5.00, null, null, null, null, null, null, true,  '2026-04-11'),
+  ('11000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000002', 2.00, null, null, null, null, null, null, false, null),
+  ('11000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000003', 0.00, null, null, null, null, null, null, false, null),
+  -- I03 open but LOCKED: every cell frozen, so route edits no longer move them.
+  ('11000000-0000-4000-8000-000000000003', 'c0000000-0000-4000-8000-000000000001', 3.75, null, null, 3.75, '2026-05-09', null, null, false, null),
+  ('11000000-0000-4000-8000-000000000003', 'c0000000-0000-4000-8000-000000000002', 2.00, null, null, 2.00, '2026-05-09', null, null, false, null),
+  ('11000000-0000-4000-8000-000000000003', 'c0000000-0000-4000-8000-000000000003', 0.00, null, null, 0.00, '2026-05-09', null, null, false, null),
+  -- I04 open and live. Emily: (3+1) bundles x $1.25. Oliver is overridden with a
+  -- reason. Maya was covered by Emily and carries a standalone comment.
+  ('11000000-0000-4000-8000-000000000004', 'c0000000-0000-4000-8000-000000000001', 5.00, null, null, null, null, null, null, false, null),
+  ('11000000-0000-4000-8000-000000000004', 'c0000000-0000-4000-8000-000000000002', 2.00, 12.50, 'Invoiced separately for the school run', null, null, null, null, false, null),
+  ('11000000-0000-4000-8000-000000000004', 'c0000000-0000-4000-8000-000000000003', 0.00, null, null, null, null, 'c0000000-0000-4000-8000-000000000001', 'Captain switching to monthly', false, null);

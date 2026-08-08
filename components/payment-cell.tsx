@@ -14,13 +14,11 @@ import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 
 import type {
-  CaptainName,
   CellOverride,
   PaymentDetail,
   SubstituteCaptainAssignment,
-  SubstituteCaptainName,
 } from "@/app/(dashboard)/finances/data";
-import { formatCurrency, SUBSTITUTE_CAPTAINS } from "@/app/(dashboard)/finances/data";
+import { formatCurrency, NO_SUBSTITUTE } from "@/app/(dashboard)/finances/data";
 
 const HOVER_OPEN_DELAY_MS = 400;
 
@@ -29,8 +27,13 @@ type PaymentCellProps = {
   paid: boolean;
   onMarkPaid: () => void;
   substituteCaptain: SubstituteCaptainAssignment;
-  onSubstituteChange: (captain: SubstituteCaptainName) => void;
-  columnCaptain: CaptainName;
+  onSubstituteChange: (captain: string) => void;
+  columnCaptain: string;
+  /**
+   * Who can be picked as a substitute. Passed in rather than imported, because the
+   * real set is every other active captain and changes as people join or retire.
+   */
+  substituteOptions: readonly string[];
   paymentDetail?: PaymentDetail;
   overridden?: boolean;
   override?: CellOverride;
@@ -197,15 +200,17 @@ const cellMenuItemClassName =
 function SubstituteCaptainPicker({
   selectedCaptain,
   onSelect,
+  options,
 }: {
-  selectedCaptain: SubstituteCaptainName;
-  onSelect: (captain: SubstituteCaptainName) => void;
+  selectedCaptain: string;
+  onSelect: (captain: string) => void;
+  options: readonly string[];
 }) {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-md text-muted-foreground">Assign substitute captain</p>
       <div className="flex flex-col">
-        {SUBSTITUTE_CAPTAINS.map((captain) => {
+        {options.map((captain) => {
           const isSelected = captain === selectedCaptain;
 
           return (
@@ -232,12 +237,14 @@ function CellActionsMenu({
   substituteCaptain,
   columnCaptain,
   onSubstituteChange,
+  substituteOptions,
   comment,
   onCommentChange,
 }: {
   substituteCaptain: SubstituteCaptainAssignment;
-  columnCaptain: CaptainName;
-  onSubstituteChange: (captain: SubstituteCaptainName) => void;
+  columnCaptain: string;
+  onSubstituteChange: (captain: string) => void;
+  substituteOptions: readonly string[];
   comment?: string;
   onCommentChange?: (comment: string) => void;
 }) {
@@ -309,8 +316,11 @@ function CellActionsMenu({
           </>
         ) : menuView === "substitute" ? (
           <SubstituteCaptainPicker
-            selectedCaptain={substituteCaptain === "None" ? columnCaptain : substituteCaptain}
+            selectedCaptain={
+              substituteCaptain === NO_SUBSTITUTE ? columnCaptain : substituteCaptain
+            }
             onSelect={onSubstituteChange}
+            options={substituteOptions}
           />
         ) : (
           <div className="flex flex-col gap-4">
@@ -351,6 +361,7 @@ export function PaymentCell({
   substituteCaptain,
   onSubstituteChange,
   columnCaptain,
+  substituteOptions,
   paymentDetail,
   overridden = false,
   override,
@@ -483,6 +494,7 @@ export function PaymentCell({
             substituteCaptain={substituteCaptain}
             columnCaptain={columnCaptain}
             onSubstituteChange={onSubstituteChange}
+            substituteOptions={substituteOptions}
             comment={comment}
             onCommentChange={onCommentChange}
           />

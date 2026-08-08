@@ -7,6 +7,7 @@ import type { z } from "zod";
 import { conflict, notFound } from "@/lib/api/errors";
 import type { createIssues, updateIssue } from "@/lib/validation/finance";
 import type {
+  CaptainPayoutRow,
   CaptainRow,
   FinancialYearRow,
   IssueRow,
@@ -18,7 +19,7 @@ import type {
 
 import { greedySplit, volunteerStatus } from "./derive";
 import { recalculateIssue } from "./recalc";
-import { db, throwDb, today } from "./shared";
+import { coercePayoutNumerics, db, throwDb, today } from "./shared";
 
 export interface IssueSummary {
   id: string;
@@ -43,6 +44,30 @@ export async function fetchIssue(id: string): Promise<IssueRow> {
   if (error) throwDb(error);
   if (!data) throw notFound("Issue");
   return data as IssueRow;
+}
+
+/**
+ * Payments settle when the issue closes. A closed issue — or an archived year —
+ * refuses every payout edit, mark-paid included, because the office ticks everyone
+ * off as they are paid and closes the issue afterwards.
+ *
+ * Not a dead end: `POST /api/issues/{id}/reopen` puts an issue back to open, which
+ * is the supported way to correct a run that was closed too early.
+ */
+export async function assertIssueEditable(id: string): Promise<void> {
+  const issue = await fetchIssue(id);
+  if (issue.status === "closed") {
+    throw conflict("This issue is closed — reopen it to change payments.");
+  }
+  const { data, error } = await db()
+    .from("financial_years")
+    .select("archived")
+    .eq("id", issue.financial_year_id)
+    .maybeSingle();
+  if (error) throwDb(error);
+  if ((data as { archived: boolean } | null)?.archived) {
+    throw conflict("This financial year is archived — payments can no longer be edited.");
+  }
 }
 
 export async function listIssues(yearId: string): Promise<IssueSummary[]> {
@@ -207,4 +232,68 @@ export async function papersToOrder(issueId: string): Promise<{ issueId: string;
     0,
   );
   return { issueId, total };
+}
+
+/**
+ * Lock an issue: freeze every unpaid cell in it at once.
+ *
+ * Settled: locking means "these numbers are settled, stop them moving if someone
+ * edits a route later". It is not a statement that anyone has been paid. One lock
+ * covers the whole issue, which matches how the office works — on bundling day you
+ * settle the whole run, not one captain at a time.
+ *
+ * Implemented as a BULK ACTION over the existing per-cell freeze rather than a
+ * `locked` column on the issue, so per-cell freezing still works underneath.
+ *
+ * Paid cells are skipped, not an error: paid already locks a cell against every
+ * edit, so they are locked by definition and freezing them would be redundant.
+ */
+export async function lockIssue(id: string): Promise<IssueSummary> {
+  const issue = await fetchIssue(id);
+  await assertIssueEditable(id);
+  const client = db();
+
+  const { data, error } = await client.from("captain_payouts").select("*").eq("issue_id", issue.id);
+  if (error) throwDb(error);
+
+  const cells = ((data ?? []) as CaptainPayoutRow[]).map(coercePayoutNumerics);
+  const toFreeze = cells.filter((c) => !c.paid && c.frozen_amount === null);
+  if (cells.length === 0) throw conflict("This issue has no payout cells to lock.");
+
+  const stamp = today();
+  for (const cell of toFreeze) {
+    const { error: freezeError } = await client
+      .from("captain_payouts")
+      .update({ frozen_amount: cell.calculated_amount, frozen_at: stamp })
+      .eq("id", cell.id);
+    if (freezeError) throwDb(freezeError);
+  }
+
+  return getIssue(id);
+}
+
+/** Unlock an issue: unfreeze every frozen, unpaid cell so they track live again. */
+export async function unlockIssue(id: string): Promise<IssueSummary> {
+  const issue = await fetchIssue(id);
+  await assertIssueEditable(id);
+  const client = db();
+
+  const { data, error } = await client.from("captain_payouts").select("*").eq("issue_id", issue.id);
+  if (error) throwDb(error);
+
+  const cells = ((data ?? []) as CaptainPayoutRow[]).map(coercePayoutNumerics);
+  const toThaw = cells.filter((c) => !c.paid && c.frozen_amount !== null);
+
+  for (const cell of toThaw) {
+    const { error: thawError } = await client
+      .from("captain_payouts")
+      .update({ frozen_amount: null, frozen_at: null })
+      .eq("id", cell.id);
+    if (thawError) throwDb(thawError);
+  }
+
+  // Cells that just went back to tracking the live calculation need recomputing,
+  // since the numbers may have moved while they were frozen.
+  await recalculateIssue(id);
+  return getIssue(id);
 }
