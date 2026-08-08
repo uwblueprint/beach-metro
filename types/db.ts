@@ -124,6 +124,11 @@ export interface CaptainPayoutRow {
   frozen_at: string | null;
   /** Captain who covered this issue; the payment is theirs, not captain_id's. */
   substitute_captain_id: string | null;
+  /**
+   * Free-standing note on the cell, independent of override_reason.
+   * PENDING(Q4): design has this as separate from the override reason.
+   */
+  comment: string | null;
   paid: boolean;
   paid_at: string | null;
 }

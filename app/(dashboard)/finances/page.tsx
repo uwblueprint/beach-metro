@@ -37,35 +37,34 @@ import {
 } from "@/components/ui/table";
 
 import {
-  CAPTAINS,
+  useAddIssue,
+  useArchiveYear,
+  useCreateYear,
+  useMarkPaid,
+  useOverridePayout,
+  useRenameYear,
+  useSetCellComment,
+  useSetSubstitute,
+  useToggleIssueLock,
+  useYearDetail,
+  useYears,
+  yearCsvUrl,
+  type GridIssue,
+} from "@/features/finances/api";
+
+import {
   DEFAULT_FINANCES_FILTERS,
-  INITIAL_ISSUES,
-  createCustomTableId,
-  createEmptyCustomTable,
-  createFinanceTableOptions,
+  NO_SUBSTITUTE,
   filterFinancesCaptains,
   filterFinancesIssues,
-  getPaymentDetail,
-  getPaymentYearTable,
-  PAYMENT_YEAR_DATE_RANGES,
-  type CaptainName,
+  formatCurrency,
+  formatIssueDateLong,
+  yearDateRange,
   type CellKey,
   type CellOverride,
-  type CustomFinanceTable,
-  type FinanceTableOption,
   type FinancesFilterState,
-  type Issue,
   type IssueFilterValue,
   type PaymentFilterValue,
-  type PaymentYear,
-  type SubstituteCaptainAssignment,
-  type SubstituteCaptainName,
-  formatCurrency,
-  generatePaymentsForIssueAtIndex,
-  generatePaymentsForIssues,
-  initialCellComments,
-  initialPaidCells,
-  nextIssueId,
 } from "./data";
 
 /** Fixed column widths — table-layout:fixed; checking cells must not resize columns */
@@ -73,10 +72,6 @@ const ISSUE_COLUMN_WIDTH = 232;
 const CAPTAIN_COLUMN_WIDTH = 133;
 
 const FINANCES_TABLE_CELL = "border-[0.5px] border-border";
-
-function getTableDisplayLabel(label: string) {
-  return label.replace(" (archived)", "");
-}
 
 function OpenLockIcon() {
   return (
@@ -201,14 +196,7 @@ function FilterSegmentGroup<T extends string>({
 }
 
 export default function FinancesPage() {
-  const [tableOptions, setTableOptions] = React.useState<FinanceTableOption[]>(() =>
-    createFinanceTableOptions(),
-  );
-  const [customTables, setCustomTables] = React.useState<Record<string, CustomFinanceTable>>({});
-  const [selectedTableId, setSelectedTableId] = React.useState("2026");
-  const [issues, setIssues] = React.useState<Issue[]>(() => [...INITIAL_ISSUES]);
-  const [payments, setPayments] = React.useState(() => generatePaymentsForIssues(INITIAL_ISSUES));
-  const [paid, setPaid] = React.useState<Set<CellKey>>(initialPaidCells);
+  const [selectedYearId, setSelectedYearId] = React.useState<string | null>(null);
   const [draftIssue, setDraftIssue] = React.useState<{ label: string } | null>(null);
   const [editingCell, setEditingCell] = React.useState<CellKey | null>(null);
   const [editValue, setEditValue] = React.useState("");
@@ -218,13 +206,6 @@ export default function FinancesPage() {
     originalValue: number;
   } | null>(null);
   const [overrideNote, setOverrideNote] = React.useState("");
-  const [editedCells, setEditedCells] = React.useState<Record<CellKey, CellOverride>>({});
-  const [substitutes, setSubstitutes] = React.useState<
-    Partial<Record<CellKey, SubstituteCaptainName>>
-  >({});
-  const [cellComments, setCellComments] = React.useState<Partial<Record<CellKey, string>>>(() =>
-    initialCellComments(),
-  );
   const [flashTriggers, setFlashTriggers] = React.useState<Partial<Record<CellKey, number>>>({});
   const [filters, setFilters] = React.useState<FinancesFilterState>(DEFAULT_FINANCES_FILTERS);
   const [overflowOpen, setOverflowOpen] = React.useState(false);
@@ -233,93 +214,95 @@ export default function FinancesPage() {
   const [showArchiveBanner, setShowArchiveBanner] = React.useState(false);
   const [isEditingTableTitle, setIsEditingTableTitle] = React.useState(false);
   const [tableTitleEditValue, setTableTitleEditValue] = React.useState("");
-  const [lockedIssues, setLockedIssues] = React.useState<Set<number>>(() => new Set([26]));
 
-  const selectedTable =
-    tableOptions.find((option) => option.id === selectedTableId) ?? tableOptions[0];
-  const tableDisplayLabel = getTableDisplayLabel(selectedTable.label);
-  const isArchivedYear = selectedTable?.archived ?? false;
-  const isEmptyTable = issues.length === 0 && !draftIssue;
-  const archivedYearDateRange = isArchivedYear
-    ? selectedTableId.startsWith("custom:")
-      ? selectedTable.label.replace(" (archived)", "")
-      : PAYMENT_YEAR_DATE_RANGES[Number(selectedTableId) as PaymentYear]
-    : null;
+  const { data: years } = useYears();
+  // Default to the newest non-archived year, matching what the overview picks.
+  const defaultYear = years?.find((y) => !y.archived) ?? years?.[0];
+  const activeYearId = selectedYearId ?? defaultYear?.id ?? null;
 
-  const visibleCaptains = React.useMemo(() => filterFinancesCaptains(filters), [filters]);
+  const { data: year, isPending, isError, error } = useYearDetail(activeYearId);
+
+  const createYear = useCreateYear();
+  const renameYear = useRenameYear();
+  const archiveYear = useArchiveYear();
+  const addIssue = useAddIssue(activeYearId);
+  const toggleLock = useToggleIssueLock(activeYearId);
+  const overridePayout = useOverridePayout(activeYearId);
+  const markPaid = useMarkPaid(activeYearId);
+  const setSubstitute = useSetSubstitute(activeYearId);
+  const setCellComment = useSetCellComment(activeYearId);
+
+  const tableOptions = (years ?? []).map((y) => ({
+    id: y.id,
+    label: y.archived ? `${y.name} (archived)` : y.name,
+    archived: y.archived,
+  }));
+  const selectedTable = tableOptions.find((o) => o.id === activeYearId) ?? tableOptions[0];
+  const tableDisplayLabel = year?.name ?? selectedTable?.label ?? "";
+  const isArchivedYear = year?.archived ?? false;
+  const archivedYearDateRange = isArchivedYear && year ? yearDateRange(year.startDate) : null;
+
+  // Memoised so the `?? []` fallbacks do not produce a new array identity on every
+  // render, which would make every downstream memo recompute for nothing.
+  const allCaptains = React.useMemo(() => year?.captains ?? [], [year]);
+  const allIssues = React.useMemo<GridIssue[]>(() => year?.issues ?? [], [year]);
+
+  const visibleCaptains = React.useMemo(
+    () => filterFinancesCaptains(allCaptains, filters),
+    [allCaptains, filters],
+  );
+  const visibleCaptainIds = React.useMemo(
+    () => visibleCaptains.map((c) => c.id),
+    [visibleCaptains],
+  );
   const visibleIssues = React.useMemo(
-    () => filterFinancesIssues(issues, filters, paid),
-    [issues, filters, paid],
+    () => filterFinancesIssues(allIssues, filters, visibleCaptainIds),
+    [allIssues, filters, visibleCaptainIds],
+  );
+  const isEmptyTable = allIssues.length === 0 && !draftIssue;
+
+  /** Every cell keyed by payout id, so lookups do not walk the grid each render. */
+  const cellsByPayoutId = React.useMemo(() => {
+    const map = new Map<string, GridIssue["cells"][number]>();
+    for (const issue of allIssues) for (const cell of issue.cells) map.set(cell.payoutId, cell);
+    return map;
+  }, [allIssues]);
+
+  /**
+   * Who can be picked as a substitute: every captain with a column, plus "None".
+   * One person may cover several captains, so this is not capped. How the grid
+   * should show that is still open with design; a row shows one covered name.
+   */
+  const substituteOptions = React.useMemo(
+    () => [NO_SUBSTITUTE, ...allCaptains.map((c) => c.name)],
+    [allCaptains],
   );
 
   function updateFilters(patch: Partial<FinancesFilterState>) {
     setFilters((prev) => ({ ...prev, ...patch }));
   }
 
-  function toggleCaptainFilter(captain: CaptainName, checked: boolean) {
-    setFilters((prev) => {
-      const next = checked
-        ? [...new Set([...prev.captains, captain])]
-        : prev.captains.filter((name) => name !== captain);
-
-      return { ...prev, captains: next.length > 0 ? next : [] };
-    });
-  }
-
-  function getCustomTablesSnapshot() {
-    if (!selectedTableId.startsWith("custom:")) return customTables;
-
-    return {
-      ...customTables,
-      [selectedTableId]: {
-        issues: [...issues],
-        payments: { ...payments },
-        paid: new Set(paid),
-      },
-    };
-  }
-
-  function resetTableUiState() {
-    setEditedCells({});
-    setSubstitutes({});
-    setCellComments(initialCellComments());
-    setFlashTriggers({});
-    setEditingCell(null);
-    setDraftIssue(null);
-    setConfirmDialog(null);
-    setOverrideNote("");
-    setFilters(DEFAULT_FINANCES_FILTERS);
-    setIsEditingTableTitle(false);
-    setTableTitleEditValue("");
-    setLockedIssues(new Set());
-  }
-
-  function loadTableData(tableId: string, tables: Record<string, CustomFinanceTable>) {
-    if (tableId.startsWith("custom:")) {
-      const table = tables[tableId] ?? createEmptyCustomTable();
-      setIssues([...table.issues]);
-      setPayments({ ...table.payments });
-      setPaid(new Set(table.paid));
-      return;
-    }
-
-    const table = getPaymentYearTable(Number(tableId) as PaymentYear);
-    setIssues([...table.issues]);
-    setPayments({ ...table.payments });
-    setPaid(new Set(table.paid));
+  function toggleCaptainFilter(captainId: string, checked: boolean) {
+    setFilters((prev) => ({
+      ...prev,
+      captains: checked
+        ? [...prev.captains, captainId]
+        : prev.captains.filter((id) => id !== captainId),
+    }));
   }
 
   function handleSelectTable(tableId: string) {
-    const nextCustomTables = getCustomTablesSnapshot();
-    if (selectedTableId.startsWith("custom:")) {
-      setCustomTables(nextCustomTables);
-    }
+    setSelectedYearId(tableId);
+    setEditingCell(null);
+    setDraftIssue(null);
+    const next = tableOptions.find((o) => o.id === tableId);
+    setShowArchiveBanner(next?.archived ?? false);
+  }
 
-    const nextTable = tableOptions.find((option) => option.id === tableId);
-    setSelectedTableId(tableId);
-    loadTableData(tableId, nextCustomTables);
-    resetTableUiState();
-    setShowArchiveBanner(nextTable?.archived ?? false);
+  function handleArchiveTable() {
+    if (!activeYearId || isArchivedYear) return;
+    setOverflowOpen(false);
+    archiveYear.mutate(activeYearId, { onSuccess: () => setShowArchiveBanner(true) });
   }
 
   function openCreateTableDialog() {
@@ -328,114 +311,101 @@ export default function FinancesPage() {
     setCreateTableOpen(true);
   }
 
-  function handleArchiveTable() {
-    if (isArchivedYear) return;
-
-    setOverflowOpen(false);
-    setEditingCell(null);
-    setDraftIssue(null);
-    setConfirmDialog(null);
-    setTableOptions((prev) =>
-      prev.map((option) => {
-        if (option.id !== selectedTableId || option.archived) return option;
-
-        const baseLabel = option.label.replace(" (archived)", "");
-        return {
-          ...option,
-          archived: true,
-          label: `${baseLabel} (archived)`,
-        };
-      }),
-    );
-    setShowArchiveBanner(true);
-  }
-
   function closeCreateTableDialog() {
     setCreateTableOpen(false);
     setNewTableName("");
   }
 
   function handleCreateTable() {
-    const label = newTableName.trim();
-    if (!label) return;
-
-    const nextCustomTables = getCustomTablesSnapshot();
-    if (selectedTableId.startsWith("custom:")) {
-      setCustomTables(nextCustomTables);
-    }
-
-    const id = createCustomTableId(
-      label,
-      tableOptions.map((option) => option.id),
+    const name = newTableName.trim();
+    if (!name) return;
+    // The start date sets the reporting quarters. There is no field for it in the
+    // design, so a new table starts on the first of the current month, which is
+    // the least surprising default for "I am starting a year now".
+    const now = new Date();
+    const startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    createYear.mutate(
+      { name, startDate },
+      {
+        onSuccess: (created) => {
+          setSelectedYearId(created.id);
+          setShowArchiveBanner(false);
+          closeCreateTableDialog();
+        },
+      },
     );
-    const emptyTable = createEmptyCustomTable();
-    const tablesWithNew = { ...nextCustomTables, [id]: emptyTable };
+  }
 
-    setCustomTables(tablesWithNew);
-    setTableOptions((prev) => [{ id, label, archived: false }, ...prev]);
-    setSelectedTableId(id);
-    setIssues([]);
-    setPayments({});
-    setPaid(new Set());
-    resetTableUiState();
-    closeCreateTableDialog();
+  function startTableTitleEdit() {
+    if (isArchivedYear || !year) return;
+    setTableTitleEditValue(year.name);
+    setIsEditingTableTitle(true);
+  }
+
+  function cancelTableTitleEdit() {
+    setIsEditingTableTitle(false);
+    setTableTitleEditValue("");
+  }
+
+  function commitTableTitleEdit() {
+    const name = tableTitleEditValue.trim();
+    if (!activeYearId || !name || name === year?.name) return cancelTableTitleEdit();
+    renameYear.mutate({ yearId: activeYearId, name }, { onSettled: cancelTableTitleEdit });
+  }
+
+  function handleTableTitleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitTableTitleEdit();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      cancelTableTitleEdit();
+    }
   }
 
   function handleCommentChange(key: CellKey, comment: string) {
-    setCellComments((prev) => {
-      if (!comment) {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      }
-
-      return { ...prev, [key]: comment };
-    });
+    setCellComment.mutate({ payoutId: key, comment: comment.trim() || null });
   }
 
-  function getSubstituteCaptain(key: CellKey): SubstituteCaptainAssignment {
-    return substitutes[key] ?? "None";
+  /**
+   * The picker offers every other captain plus "None". Choosing the column's own
+   * captain clears the substitute, since a captain covering for themselves is the
+   * same as nobody covering.
+   */
+  function handleSubstituteChange(key: CellKey, columnCaptainId: string, nextName: string) {
+    const target = allCaptains.find((c) => c.name === nextName);
+    const substituteCaptainId =
+      nextName === NO_SUBSTITUTE || !target || target.id === columnCaptainId ? null : target.id;
+    setSubstitute.mutate({ payoutId: key, substituteCaptainId });
   }
 
-  function handleSubstituteChange(
-    key: CellKey,
-    columnCaptain: CaptainName,
-    captain: SubstituteCaptainName,
-  ) {
-    setSubstitutes((prev) => {
-      if (captain === columnCaptain) {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      }
-
-      return { ...prev, [key]: captain };
-    });
-  }
-
+  /** Allowed any time the issue is open. One way: paid is final, there is no untick. */
   function handleMarkPaid(key: CellKey) {
     if (isArchivedYear) return;
-    setPaid((prev) => new Set(prev).add(key));
+    markPaid.mutate(key);
   }
 
   function handleDoubleClick(key: CellKey) {
     if (isArchivedYear) return;
-    const value = getCellValue(key);
+    const cell = cellsByPayoutId.get(key);
+    if (!cell || cell.paid) return;
     setEditingCell(key);
-    setEditValue(value.toFixed(2));
+    setEditValue(String(cell.effectiveAmount));
   }
 
   function handleEditSubmit(key: CellKey) {
-    const numValue = parseFloat(editValue);
-    if (!isNaN(numValue)) {
-      setOverrideNote("");
-      setConfirmDialog({
-        key,
-        value: editValue,
-        originalValue: editedCells[key]?.originalValue ?? payments[key] ?? 0,
-      });
-    }
+    const cell = cellsByPayoutId.get(key);
+    if (!cell) return setEditingCell(null);
+
+    const parsed = parseFloat(editValue);
+    if (Number.isNaN(parsed) || parsed < 0) return setEditingCell(null);
+
+    // Typing the calculated value back in means "no override", so clear instead.
+    if (parsed === cell.effectiveAmount) return setEditingCell(null);
+
     setEditingCell(null);
+    setOverrideNote("");
+    setConfirmDialog({ key, value: String(parsed), originalValue: cell.effectiveAmount });
   }
 
   function closeConfirmDialog() {
@@ -444,24 +414,20 @@ export default function FinancesPage() {
   }
 
   function confirmEdit() {
-    if (!confirmDialog || !overrideNote.trim()) return;
-    const { key, value } = confirmDialog;
-    const numValue = parseFloat(value);
-    if (isNaN(numValue)) return;
-    setEditedCells((prev) => ({
-      ...prev,
-      [key]: {
-        amount: numValue,
-        originalValue: confirmDialog.originalValue,
-        note: overrideNote.trim(),
-      },
-    }));
-    setFlashTriggers((prev) => ({ ...prev, [key]: (prev[key] ?? 0) + 1 }));
-    closeConfirmDialog();
-  }
+    if (!confirmDialog) return;
+    const note = overrideNote.trim();
+    if (!note) return;
 
-  function getCellValue(key: CellKey): number {
-    return editedCells[key]?.amount ?? payments[key] ?? 0;
+    const { key, value } = confirmDialog;
+    overridePayout.mutate(
+      { payoutId: key, amount: parseFloat(value), reason: note },
+      {
+        onSuccess: () => {
+          setFlashTriggers((prev) => ({ ...prev, [key]: (prev[key] ?? 0) + 1 }));
+        },
+      },
+    );
+    closeConfirmDialog();
   }
 
   function handleAddIssue() {
@@ -469,106 +435,62 @@ export default function FinancesPage() {
     setDraftIssue({ label: "" });
   }
 
-  function cancelDraftIssue() {
-    setDraftIssue(null);
-  }
-
   function commitDraftIssue() {
-    if (!draftIssue) return;
-    const label = draftIssue.label.trim();
-    if (!label) {
-      cancelDraftIssue();
-      return;
-    }
-
-    const newIssue: Issue = {
-      id: nextIssueId(issues),
-      label,
-      status: "open",
-      date: new Date().toISOString().slice(0, 10),
-    };
-    setIssues((prev) => [newIssue, ...prev]);
-    setPayments((prev) => ({
-      ...prev,
-      ...generatePaymentsForIssueAtIndex(newIssue, 0),
-    }));
-    cancelDraftIssue();
+    const label = draftIssue?.label.trim();
+    setDraftIssue(null);
+    if (!label || !activeYearId) return;
+    // No date field in the design, so a new issue is dated today. Its position in
+    // the year (and so its reporting quarter) follows from that.
+    const today = new Date().toISOString().slice(0, 10);
+    addIssue.mutate({ name: label, date: today });
   }
 
   function handleDraftKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
       e.preventDefault();
       commitDraftIssue();
-    }
-    if (e.key === "Escape") {
-      cancelDraftIssue();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setDraftIssue(null);
     }
   }
 
   function handleDraftBlur() {
-    if (!draftIssue) return;
-    if (draftIssue.label.trim()) {
-      commitDraftIssue();
-    } else {
-      cancelDraftIssue();
-    }
+    commitDraftIssue();
   }
 
-  function cancelTableTitleEdit() {
-    setIsEditingTableTitle(false);
-    setTableTitleEditValue("");
+  /** One lock per issue ("these numbers are settled"), a bulk freeze over its cells. */
+  function toggleIssueLock(issueId: string, locked: boolean) {
+    if (isArchivedYear) return;
+    if (editingCell && cellsByPayoutId.get(editingCell)?.payoutId) setEditingCell(null);
+    toggleLock.mutate({ issueId, locked });
   }
 
-  function startTableTitleEdit() {
-    if (isArchivedYear || isEditingTableTitle) return;
-    setTableTitleEditValue(tableDisplayLabel);
-    setIsEditingTableTitle(true);
+  function handleExportCsv() {
+    if (activeYearId) window.location.href = yearCsvUrl(activeYearId);
   }
 
-  function commitTableTitleEdit() {
-    const trimmed = tableTitleEditValue.trim();
-    if (!trimmed) {
-      cancelTableTitleEdit();
-      return;
-    }
-
-    setTableOptions((prev) =>
-      prev.map((option) => {
-        if (option.id !== selectedTableId) return option;
-
-        const suffix = option.archived ? " (archived)" : "";
-        return { ...option, label: `${trimmed}${suffix}` };
-      }),
+  if (isError) {
+    return (
+      <div className="page-container">
+        <div className="page">
+          <p className="p-6 text-md text-secondary">
+            {error instanceof Error ? error.message : "Could not load this finance table."}
+          </p>
+        </div>
+      </div>
     );
-    cancelTableTitleEdit();
   }
 
-  function handleTableTitleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      commitTableTitleEdit();
-    }
-    if (event.key === "Escape") {
-      cancelTableTitleEdit();
-    }
+  if (isPending || !year) {
+    return (
+      <div className="page-container">
+        <div className="page">
+          <p className="p-6 text-md text-secondary">Loading finance table…</p>
+        </div>
+      </div>
+    );
   }
-
-  function toggleIssueLock(issueId: number) {
-    setLockedIssues((prev) => {
-      const next = new Set(prev);
-      if (next.has(issueId)) {
-        next.delete(issueId);
-      } else {
-        next.add(issueId);
-      }
-      return next;
-    });
-
-    if (editingCell?.startsWith(`${issueId}-`)) {
-      setEditingCell(null);
-    }
-  }
-
   return (
     <div className="page-container">
       <div className="page">
@@ -627,11 +549,11 @@ export default function FinancesPage() {
                     className="min-w-56"
                   >
                     <DropdownMenuRadioGroup
-                      value={selectedTableId}
+                      value={activeYearId ?? ""}
                       onValueChange={handleSelectTable}
                     >
                       {tableOptions.map((option) => {
-                        const isSelected = option.id === selectedTableId;
+                        const isSelected = option.id === activeYearId;
 
                         return (
                           <DropdownMenuRadioItem
@@ -653,7 +575,9 @@ export default function FinancesPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button size="sm">Export as CSV</Button>
+              <Button size="sm" onClick={handleExportCsv}>
+                Export as CSV
+              </Button>
               <Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
                 <PopoverTrigger
                   render={
@@ -781,22 +705,22 @@ export default function FinancesPage() {
 
                   <FilterSection label="Captain">
                     <div className="flex flex-col gap-2">
-                      {CAPTAINS.map((captain) => {
-                        const checked = filters.captains.includes(captain);
+                      {allCaptains.map((captain) => {
+                        const checked = filters.captains.includes(captain.id);
 
                         return (
                           <label
-                            key={captain}
+                            key={captain.id}
                             className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground"
                           >
                             <Checkbox
                               checked={checked}
                               onCheckedChange={(nextChecked) =>
-                                toggleCaptainFilter(captain, nextChecked)
+                                toggleCaptainFilter(captain.id, nextChecked)
                               }
                               className="border-border bg-bg data-checked:border-primary data-checked:bg-primary data-checked:text-bg"
                             />
-                            {captain}
+                            {captain.name}
                           </label>
                         );
                       })}
@@ -811,7 +735,7 @@ export default function FinancesPage() {
                 <colgroup>
                   <col style={{ width: ISSUE_COLUMN_WIDTH }} />
                   {visibleCaptains.map((captain) => (
-                    <col key={captain} style={{ width: CAPTAIN_COLUMN_WIDTH }} />
+                    <col key={captain.id} style={{ width: CAPTAIN_COLUMN_WIDTH }} />
                   ))}
                 </colgroup>
                 <TableHeader className="[&_tr]:border-0">
@@ -842,14 +766,14 @@ export default function FinancesPage() {
                     </TableHead>
                     {visibleCaptains.map((captain) => (
                       <TableHead
-                        key={captain}
+                        key={captain.id}
                         className={cn(
                           "h-10 px-4 text-sm font-medium text-muted-foreground",
                           FINANCES_TABLE_CELL,
                         )}
                         style={{ width: CAPTAIN_COLUMN_WIDTH, minWidth: CAPTAIN_COLUMN_WIDTH }}
                       >
-                        {captain}
+                        {captain.name}
                       </TableHead>
                     ))}
                   </TableRow>
@@ -867,7 +791,7 @@ export default function FinancesPage() {
                       </TableCell>
                       {visibleCaptains.map((captain) => (
                         <TableCell
-                          key={`empty-${captain}`}
+                          key={`empty-${captain.id}`}
                           className={cn("h-12", FINANCES_TABLE_CELL)}
                           style={{ width: CAPTAIN_COLUMN_WIDTH, minWidth: CAPTAIN_COLUMN_WIDTH }}
                         />
@@ -896,7 +820,7 @@ export default function FinancesPage() {
                       </TableCell>
                       {visibleCaptains.map((captain) => (
                         <TableCell
-                          key={`draft-${captain}`}
+                          key={`draft-${captain.id}`}
                           className={cn("h-12", FINANCES_TABLE_CELL)}
                           style={{ width: CAPTAIN_COLUMN_WIDTH, minWidth: CAPTAIN_COLUMN_WIDTH }}
                         />
@@ -904,7 +828,7 @@ export default function FinancesPage() {
                     </TableRow>
                   )}
                   {visibleIssues.map((issue) => {
-                    const isIssueLocked = lockedIssues.has(issue.id);
+                    const isIssueLocked = issue.locked;
 
                     return (
                       <TableRow key={issue.id} className="border-0 hover:bg-transparent">
@@ -913,12 +837,15 @@ export default function FinancesPage() {
                           style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
                         >
                           <div className="group flex h-full w-full items-center justify-between gap-2">
-                            <span className="min-w-0 whitespace-nowrap">{issue.label}</span>
+                            {/* The office already names issues with their date
+                                ("Issue 01, March 10th"), so appending the date
+                                again would read as a duplicate. */}
+                            <span className="min-w-0 whitespace-nowrap">{issue.name}</span>
                             {!isArchivedYear && (
                               <button
                                 type="button"
                                 aria-label={isIssueLocked ? "Unlock issue" : "Lock issue"}
-                                onClick={() => toggleIssueLock(issue.id)}
+                                onClick={() => toggleIssueLock(issue.id, isIssueLocked)}
                                 className={cn(
                                   "flex shrink-0 items-center justify-center rounded-[4px] p-1.5 text-muted-foreground transition-[opacity,background-color,color] duration-200 hover:bg-muted hover:text-primary",
                                   isIssueLocked
@@ -932,8 +859,36 @@ export default function FinancesPage() {
                           </div>
                         </TableCell>
                         {visibleCaptains.map((captain) => {
-                          const key: CellKey = `${issue.id}-${captain}`;
+                          const cell = issue.cells.find((c) => c.captainId === captain.id);
+                          if (!cell) {
+                            return (
+                              <TableCell
+                                key={`${issue.id}-${captain.id}`}
+                                className={cn("h-12", FINANCES_TABLE_CELL)}
+                                style={{
+                                  width: CAPTAIN_COLUMN_WIDTH,
+                                  minWidth: CAPTAIN_COLUMN_WIDTH,
+                                }}
+                              />
+                            );
+                          }
+
+                          const key: CellKey = cell.payoutId;
                           const isEditing = editingCell === key;
+                          const overridden = cell.calculationStatus === "overridden";
+                          const override: CellOverride | undefined = overridden
+                            ? {
+                                amount: cell.effectiveAmount,
+                                originalValue: cell.calculatedAmount,
+                                note: cell.overrideReason ?? "",
+                              }
+                            : undefined;
+                          // Quantity implied by the formula, so the popover can show
+                          // "N x rate" without a request per cell.
+                          const quantity =
+                            captain.payRate > 0
+                              ? Math.round(cell.calculatedAmount / captain.payRate)
+                              : 0;
 
                           return (
                             <TableCell
@@ -945,20 +900,28 @@ export default function FinancesPage() {
                               }}
                             >
                               <PaymentCell
-                                value={getCellValue(key)}
-                                paid={paid.has(key)}
-                                columnCaptain={captain}
-                                substituteCaptain={getSubstituteCaptain(key)}
-                                onSubstituteChange={(nextCaptain) =>
-                                  handleSubstituteChange(key, captain, nextCaptain)
+                                value={cell.effectiveAmount}
+                                paid={cell.paid}
+                                columnCaptain={captain.name}
+                                substituteCaptain={cell.substituteCaptainName ?? NO_SUBSTITUTE}
+                                substituteOptions={substituteOptions}
+                                onSubstituteChange={(nextName) =>
+                                  handleSubstituteChange(key, captain.id, nextName)
                                 }
-                                paymentDetail={getPaymentDetail(captain, issue)}
-                                comment={cellComments[key]}
+                                paymentDetail={{
+                                  captainName: captain.name,
+                                  issueLabel: issue.name,
+                                  lastModified: formatIssueDateLong(issue.date),
+                                  territory: `${captain.name}'s territory`,
+                                  bundleCount: quantity,
+                                  ratePerBundle: captain.payRate,
+                                }}
+                                comment={cell.comment ?? undefined}
                                 onCommentChange={(nextComment) =>
                                   handleCommentChange(key, nextComment)
                                 }
-                                overridden={!!editedCells[key]}
-                                override={editedCells[key]}
+                                overridden={overridden}
+                                override={override}
                                 flashTrigger={flashTriggers[key] ?? 0}
                                 onMarkPaid={() => handleMarkPaid(key)}
                                 isEditing={isEditing}

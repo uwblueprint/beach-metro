@@ -2,11 +2,15 @@
 import type { z } from "zod";
 
 import { conflict, notFound } from "@/lib/api/errors";
-import type { createFinancialYear, yearsQuery } from "@/lib/validation/finance";
-import type { CaptainPayoutRow, CaptainRow, FinancialYearRow, IssueRow } from "@/types/db";
+import type {
+  createFinancialYear,
+  updateFinancialYear,
+  yearsQuery,
+} from "@/lib/validation/finance";
+import type { CaptainPayoutRow, CaptainRow, FinancialYearRow, IssueRow, PayType } from "@/types/db";
 
 import { calculationStatus, effectiveAmount } from "./derive";
-import { coercePayoutNumerics, db, throwDb } from "./shared";
+import { coerceCaptainNumerics, coercePayoutNumerics, db, throwDb } from "./shared";
 
 export interface YearSummary {
   id: string;
@@ -21,18 +25,39 @@ export interface YearDetail {
   id: string;
   name: string;
   archived: boolean;
-  /** Column set: every captain appearing in this year's payout cells. */
-  captains: Array<{ id: string; name: string }>;
+  /** The month the year starts; the header shows the range from it. */
+  startDate: string;
+  /**
+   * Column set: every captain appearing in this year's payout cells. Pay config
+   * rides along so the cell popover can show "N bundles x rate" without a
+   * request per cell.
+   */
+  captains: Array<{ id: string; name: string; payType: PayType; payRate: number }>;
   issues: Array<{
     id: string;
     name: string;
     date: string;
     status: "open" | "closed";
+    /**
+     * Derived, not stored: every cell is either frozen or paid, and there is at
+     * least one. One lock per issue, modelled as a bulk freeze over the per-cell
+     * state rather than a new column.
+     */
+    locked: boolean;
     cells: Array<{
       payoutId: string;
       captainId: string;
+      /** What the formula says, before any override or freeze. */
+      calculatedAmount: number;
       effectiveAmount: number;
       calculationStatus: "calculated" | "frozen" | "overridden";
+      /** Shown in the cell popover next to the amount. */
+      overrideReason: string | null;
+      /** Free-standing note, a different thing from the override reason. */
+      comment: string | null;
+      /** The captain who covered this issue, if one is recorded. */
+      substituteCaptainId: string | null;
+      substituteCaptainName: string | null;
       paid: boolean;
     }>;
   }>;
@@ -89,35 +114,61 @@ export async function getYearDetail(id: string): Promise<YearDetail> {
 
   const { data: captainData, error: captainError } = await client
     .from("captains")
-    .select("id, first_name, last_name");
+    .select("id, first_name, last_name, pay_type, pay_rate");
   if (captainError) throwDb(captainError);
-  const captains = (captainData ?? []) as Pick<CaptainRow, "id" | "first_name" | "last_name">[];
+  const captains = (
+    (captainData ?? []) as Pick<
+      CaptainRow,
+      "id" | "first_name" | "last_name" | "pay_type" | "pay_rate"
+    >[]
+  ).map(coerceCaptainNumerics);
 
   const columnCaptainIds = [...new Set(payouts.map((p) => p.captain_id))];
+
+  const nameOf = (cid: string | null): string | null => {
+    if (!cid) return null;
+    const c = captains.find((x) => x.id === cid);
+    return c ? `${c.first_name} ${c.last_name}` : "Unknown captain";
+  };
 
   return {
     id: year.id,
     name: year.name,
     archived: year.archived,
+    startDate: year.start_date,
     captains: columnCaptainIds.map((cid) => {
       const c = captains.find((x) => x.id === cid);
-      return { id: cid, name: c ? `${c.first_name} ${c.last_name}` : "Unknown captain" };
+      return {
+        id: cid,
+        name: nameOf(cid) ?? "Unknown captain",
+        payType: c?.pay_type ?? "bundle",
+        payRate: c?.pay_rate ?? 0,
+      };
     }),
-    issues: issues.map((i) => ({
-      id: i.id,
-      name: i.name,
-      date: i.date,
-      status: i.status,
-      cells: payouts
-        .filter((p) => p.issue_id === i.id)
-        .map((p) => ({
+    issues: issues.map((i) => {
+      const cells = payouts.filter((p) => p.issue_id === i.id);
+      return {
+        id: i.id,
+        name: i.name,
+        date: i.date,
+        status: i.status,
+        // Paid counts as locked: a paid cell already refuses every edit, so an
+        // issue whose cells are all paid reads as locked without being frozen.
+        locked: cells.length > 0 && cells.every((p) => p.paid || p.frozen_amount !== null),
+        cells: cells.map((p) => ({
           payoutId: p.id,
           captainId: p.captain_id,
+          calculatedAmount: p.calculated_amount,
           effectiveAmount: effectiveAmount(p),
           calculationStatus: calculationStatus(p),
+          overrideReason: p.override_reason,
+          comment: p.comment,
+          substituteCaptainId: p.substitute_captain_id,
+          substituteCaptainName: nameOf(p.substitute_captain_id),
           paid: p.paid,
         })),
-    })),
+      };
+    }),
   };
 }
 
@@ -165,4 +216,22 @@ export async function exportYearCsv(id: string): Promise<{ filename: string; csv
     lines.push([esc(issue.name), issue.date, issue.status, ...cells].join(","));
   }
   return { filename: `${detail.name.replaceAll(/\s+/g, "-")}.csv`, csv: lines.join("\n") + "\n" };
+}
+
+/**
+ * Rename a year. Only the name is editable: the start date fixes the reporting
+ * quarters (finance flow §4a), so changing it after issues exist would silently
+ * move every issue into a different quarter on the overview.
+ */
+export async function updateYearRecord(
+  id: string,
+  input: z.infer<typeof updateFinancialYear>,
+): Promise<YearSummary> {
+  await fetchYear(id);
+  const { error } = await db().from("financial_years").update({ name: input.name }).eq("id", id);
+  if (error) throwDb(error);
+  const years = await listYears({});
+  const updated = years.find((y) => y.id === id);
+  if (!updated) throw notFound("Financial year");
+  return updated;
 }
