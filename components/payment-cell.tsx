@@ -102,6 +102,7 @@ function PaymentAmountPopover({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
+        nativeButton={false}
         render={
           <span
             className={cn(
