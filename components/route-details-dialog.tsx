@@ -124,6 +124,12 @@ function RouteDetailsFields({
     }
 
     const bundles = papersRows.filter((p) => p > 0).map((papers) => ({ papers }));
+    if (bundles.length === 0) {
+      // Without this the route saves with papers = 0: the API accepts an empty
+      // bundle list, and the sum-equals-papers check passes trivially (0 = 0).
+      setError("Add at least one bundle with a paper count.");
+      return;
+    }
     const resolveAddress = (line: string, placeId: string | null) =>
       placeId ? { placeId } : { addressLines: [line] };
 
