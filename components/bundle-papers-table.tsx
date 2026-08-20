@@ -117,6 +117,14 @@ function BundlePapersTable({
                 type="button"
                 className="flex h-8 w-full cursor-text items-center rounded-[4px] px-0 text-left text-md tabular-nums text-secondary outline-none focus-visible:ring-2 focus-visible:ring-active/40"
                 onDoubleClick={() => startEdit(index)}
+                // Keyboard parity with the double-click: the cell is focusable,
+                // so it has to be openable without a pointer.
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    startEdit(index);
+                  }
+                }}
               >
                 {papers > 0 ? papers : ""}
               </button>
