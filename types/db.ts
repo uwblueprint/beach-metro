@@ -139,6 +139,14 @@ export interface RouteBundle {
   papers: number;
 }
 
+export interface BundleLabelRow {
+  id: string;
+  delivery_id: string;
+  /** Index into the delivery's `bundles` array. Positional: a re-split shifts it. */
+  bundle_index: number;
+  labelled_at: string;
+}
+
 export interface RouteDeliveryRow {
   id: string;
   issue_id: string;
