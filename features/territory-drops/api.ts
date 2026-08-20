@@ -1,7 +1,7 @@
 // Data layer for the New Territory Drop dialog: candidates + mutations.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/lib/api/client";
+import { ApiError, api } from "@/lib/api/client";
 import { memberKeys } from "@/features/members/api";
 import type { CaptainSummary } from "@/lib/services/captains";
 import type {
@@ -83,18 +83,35 @@ export function useAddCommercialDrop() {
     }: {
       territoryId: string;
       address: { placeId: string } | { addressLines: string[] };
-      /** When reallocating an existing drop, remove it from the prior territory first. */
+      /** When reallocating an existing drop, the prior territory to detach it from. */
       previousTerritoryId?: string | null;
       previousAddressId?: string | null;
     }) => {
+      // Add to the new territory BEFORE detaching from the old one. Removing
+      // first would leave the drop on neither territory if the add then failed
+      // (the remove hard-deletes the address row). This way a failed detach
+      // leaves it visibly on both, which the user can still fix.
+      const detail = await api.post<TerritoryDetail>(
+        `/api/territories/${territoryId}/commercial-drops`,
+        { address },
+      );
+
       if (previousTerritoryId && previousAddressId && previousTerritoryId !== territoryId) {
-        await api.del(
-          `/api/territories/${previousTerritoryId}/commercial-drops/${previousAddressId}`,
-        );
+        try {
+          await api.del(
+            `/api/territories/${previousTerritoryId}/commercial-drops/${previousAddressId}`,
+          );
+        } catch (cause) {
+          throw new ApiError(
+            "conflict",
+            "Added to the new territory, but could not remove it from the old one — it now appears on both.",
+            409,
+            cause,
+          );
+        }
       }
-      return api.post<TerritoryDetail>(`/api/territories/${territoryId}/commercial-drops`, {
-        address,
-      });
+
+      return detail;
     },
     onSuccess: () => invalidateTerritoryCaches(queryClient),
   });
