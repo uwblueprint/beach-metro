@@ -154,6 +154,9 @@ export async function listRecentPaidPayoutsForCaptain(
   captainId: string,
   limit = 4,
 ): Promise<CaptainReimbursementsResult> {
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID.test(captainId)) throw notFound("Captain");
+
   const client = db();
   const { data: captainData, error: captainError } = await client
     .from("captains")

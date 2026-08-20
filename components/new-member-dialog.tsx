@@ -3,6 +3,7 @@
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
+import { AddressField } from "@/components/address-field";
 import {
   Dialog,
   DialogBody,
@@ -18,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { useCreateCaptain, useCreateVolunteer, type MemberRole } from "@/features/members/api";
+import { useCaptainsList } from "@/features/territory-drops/api";
 
 export interface NewMemberDialogProps {
   open: boolean;
@@ -37,7 +39,12 @@ const CADENCES = [
 ] as const;
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }
 
 function SelectField({
@@ -78,14 +85,18 @@ function NewMemberForm({
 }) {
   const createVolunteer = useCreateVolunteer();
   const createCaptain = useCreateCaptain();
+  const { data: captains } = useCaptainsList();
 
   const [step, setStep] = useState(1);
   const [role, setRole] = useState<MemberRole>("volunteer");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [startDate, setStartDate] = useState(todayIso);
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [streetAddress, setStreetAddress] = useState("");
+  const [addressPlaceId, setAddressPlaceId] = useState<string | null>(null);
+  const [captainTerritoryId, setCaptainTerritoryId] = useState("");
   const [payType, setPayType] = useState<"bundle" | "paper" | "drop" | "">("");
   const [payRate, setPayRate] = useState("");
   const [payCadence, setPayCadence] = useState<"biweekly" | "monthly" | "">("");
@@ -105,6 +116,7 @@ function NewMemberForm({
   function validateStep(current: number): string | null {
     if (current === 1) {
       if (!firstName.trim() || !lastName.trim()) return "First and last name are required.";
+      if (!startDate) return "Start date is required.";
       return null;
     }
     if (current === 2) {
@@ -154,8 +166,11 @@ function NewMemberForm({
           lastName: lastName.trim(),
           email: email.trim(),
           phone: phone.trim(),
-          address: { addressLines: [streetAddress.trim()] },
-          startDate: todayIso(),
+          address: addressPlaceId
+            ? { placeId: addressPlaceId }
+            : { addressLines: [streetAddress.trim()] },
+          startDate,
+          captainTerritoryId: captainTerritoryId || null,
         });
         onSuccess?.({
           id: created.id,
@@ -171,7 +186,7 @@ function NewMemberForm({
           payType: payType as "bundle" | "paper" | "drop",
           payRate: Number(payRate),
           payCadence: payCadence as "biweekly" | "monthly",
-          startDate: todayIso(),
+          startDate,
         });
         onSuccess?.({
           id: created.id,
@@ -245,6 +260,18 @@ function NewMemberForm({
                 autoComplete="family-name"
               />
             </DialogField>
+            <DialogField>
+              <Label htmlFor="nm-start" className="text-md font-normal text-primary">
+                Start Date
+              </Label>
+              <Input
+                id="nm-start"
+                type="date"
+                name="startDate"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </DialogField>
           </>
         ) : null}
 
@@ -278,18 +305,48 @@ function NewMemberForm({
               />
             </DialogField>
             {role === "volunteer" ? (
-              <DialogField>
-                <Label htmlFor="nm-address" className="text-md font-normal text-primary">
-                  Street Address
-                </Label>
-                <Input
-                  id="nm-address"
-                  value={streetAddress}
-                  onChange={(e) => setStreetAddress(e.target.value)}
-                  placeholder="Input text"
-                  autoComplete="street-address"
-                />
-              </DialogField>
+              <>
+                <DialogField>
+                  <AddressField
+                    id="nm-address"
+                    label="Street Address"
+                    placeholder="1900 Queen St E"
+                    value={streetAddress}
+                    onChange={(text) => {
+                      setStreetAddress(text);
+                      setAddressPlaceId(null);
+                    }}
+                    onPick={(placeId, text) => {
+                      setAddressPlaceId(placeId);
+                      setStreetAddress(text);
+                    }}
+                  />
+                </DialogField>
+                <DialogField>
+                  <Label
+                    id="nm-captain-label"
+                    htmlFor="nm-captain"
+                    className="text-md font-normal text-primary"
+                  >
+                    Captain
+                  </Label>
+                  <SelectField
+                    id="nm-captain"
+                    aria-labelledby="nm-captain-label"
+                    value={captainTerritoryId}
+                    onChange={setCaptainTerritoryId}
+                  >
+                    <option value="">No captain</option>
+                    {(captains ?? [])
+                      .filter((c) => c.territory)
+                      .map((c) => (
+                        <option key={c.id} value={c.territory!.id}>
+                          {c.firstName} {c.lastName}
+                        </option>
+                      ))}
+                  </SelectField>
+                </DialogField>
+              </>
             ) : null}
           </>
         ) : null}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { AddressField } from "@/components/address-field";
 import { BundlePapersTable } from "@/components/bundle-papers-table";
 import { Button } from "@/components/ui/button";
 import {
@@ -100,6 +101,8 @@ function RouteDetailsFields({
   const [streetName, setStreetName] = useState(initial.streetName);
   const [startAddress, setStartAddress] = useState(initial.startAddress);
   const [endAddress, setEndAddress] = useState(initial.endAddress);
+  const [startPlaceId, setStartPlaceId] = useState(initial.startPlaceId);
+  const [endPlaceId, setEndPlaceId] = useState(initial.endPlaceId);
   const [papersRows, setPapersRows] = useState(initial.papersRows);
   const [note, setNote] = useState(initial.note);
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +124,8 @@ function RouteDetailsFields({
     }
 
     const bundles = papersRows.filter((p) => p > 0).map((papers) => ({ papers }));
+    const resolveAddress = (line: string, placeId: string | null) =>
+      placeId ? { placeId } : { addressLines: [line] };
 
     try {
       if (isEdit && routeId) {
@@ -129,22 +134,18 @@ function RouteDetailsFields({
           bundles,
           note: note.trim() || null,
         };
-        if (start !== initial.initialStartLabel) {
-          body.startAddress = { addressLines: [start] };
-        } else if (initial.startPlaceId) {
-          body.startAddress = { placeId: initial.startPlaceId };
+        if (start !== initial.initialStartLabel || startPlaceId !== initial.startPlaceId) {
+          body.startAddress = resolveAddress(start, startPlaceId);
         }
-        if (end !== initial.initialEndLabel) {
-          body.endAddress = { addressLines: [end] };
-        } else if (initial.endPlaceId) {
-          body.endAddress = { placeId: initial.endPlaceId };
+        if (end !== initial.initialEndLabel || endPlaceId !== initial.endPlaceId) {
+          body.endAddress = resolveAddress(end, endPlaceId);
         }
         await updateRoute.mutateAsync({ id: routeId, body });
       } else {
         await createRoute.mutateAsync({
           streetName: name,
-          startAddress: { addressLines: [start] },
-          endAddress: { addressLines: [end] },
+          startAddress: resolveAddress(start, startPlaceId),
+          endAddress: resolveAddress(end, endPlaceId),
           assignedVolunteerId: volunteerId,
           houseCount: 0,
           bundles,
@@ -179,25 +180,35 @@ function RouteDetailsFields({
           />
         </DialogField>
         <DialogField>
-          <Label htmlFor="route-start" className="text-md font-normal text-primary">
-            Start Address
-          </Label>
-          <Input
+          <AddressField
             id="route-start"
-            value={startAddress}
-            onChange={(e) => setStartAddress(e.target.value)}
+            label="Start Address"
             placeholder="123 Queen St"
+            value={startAddress}
+            onChange={(text) => {
+              setStartAddress(text);
+              setStartPlaceId(null);
+            }}
+            onPick={(placeId, text) => {
+              setStartPlaceId(placeId);
+              setStartAddress(text);
+            }}
           />
         </DialogField>
         <DialogField>
-          <Label htmlFor="route-end" className="text-md font-normal text-primary">
-            End Address
-          </Label>
-          <Input
+          <AddressField
             id="route-end"
-            value={endAddress}
-            onChange={(e) => setEndAddress(e.target.value)}
+            label="End Address"
             placeholder="187 Queen St"
+            value={endAddress}
+            onChange={(text) => {
+              setEndAddress(text);
+              setEndPlaceId(null);
+            }}
+            onPick={(placeId, text) => {
+              setEndPlaceId(placeId);
+              setEndAddress(text);
+            }}
           />
         </DialogField>
         <DialogField>

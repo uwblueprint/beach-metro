@@ -4,6 +4,7 @@ import { ChevronDown, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { AddressField } from "@/components/address-field";
 import { Button } from "@/components/ui/button";
 import { NewTerritoryDropDialog, type DropSelection } from "@/components/new-territory-drop-dialog";
 import { NotesSection } from "@/components/notes-section";
@@ -23,6 +24,7 @@ import {
   useVolunteer,
   type MemberRole,
 } from "@/features/members/api";
+import { territoryDropKeys } from "@/features/territory-drops/api";
 
 /** The row the user clicked. Name comes along so the header renders immediately. */
 export interface MemberSelection {
@@ -155,6 +157,7 @@ function VolunteerContent({ id }: { id: string }) {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [addressPlaceId, setAddressPlaceId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -187,6 +190,7 @@ function VolunteerContent({ id }: { id: string }) {
     setEmail(volunteer!.email);
     setPhone(volunteer!.phone);
     setAddress(currentAddress);
+    setAddressPlaceId(volunteer!.address.placeId);
     setStartDate(volunteer!.startDate);
     setSaveError(null);
     setEditing(true);
@@ -218,12 +222,18 @@ function VolunteerContent({ id }: { id: string }) {
       email?: string;
       phone?: string;
       startDate?: string;
-      address?: { addressLines: string[] };
+      address?: { addressLines: string[] } | { placeId: string };
     } = {};
     if (trimmedEmail !== volunteer!.email) body.email = trimmedEmail;
     if (trimmedPhone !== volunteer!.phone) body.phone = trimmedPhone;
     if (startDate !== volunteer!.startDate) body.startDate = startDate;
-    if (trimmedAddress !== currentAddress) body.address = { addressLines: [trimmedAddress] };
+    if (trimmedAddress !== currentAddress) {
+      body.address = addressPlaceId
+        ? { placeId: addressPlaceId }
+        : { addressLines: [trimmedAddress] };
+    } else if (addressPlaceId && addressPlaceId !== volunteer!.address.placeId) {
+      body.address = { placeId: addressPlaceId };
+    }
 
     if (Object.keys(body).length === 0) {
       setEditing(false);
@@ -267,12 +277,19 @@ function VolunteerContent({ id }: { id: string }) {
               />
             </EditableField>
             <EditableField label="Address" htmlFor={`volunteer-address-${id}`}>
-              <Input
+              <AddressField
                 id={`volunteer-address-${id}`}
-                name="address"
-                autoComplete="street-address"
+                label=""
+                placeholder="1900 Queen St E"
                 value={address}
-                onChange={(e) => setAddress(e.target.value)}
+                onChange={(text) => {
+                  setAddress(text);
+                  setAddressPlaceId(null);
+                }}
+                onPick={(placeId, text) => {
+                  setAddressPlaceId(placeId);
+                  setAddress(text);
+                }}
               />
             </EditableField>
             <EditableField label="Start Date" htmlFor={`volunteer-start-${id}`}>
@@ -715,7 +732,7 @@ function CaptainContent({ id }: { id: string }) {
         onSuccess={() => {
           void refetchTerritory();
           void queryClient.invalidateQueries({ queryKey: memberKeys.all });
-          void queryClient.invalidateQueries({ queryKey: ["territory-drops"] });
+          void queryClient.invalidateQueries({ queryKey: territoryDropKeys.all });
           if (territoryId) {
             void queryClient.invalidateQueries({ queryKey: memberKeys.territory(territoryId) });
           }

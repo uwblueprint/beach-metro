@@ -13,6 +13,8 @@ import type { CaptainPayoutHistoryEntry } from "@/lib/services/payouts";
 import type { CaptainSummary } from "@/lib/services/captains";
 import type { TerritoryDetail } from "@/lib/services/territories";
 import type { VolunteerDetail } from "@/lib/services/volunteers";
+import { routeKeys } from "@/features/routes/api";
+import { territoryDropKeys } from "@/features/territory-drops/api";
 
 export type { MemberRow, MemberNote, CaptainPayoutHistoryEntry };
 
@@ -106,7 +108,7 @@ export function useRetireMember() {
       api.post<unknown>(`/api/${role}s/${id}/retire`),
     onSuccess: (_data, { id, role }) => {
       queryClient.invalidateQueries({ queryKey: memberKeys.all });
-      queryClient.invalidateQueries({ queryKey: ["routes"] });
+      queryClient.invalidateQueries({ queryKey: routeKeys.all });
       queryClient.invalidateQueries({
         queryKey: role === "volunteer" ? memberKeys.volunteer(id) : memberKeys.captain(id),
       });
@@ -192,7 +194,7 @@ export function useSetVacation(volunteerId: string) {
     onSuccess: () => {
       // Status is derived from the window, so both the row and the detail change.
       queryClient.invalidateQueries({ queryKey: memberKeys.all });
-      queryClient.invalidateQueries({ queryKey: ["routes"] });
+      queryClient.invalidateQueries({ queryKey: routeKeys.all });
     },
   });
 }
@@ -238,7 +240,7 @@ export function useCreateCaptain() {
     mutationFn: (body: CreateCaptainBody) => api.post<CaptainSummary>("/api/captains", body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: memberKeys.all });
-      queryClient.invalidateQueries({ queryKey: ["territory-drops"] });
+      queryClient.invalidateQueries({ queryKey: territoryDropKeys.all });
     },
   });
 }

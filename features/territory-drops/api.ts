@@ -2,6 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
+import { memberKeys } from "@/features/members/api";
 import type { CaptainSummary } from "@/lib/services/captains";
 import type {
   CommercialDropCandidate,
@@ -59,7 +60,7 @@ export function useCommercialDropCandidates() {
 
 function invalidateTerritoryCaches(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: territoryDropKeys.all });
-  queryClient.invalidateQueries({ queryKey: ["members"] });
+  queryClient.invalidateQueries({ queryKey: memberKeys.all });
 }
 
 export function useAssignVolunteerToTerritory() {

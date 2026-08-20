@@ -13,7 +13,7 @@ export const routeKeys = {
 export function useVolunteerRoutes(volunteerId: string | null | undefined) {
   return useQuery({
     queryKey: routeKeys.byVolunteer(volunteerId ?? ""),
-    queryFn: () => api.get<RouteSummary[]>("/api/routes", { volunteerId: volunteerId! }),
+    queryFn: () => api.get<RouteSummary[]>("/api/routes", { volunteerId: volunteerId ?? "" }),
     enabled: !!volunteerId,
   });
 }
