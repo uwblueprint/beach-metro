@@ -44,7 +44,12 @@ export interface CommercialDropCandidate {
 export async function listCommercialDropCandidates(): Promise<CommercialDropCandidate[]> {
   const client = db();
   const [aRes, tRes, cRes] = await Promise.all([
-    client.from("addresses").select("id, google_maps_id, territory_id").eq("type", "commercial"),
+    // Embed the cached label rather than re-selecting these same rows through
+    // getAddressDetails afterwards.
+    client
+      .from("addresses")
+      .select("id, google_maps_id, territory_id, google_maps_locations(cached_formatted_address)")
+      .eq("type", "commercial"),
     client.from("captain_territories").select("id, assigned_captain_id"),
     client.from("captains").select("id, first_name, last_name"),
   ]);
@@ -67,17 +72,19 @@ export async function listCommercialDropCandidates(): Promise<CommercialDropCand
     ]),
   );
 
-  const rows = (aRes.data ?? []) as Array<{
+  // PostgREST returns the many-to-one embed as a single object; the untyped
+  // client infers an array, so cast through unknown (same as getAddressDetails).
+  const rows = (aRes.data ?? []) as unknown as Array<{
     id: string;
     google_maps_id: string;
     territory_id: string | null;
+    google_maps_locations: { cached_formatted_address: string | null } | null;
   }>;
-  const details = await getAddressDetails(rows.map((r) => r.id));
 
   return rows.map((row) => ({
     addressId: row.id,
     placeId: row.google_maps_id,
-    label: details.get(row.id)?.formattedAddress ?? "Address not geocoded yet",
+    label: row.google_maps_locations?.cached_formatted_address ?? "Address not geocoded yet",
     territoryId: row.territory_id,
     territoryBadge: row.territory_id ? (badgeByTerritoryId.get(row.territory_id) ?? null) : null,
   }));
