@@ -6,7 +6,20 @@
 // grayscale style is a neutral placeholder that matches the mockups' tone.
 
 import { APIProvider, Map, useMap } from "@vis.gl/react-google-maps";
-import { useEffect } from "react";
+import { Filter, Maximize2, Minimize2, Minus, Plus } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+
+import { Button } from "@/components/ui/button";
+import { PillGroup } from "@/components/ui/pill-group";
+import { SearchBar } from "@/components/ui/search-bar";
+import { cn } from "@/lib/utils";
 
 export interface MapRoute {
   id: string;
@@ -25,6 +38,9 @@ export interface MapHome {
   name: string;
   home: { latitude: number; longitude: number } | null;
 }
+
+export type VacancyFilter = "all" | "vacant" | "assigned";
+export type DeliveryTypeFilter = "all" | "routes" | "drops";
 
 // Desaturated / monochrome base map: light-gray land, white roads, gray water,
 // no POI or transit clutter — so the colored route lines are the only signal.
@@ -184,46 +200,313 @@ function FitBounds({ routes, homes }: { routes: MapRoute[]; homes: MapHome[] }) 
 
 const BEACHES_CENTER = { lat: 43.6725, lng: -79.2915 };
 
+const ASSIGNED_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "assigned", label: "Assigned" },
+  { value: "vacant", label: "Vacant" },
+] as const;
+
+const TYPE_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "routes", label: "Routes" },
+  { value: "drops", label: "Drops" },
+] as const;
+
+function readCssDurationMsFrom(el: Element, variable: string, fallback: number): number {
+  const raw = getComputedStyle(el).getPropertyValue(variable).trim();
+  if (!raw) return fallback;
+  if (raw.endsWith("ms")) return parseFloat(raw);
+  if (raw.endsWith("s")) return parseFloat(raw) * 1000;
+  return parseFloat(raw) || fallback;
+}
+
+/** Custom map controls overlay: filter, search, zoom ±, fullscreen. */
+function MapControls(props: {
+  search: string;
+  onSearchChange: (value: string) => void;
+  filterOpen: boolean;
+  onFilterToggle: () => void;
+  vacancy: VacancyFilter;
+  onVacancyChange: (value: VacancyFilter) => void;
+  deliveryType: DeliveryTypeFilter;
+  onDeliveryTypeChange: (value: DeliveryTypeFilter) => void;
+}) {
+  const map = useMap("routes-map");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const filterInnerRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [filterClosing, setFilterClosing] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [filterHeight, setFilterHeight] = useState(0);
+
+  const filterVisible = props.filterOpen || filterClosing;
+
+  useEffect(() => {
+    function onFsChange() {
+      setIsFullscreen(!!document.fullscreenElement);
+    }
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  // Keep panel mounted through the close animation; measure for card-resize height tween.
+  useLayoutEffect(() => {
+    if (props.filterOpen) {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+      setFilterClosing(false);
+      setDropdownOpen(false);
+      // Double rAF so the dropdown mounts at pre-scale before .is-open tweens in.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setDropdownOpen(true);
+          setFilterHeight(filterInnerRef.current?.scrollHeight ?? 0);
+        });
+      });
+      return;
+    }
+
+    if (!filterClosing && filterHeight === 0) return;
+
+    setDropdownOpen(false);
+    setFilterHeight(0);
+    setFilterClosing(true);
+    // Local overlay overrides are 150ms / 100ms — read from the element, not :root.
+    const el = containerRef.current;
+    const closeMs = el
+      ? Math.max(
+          readCssDurationMsFrom(el, "--dropdown-close-dur", 100),
+          readCssDurationMsFrom(el, "--resize-dur", 150),
+        )
+      : 150;
+    closeTimerRef.current = setTimeout(() => {
+      setFilterClosing(false);
+      closeTimerRef.current = null;
+    }, closeMs);
+
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    };
+    // Close orchestration is keyed on open only; height/closing are driven inside.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.filterOpen]);
+
+  useLayoutEffect(() => {
+    if (!dropdownOpen || !filterInnerRef.current) return;
+    setFilterHeight(filterInnerRef.current.scrollHeight);
+  }, [dropdownOpen, props.vacancy, props.deliveryType]);
+
+  const handleZoomIn = useCallback(() => {
+    if (!map) return;
+    map.setZoom((map.getZoom() ?? 14) + 1);
+  }, [map]);
+
+  const handleZoomOut = useCallback(() => {
+    if (!map) return;
+    map.setZoom((map.getZoom() ?? 14) - 1);
+  }, [map]);
+
+  const handleFullscreen = useCallback(() => {
+    const el = containerRef.current?.closest("[data-map-container]") as HTMLElement | null;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      el.requestFullscreen();
+    }
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col pt-4 pb-6"
+      style={
+        {
+          // Quick open/close for this overlay (overrides root durations locally).
+          "--resize-dur": "150ms",
+          "--dropdown-open-dur": "150ms",
+          "--dropdown-close-dur": "100ms",
+        } as CSSProperties
+      }
+    >
+      {/* Fill + blur grow/shrink with the overlay as filters open/close */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-white to-transparent" />
+        <div className="map-ui-blur-fill absolute inset-0" />
+      </div>
+
+      <div className="pointer-events-auto relative z-10 flex items-center gap-2 px-4">
+        <Button
+          variant="outline"
+          size="icon"
+          shape="rounded"
+          aria-label="Toggle filters"
+          aria-expanded={props.filterOpen}
+          className={cn(
+            "size-[34px] hover:bg-tag-hover",
+            props.filterOpen || filterClosing
+              ? "border-active-border bg-tag-active text-active hover:bg-tag-active-hover"
+              : "border-border bg-bg",
+          )}
+          onClick={props.onFilterToggle}
+        >
+          <Filter className="size-4" />
+        </Button>
+
+        <SearchBar
+          value={props.search}
+          onChange={props.onSearchChange}
+          placeholder="Search Address, Route, or Volunteer"
+          className="min-w-0 flex-1 bg-bg"
+        />
+
+        <Button
+          variant="outline"
+          size="icon"
+          shape="rounded"
+          aria-label="Zoom out"
+          className="size-[34px] border-border bg-bg hover:bg-tag-hover"
+          onClick={handleZoomOut}
+        >
+          <Minus className="size-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          shape="rounded"
+          aria-label="Zoom in"
+          className="size-[34px] border-border bg-bg hover:bg-tag-hover"
+          onClick={handleZoomIn}
+        >
+          <Plus className="size-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          shape="rounded"
+          aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          className="size-[34px] border-border bg-bg hover:bg-tag-hover"
+          onClick={handleFullscreen}
+        >
+          <span className="t-icon-swap size-4" data-state={isFullscreen ? "b" : "a"}>
+            <span className="t-icon" data-icon="a">
+              <Maximize2 className="size-4" />
+            </span>
+            <span className="t-icon" data-icon="b">
+              <Minimize2 className="size-4" />
+            </span>
+          </span>
+        </Button>
+      </div>
+
+      {/* Height tween (card resize) expands the gradient fill; dropdown scales/fades content */}
+      <div className="t-resize relative z-10 overflow-hidden px-4" style={{ height: filterHeight }}>
+        {filterVisible && (
+          <div
+            ref={filterInnerRef}
+            className={cn(
+              "t-dropdown pointer-events-auto flex flex-col gap-5 pt-5",
+              dropdownOpen && "is-open",
+              filterClosing && "is-closing",
+            )}
+            data-origin="top-left"
+          >
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-secondary">Assigned</p>
+              <PillGroup
+                exclusive
+                options={[...ASSIGNED_OPTIONS]}
+                value={props.vacancy}
+                onChange={(value) => {
+                  if (value != null) props.onVacancyChange(value as VacancyFilter);
+                }}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-secondary">Type</p>
+              <PillGroup
+                exclusive
+                options={[...TYPE_OPTIONS]}
+                value={props.deliveryType}
+                onChange={(value) => {
+                  if (value != null) props.onDeliveryTypeChange(value as DeliveryTypeFilter);
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function RouteMap(props: {
   routes: MapRoute[];
   homes: MapHome[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  search: string;
+  onSearchChange: (value: string) => void;
+  filterOpen: boolean;
+  onFilterToggle: () => void;
+  vacancy: VacancyFilter;
+  onVacancyChange: (value: VacancyFilter) => void;
+  deliveryType: DeliveryTypeFilter;
+  onDeliveryTypeChange: (value: DeliveryTypeFilter) => void;
 }) {
   const browserKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY;
   if (!browserKey) {
     return (
-      <div className="text-muted-foreground flex h-full items-center justify-center rounded-lg border text-sm">
+      <div className="flex h-full items-center justify-center text-sm text-secondary">
         NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY is not set — the map cannot load.
       </div>
     );
   }
 
   return (
-    <APIProvider apiKey={browserKey}>
-      <Map
-        defaultCenter={BEACHES_CENTER}
-        defaultZoom={14}
-        gestureHandling="greedy"
-        disableDefaultUI={true}
-        zoomControl={true}
-        fullscreenControl={true}
-        styles={MAP_STYLE}
-        className="h-full w-full overflow-hidden rounded-lg border"
-      >
-        {props.routes.map((r) => (
-          <RouteOverlay
-            key={r.id}
-            route={r}
-            selected={r.id === props.selectedId}
-            onSelect={() => props.onSelect(r.id)}
-          />
-        ))}
-        {props.homes.map((h) => (
-          <HomeMarker key={h.id} home={h} />
-        ))}
-        <FitBounds routes={props.routes} homes={props.homes} />
-      </Map>
-    </APIProvider>
+    <div className="relative h-full w-full" data-map-container>
+      <APIProvider apiKey={browserKey}>
+        <Map
+          id="routes-map"
+          defaultCenter={BEACHES_CENTER}
+          defaultZoom={14}
+          gestureHandling="greedy"
+          disableDefaultUI={true}
+          zoomControl={false}
+          fullscreenControl={false}
+          styles={MAP_STYLE}
+          className="h-full w-full"
+        >
+          {props.routes.map((r) => (
+            <RouteOverlay
+              key={r.id}
+              route={r}
+              selected={r.id === props.selectedId}
+              onSelect={() => props.onSelect(r.id)}
+            />
+          ))}
+          {props.homes.map((h) => (
+            <HomeMarker key={h.id} home={h} />
+          ))}
+          <FitBounds routes={props.routes} homes={props.homes} />
+        </Map>
+        <MapControls
+          search={props.search}
+          onSearchChange={props.onSearchChange}
+          filterOpen={props.filterOpen}
+          onFilterToggle={props.onFilterToggle}
+          vacancy={props.vacancy}
+          onVacancyChange={props.onVacancyChange}
+          deliveryType={props.deliveryType}
+          onDeliveryTypeChange={props.onDeliveryTypeChange}
+        />
+      </APIProvider>
+    </div>
   );
 }

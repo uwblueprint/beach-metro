@@ -10,34 +10,23 @@ interface SidePanelRowProps {
   children: ReactNode;
   meta?: string;
   onEdit?: () => void;
+  /** When set, the row is clickable (e.g. selectable deliveries). Uses a div when onEdit is also set. */
   onClick?: () => void;
   className?: string;
 }
 
 function SidePanelRow({ children, meta, onEdit, onClick, className }: SidePanelRowProps) {
-  return (
-    <div
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onClick={onClick}
-      onKeyDown={
-        onClick
-          ? (e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onClick();
-              }
-            }
-          : undefined
-      }
-      className={cn(
-        "group/row relative flex h-8 items-center gap-2 overflow-hidden rounded-[4px] px-2 py-1",
-        onClick && "cursor-pointer hover:bg-tag-hover/60",
-        className,
-      )}
-    >
+  const classes = cn(
+    "group/row relative flex h-8 items-center gap-2 overflow-hidden rounded-[4px] px-2 py-1",
+    onClick &&
+      "w-full cursor-pointer text-left outline-none transition-colors hover:bg-tag-hover focus-visible:ring-3 focus-visible:ring-ring/50",
+    className,
+  );
+
+  const content = (
+    <>
       <div className="min-w-0 flex-1 truncate text-md">{children}</div>
-      {meta && <span className="shrink-0 text-md text-secondary">{meta}</span>}
+      {meta ? <span className="shrink-0 text-md text-secondary">{meta}</span> : null}
       {onEdit && (
         <>
           <div
@@ -60,6 +49,35 @@ function SidePanelRow({ children, meta, onEdit, onClick, className }: SidePanelR
           </div>
         </>
       )}
+    </>
+  );
+
+  if (onClick && !onEdit) {
+    return (
+      <button type="button" className={classes} onClick={onClick}>
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+      className={classes}
+    >
+      {content}
     </div>
   );
 }

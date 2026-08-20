@@ -26,7 +26,7 @@ function SearchBar({
     <div
       className={cn(
         "@container flex w-full items-center gap-3 rounded-full border border-border px-3 py-2 transition-colors",
-        "focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50", // TODO: define the focus ring style more deliberately.
+        "focus-within:border-active focus-within:ring-3 focus-within:ring-active/40",
         disabled && "pointer-events-none opacity-50",
         className,
       )}
