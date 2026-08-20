@@ -737,11 +737,9 @@ const CADENCES = [
 ] as const;
 
 function CreateMemberContent({
-  onCancel,
   onCreated,
   onBusyChange,
 }: {
-  onCancel: () => void;
   onCreated: (member: MemberSelection) => void;
   onBusyChange: (busy: boolean) => void;
 }) {
@@ -1000,14 +998,13 @@ function MemberSidePanel({ member, creating, onClose, onCreated }: MemberSidePan
   const [displayed, setDisplayed] = useState<MemberSelection | null>(member);
   const [displayedCreating, setDisplayedCreating] = useState(creating);
   const [open, setOpen] = useState(false);
-  const [createBusy, setCreateBusy] = useState(false);
+  const [createBusyState, setCreateBusy] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasActiveRef = useRef(false);
 
-  // Reset busy state whenever the create form is dismissed.
-  useEffect(() => {
-    if (!creating) setCreateBusy(false);
-  }, [creating]);
+  // Busy only means anything while the create form is up, so derive it rather
+  // than resetting through an effect on dismissal.
+  const createBusy = creating && createBusyState;
 
   const isActive = creating || member !== null;
 
@@ -1087,11 +1084,7 @@ function MemberSidePanel({ member, creating, onClose, onCreated }: MemberSidePan
         </div>
         <div className="flex-1 overflow-y-auto p-4">
           {displayedCreating ? (
-            <CreateMemberContent
-              onCancel={onClose}
-              onCreated={onCreated}
-              onBusyChange={setCreateBusy}
-            />
+            <CreateMemberContent onCreated={onCreated} onBusyChange={setCreateBusy} />
           ) : displayed?.role === "volunteer" ? (
             <VolunteerContent key={displayed.id} id={displayed.id} />
           ) : displayed ? (
