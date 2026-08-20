@@ -44,6 +44,14 @@ export function monthLabel(isoMonth: string): string {
   return MONTHS_SHORT[month - 1] ?? isoMonth;
 }
 
+/** "2026-03" -> "Mar 2026". Used in the chart hover summary. */
+export function monthYearLabel(isoMonth: string): string {
+  const [year, month] = isoMonth.split("-");
+  const monthIndex = Number(month);
+  if (!year || !monthIndex) return isoMonth;
+  return `${MONTHS_SHORT[monthIndex - 1]} ${year}`;
+}
+
 /** "2026-03-10" -> "Mar 10th", matching how the office writes issue dates. */
 export function formatIssueDate(iso: string): string {
   const [, month, day] = iso.split("-").map(Number);

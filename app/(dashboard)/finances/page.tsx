@@ -42,10 +42,12 @@ import {
   useCreateYear,
   useMarkPaid,
   useOverridePayout,
+  useRenameIssue,
   useRenameYear,
   useSetCellComment,
   useSetSubstitute,
   useToggleIssueLock,
+  useUnarchiveYear,
   useYearDetail,
   useYears,
   yearCsvUrl,
@@ -208,12 +210,17 @@ export default function FinancesPage() {
   const [overrideNote, setOverrideNote] = React.useState("");
   const [flashTriggers, setFlashTriggers] = React.useState<Partial<Record<CellKey, number>>>({});
   const [filters, setFilters] = React.useState<FinancesFilterState>(DEFAULT_FINANCES_FILTERS);
+  const [draftFilters, setDraftFilters] =
+    React.useState<FinancesFilterState>(DEFAULT_FINANCES_FILTERS);
+  const [filtersOpen, setFiltersOpen] = React.useState(false);
   const [overflowOpen, setOverflowOpen] = React.useState(false);
   const [createTableOpen, setCreateTableOpen] = React.useState(false);
   const [newTableName, setNewTableName] = React.useState("");
   const [showArchiveBanner, setShowArchiveBanner] = React.useState(false);
   const [isEditingTableTitle, setIsEditingTableTitle] = React.useState(false);
   const [tableTitleEditValue, setTableTitleEditValue] = React.useState("");
+  const [editingIssueId, setEditingIssueId] = React.useState<string | null>(null);
+  const [issueNameEditValue, setIssueNameEditValue] = React.useState("");
 
   const { data: years } = useYears();
   // Default to the newest non-archived year, matching what the overview picks.
@@ -225,7 +232,9 @@ export default function FinancesPage() {
   const createYear = useCreateYear();
   const renameYear = useRenameYear();
   const archiveYear = useArchiveYear();
+  const unarchiveYear = useUnarchiveYear();
   const addIssue = useAddIssue(activeYearId);
+  const renameIssue = useRenameIssue(activeYearId);
   const toggleLock = useToggleIssueLock(activeYearId);
   const overridePayout = useOverridePayout(activeYearId);
   const markPaid = useMarkPaid(activeYearId);
@@ -278,17 +287,31 @@ export default function FinancesPage() {
     [allCaptains],
   );
 
-  function updateFilters(patch: Partial<FinancesFilterState>) {
-    setFilters((prev) => ({ ...prev, ...patch }));
+  function handleFiltersOpenChange(open: boolean) {
+    if (open) setDraftFilters(filters);
+    setFiltersOpen(open);
   }
 
-  function toggleCaptainFilter(captainId: string, checked: boolean) {
-    setFilters((prev) => ({
+  function updateDraftFilters(patch: Partial<FinancesFilterState>) {
+    setDraftFilters((prev) => ({ ...prev, ...patch }));
+  }
+
+  function toggleDraftCaptainFilter(captainId: string, checked: boolean) {
+    setDraftFilters((prev) => ({
       ...prev,
       captains: checked
         ? [...prev.captains, captainId]
         : prev.captains.filter((id) => id !== captainId),
     }));
+  }
+
+  function clearDraftFilters() {
+    setDraftFilters(DEFAULT_FINANCES_FILTERS);
+  }
+
+  function applyFilters() {
+    setFilters(draftFilters);
+    setFiltersOpen(false);
   }
 
   function handleSelectTable(tableId: string) {
@@ -360,6 +383,37 @@ export default function FinancesPage() {
     } else if (event.key === "Escape") {
       event.preventDefault();
       cancelTableTitleEdit();
+    }
+  }
+
+  function startIssueNameEdit(issue: GridIssue) {
+    if (isArchivedYear) return;
+    setIssueNameEditValue(issue.name);
+    setEditingIssueId(issue.id);
+  }
+
+  function cancelIssueNameEdit() {
+    setEditingIssueId(null);
+    setIssueNameEditValue("");
+  }
+
+  function commitIssueNameEdit(issueId: string, originalName: string) {
+    const name = issueNameEditValue.trim();
+    if (!name || name === originalName) return cancelIssueNameEdit();
+    renameIssue.mutate({ issueId, name }, { onSettled: cancelIssueNameEdit });
+  }
+
+  function handleIssueNameKeyDown(
+    event: React.KeyboardEvent<HTMLInputElement>,
+    issueId: string,
+    originalName: string,
+  ) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitIssueNameEdit(issueId, originalName);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      cancelIssueNameEdit();
     }
   }
 
@@ -519,26 +573,22 @@ export default function FinancesPage() {
                       className="w-full min-w-0 border-0 bg-transparent p-0 text-md font-medium text-primary outline outline-2 outline-active -outline-offset-2"
                     />
                   </span>
-                ) : (
-                  <span
-                    onDoubleClick={startTableTitleEdit}
-                    className={cn(
-                      "text-md font-medium text-primary",
-                      !isArchivedYear && "cursor-text",
-                    )}
-                  >
-                    {tableDisplayLabel}
-                  </span>
-                )}
+                ) : null}
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
                       <button
                         type="button"
                         aria-label="Switch table"
-                        className="inline-flex items-center text-muted-foreground"
+                        className="inline-flex items-center gap-1"
+                        onDoubleClick={!isEditingTableTitle ? startTableTitleEdit : undefined}
                       >
-                        <ChevronDown className="size-3.5" strokeWidth={2} />
+                        {!isEditingTableTitle && (
+                          <span className={cn("text-md font-medium text-primary", !isArchivedYear && "cursor-text")}>
+                            {tableDisplayLabel}
+                          </span>
+                        )}
+                        <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
                       </button>
                     }
                   />
@@ -625,13 +675,21 @@ export default function FinancesPage() {
             <ArchiveBanner
               dateRange={archivedYearDateRange}
               onDismiss={() => setShowArchiveBanner(false)}
+              onUnarchive={
+                activeYearId
+                  ? () =>
+                      unarchiveYear.mutate(activeYearId, {
+                        onSuccess: () => setShowArchiveBanner(false),
+                      })
+                  : undefined
+              }
             />
           )}
 
           {/* Filter + table */}
           <div className="flex flex-col gap-2">
             <div className="flex justify-end">
-              <Popover>
+              <Popover open={filtersOpen} onOpenChange={handleFiltersOpenChange}>
                 <PopoverTrigger
                   render={
                     <button
@@ -651,81 +709,92 @@ export default function FinancesPage() {
                   align="end"
                   side="bottom"
                   sideOffset={4}
-                  className="w-[280px] gap-4 rounded-xl bg-bg p-4 text-md text-primary shadow-md ring-1 ring-foreground/10"
+                  className="w-[280px] gap-2.5 rounded-lg bg-bg p-3 text-md text-primary shadow-md ring-1 ring-foreground/10"
                 >
-                  <p className="text-md font-medium text-primary">Filters</p>
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm font-medium text-primary">Filters</p>
 
-                  <FilterSection label="Issue">
-                    <FilterSegmentGroup<IssueFilterValue>
-                      value={filters.issue}
-                      onChange={(issue) => updateFilters({ issue })}
-                      options={[
-                        { value: "all", label: "All" },
-                        { value: "open", label: "Open" },
-                        { value: "closed", label: "Closed" },
-                      ]}
-                    />
-                  </FilterSection>
+                    <FilterSection label="Issue">
+                      <FilterSegmentGroup<IssueFilterValue>
+                        value={draftFilters.issue}
+                        onChange={(issue) => updateDraftFilters({ issue })}
+                        options={[
+                          { value: "all", label: "All" },
+                          { value: "open", label: "Open" },
+                          { value: "closed", label: "Closed" },
+                        ]}
+                      />
+                    </FilterSection>
 
-                  <FilterSection label="Payment">
-                    <FilterSegmentGroup<PaymentFilterValue>
-                      value={filters.payment}
-                      onChange={(payment) => updateFilters({ payment })}
-                      options={[
-                        { value: "all", label: "All" },
-                        { value: "paid", label: "Paid" },
-                        { value: "unpaid", label: "Unpaid" },
-                      ]}
-                    />
-                  </FilterSection>
+                    <FilterSection label="Payment">
+                      <FilterSegmentGroup<PaymentFilterValue>
+                        value={draftFilters.payment}
+                        onChange={(payment) => updateDraftFilters({ payment })}
+                        options={[
+                          { value: "all", label: "All" },
+                          { value: "paid", label: "Paid" },
+                          { value: "unpaid", label: "Unpaid" },
+                        ]}
+                      />
+                    </FilterSection>
 
-                  <FilterSection label="Date">
-                    <div className="flex items-center gap-2">
-                      <div className="min-w-0 flex-1">
-                        <DatePicker
-                          label="Start Date"
-                          value={filters.startDate}
-                          onChange={(startDate) => updateFilters({ startDate })}
-                        />
+                    <FilterSection label="Date">
+                      <div className="flex items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <DatePicker
+                            label="Start Date"
+                            value={draftFilters.startDate}
+                            onChange={(startDate) => updateDraftFilters({ startDate })}
+                          />
+                        </div>
+                        <span aria-hidden className="shrink-0 text-sm text-muted-foreground">
+                          →
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <DatePicker
+                            label="End Date"
+                            value={draftFilters.endDate}
+                            onChange={(endDate) => updateDraftFilters({ endDate })}
+                          />
+                        </div>
                       </div>
-                      <span aria-hidden className="shrink-0 text-sm text-muted-foreground">
-                        →
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <DatePicker
-                          label="End Date"
-                          value={filters.endDate}
-                          onChange={(endDate) => updateFilters({ endDate })}
-                        />
+                    </FilterSection>
+
+                    <div className="border-t border-hairline" />
+
+                    <FilterSection label="Captain">
+                      <div className="flex flex-col gap-2">
+                        {allCaptains.map((captain) => {
+                          const checked = draftFilters.captains.includes(captain.id);
+
+                          return (
+                            <label
+                              key={captain.id}
+                              className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground"
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(nextChecked) =>
+                                  toggleDraftCaptainFilter(captain.id, nextChecked)
+                                }
+                                className="border-border bg-bg data-checked:border-primary data-checked:bg-primary data-checked:text-bg"
+                              />
+                              {captain.name}
+                            </label>
+                          );
+                        })}
                       </div>
-                    </div>
-                  </FilterSection>
+                    </FilterSection>
+                  </div>
 
-                  <div className="border-t border-border" />
-
-                  <FilterSection label="Captain">
-                    <div className="flex flex-col gap-2">
-                      {allCaptains.map((captain) => {
-                        const checked = filters.captains.includes(captain.id);
-
-                        return (
-                          <label
-                            key={captain.id}
-                            className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground"
-                          >
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(nextChecked) =>
-                                toggleCaptainFilter(captain.id, nextChecked)
-                              }
-                              className="border-border bg-bg data-checked:border-primary data-checked:bg-primary data-checked:text-bg"
-                            />
-                            {captain.name}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </FilterSection>
+                  <div className="flex items-center justify-end gap-2 border-t border-hairline pt-2.5">
+                    <Button type="button" variant="text" size="sm" onClick={clearDraftFilters}>
+                      Clear all
+                    </Button>
+                    <Button type="button" variant="primary" size="sm" onClick={applyFilters}>
+                      Apply
+                    </Button>
+                  </div>
                 </PopoverContent>
               </Popover>
             </div>
@@ -829,28 +898,49 @@ export default function FinancesPage() {
                   )}
                   {visibleIssues.map((issue) => {
                     const isIssueLocked = issue.locked;
+                    const isIssueClosed = issue.status === "closed";
 
                     return (
-                      <TableRow key={issue.id} className="border-0 hover:bg-transparent">
+                      <TableRow key={issue.id} className="group border-0 hover:bg-transparent">
                         <TableCell
-                          className={cn("h-12 p-2 text-md text-primary", FINANCES_TABLE_CELL)}
+                          className={cn("h-12 px-4 py-2 text-md text-primary", FINANCES_TABLE_CELL)}
                           style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
                         >
-                          <div className="group flex h-full w-full items-center justify-between gap-2">
-                            {/* The office already names issues with their date
-                                ("Issue 01, March 10th"), so appending the date
-                                again would read as a duplicate. */}
-                            <span className="min-w-0 whitespace-nowrap">{issue.name}</span>
-                            {!isArchivedYear && (
+                          <div className="flex h-full w-full items-center justify-between gap-2">
+                            {editingIssueId === issue.id ? (
+                              <input
+                                autoFocus
+                                type="text"
+                                value={issueNameEditValue}
+                                onChange={(e) => setIssueNameEditValue(e.target.value)}
+                                onKeyDown={(e) => handleIssueNameKeyDown(e, issue.id, issue.name)}
+                                onBlur={() => commitIssueNameEdit(issue.id, issue.name)}
+                                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-md text-primary outline-none"
+                              />
+                            ) : (
+                              <span
+                                className={cn(
+                                  "min-w-0 whitespace-nowrap",
+                                  !isArchivedYear && "cursor-text",
+                                )}
+                                onDoubleClick={!isArchivedYear ? () => startIssueNameEdit(issue) : undefined}
+                              >
+                                {issue.name}
+                              </span>
+                            )}
+                            {!isArchivedYear && !isIssueClosed && (
                               <button
                                 type="button"
                                 aria-label={isIssueLocked ? "Unlock issue" : "Lock issue"}
-                                onClick={() => toggleIssueLock(issue.id, isIssueLocked)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleIssueLock(issue.id, isIssueLocked);
+                                }}
                                 className={cn(
-                                  "flex shrink-0 items-center justify-center rounded-[4px] p-1.5 text-muted-foreground transition-[opacity,background-color,color] duration-200 hover:bg-muted hover:text-primary",
+                                  "flex shrink-0 items-center justify-center rounded-[4px] p-2 text-muted-foreground transition-[background-color,color] duration-100 hover:bg-muted hover:text-primary",
                                   isIssueLocked
-                                    ? "opacity-100"
-                                    : "opacity-0 group-hover:opacity-100",
+                                    ? "pointer-events-auto opacity-100"
+                                    : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100",
                                 )}
                               >
                                 {isIssueLocked ? <ClosedLockIcon /> : <OpenLockIcon />}
@@ -864,12 +954,14 @@ export default function FinancesPage() {
                             return (
                               <TableCell
                                 key={`${issue.id}-${captain.id}`}
-                                className={cn("h-12", FINANCES_TABLE_CELL)}
+                                className={cn("h-12 px-4", FINANCES_TABLE_CELL)}
                                 style={{
                                   width: CAPTAIN_COLUMN_WIDTH,
                                   minWidth: CAPTAIN_COLUMN_WIDTH,
                                 }}
-                              />
+                              >
+                                <span className="text-md text-muted-foreground">—</span>
+                              </TableCell>
                             );
                           }
 
@@ -966,7 +1058,7 @@ export default function FinancesPage() {
                 />
               </div>
 
-              <DialogFooter className="mt-0 gap-4">
+              <DialogFooter className="mt-0 justify-end gap-2 border-t-0 p-0">
                 <Button type="button" variant="outline" onClick={closeCreateTableDialog}>
                   Cancel
                 </Button>
@@ -979,23 +1071,13 @@ export default function FinancesPage() {
 
           <Dialog open={!!confirmDialog} onOpenChange={(open) => !open && closeConfirmDialog()}>
             <DialogContent className="gap-0 overflow-hidden p-0">
-              <DialogHeader className="mb-0 flex-row items-start justify-between gap-4 border-b border-border px-6 py-4">
+              <DialogHeader className="border-b border-border px-6 py-4">
                 <DialogTitle className="text-md font-medium leading-snug">
                   Leave a note to override{" "}
                   {confirmDialog
                     ? `${formatCurrency(confirmDialog.originalValue)} to ${formatCurrency(parseFloat(confirmDialog.value))}`
                     : ""}
                 </DialogTitle>
-                <Button
-                  type="button"
-                  variant="text"
-                  size="icon-sm"
-                  className="shrink-0 text-muted-foreground"
-                  onClick={closeConfirmDialog}
-                >
-                  <X className="size-4" />
-                  <span className="sr-only">Close</span>
-                </Button>
               </DialogHeader>
 
               <div className="flex flex-col gap-3 px-6 py-4">

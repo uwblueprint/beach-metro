@@ -75,7 +75,7 @@ export async function listIssues(yearId: string): Promise<IssueSummary[]> {
     .from("issues")
     .select("*")
     .eq("financial_year_id", yearId)
-    .order("date");
+    .order("date", { ascending: false });
   if (error) throwDb(error);
   return ((data ?? []) as IssueRow[]).map(toSummary);
 }

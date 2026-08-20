@@ -200,6 +200,23 @@ export async function archiveYear(id: string): Promise<YearSummary> {
   };
 }
 
+/** Unarchive: reverses an accidental archive. */
+export async function unarchiveYear(id: string): Promise<YearSummary> {
+  const year = await fetchYear(id);
+  if (!year.archived) throw conflict("Financial year is not archived.");
+  const { error } = await db().from("financial_years").update({ archived: false }).eq("id", id);
+  if (error) throwDb(error);
+  const detail = await fetchYear(id);
+  const { data } = await db().from("issues").select("id").eq("financial_year_id", id);
+  return {
+    id: detail.id,
+    name: detail.name,
+    archived: detail.archived,
+    startDate: detail.start_date,
+    issueCount: (data ?? []).length,
+  };
+}
+
 /** Read-only CSV export of the year table (finance flow §4h). */
 export async function exportYearCsv(id: string): Promise<{ filename: string; csv: string }> {
   const detail = await getYearDetail(id);
