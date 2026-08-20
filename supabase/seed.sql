@@ -122,6 +122,14 @@ insert into volunteer_routes (id, start_address_id, end_address_id, street_name,
   -- SOFT-DELETED: must be hidden from all views but keep resolving historically.
   ('e0000000-0000-4000-8000-000000000008', 'b0000000-0000-4000-8000-000000000115', 'b0000000-0000-4000-8000-000000000116', 'Balsam Ave',   'NORTH', null,                                     30, null, 30,  greedy_split_papers(30),  null, now());
 
+-- Member notes. Multiple notes on one person, each with its own timestamp, so the
+-- side panel has real history to render (and to prove ordering is newest-first).
+insert into member_notes (id, volunteer_id, captain_id, text, created_at) values
+  ('9a000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000003', null, 'Away — back next week', (current_date - 7)),
+  ('9a000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000003', null, 'Prefers morning deliveries', '2024-03-15 12:00:00-04'),
+  ('9a000000-0000-4000-8000-000000000003', 'd0000000-0000-4000-8000-000000000005', null, 'End date passed; retire or extend?', (current_date - 30)),
+  ('9a000000-0000-4000-8000-000000000004', null, 'c0000000-0000-4000-8000-000000000002', 'Prefers Tuesday pickups', '2024-08-30 12:00:00-04'),
+  ('9a000000-0000-4000-8000-000000000005', null, 'c0000000-0000-4000-8000-000000000003', 'Declines reimbursement (donate-back)', '2024-07-27 12:00:00-04');
 
 insert into financial_years (id, name, archived, start_date) values
   ('f0000000-0000-4000-8000-000000000001', '2026–2027', false, '2026-03-01');
