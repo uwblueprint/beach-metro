@@ -584,7 +584,12 @@ export default function FinancesPage() {
                         onDoubleClick={!isEditingTableTitle ? startTableTitleEdit : undefined}
                       >
                         {!isEditingTableTitle && (
-                          <span className={cn("text-md font-medium text-primary", !isArchivedYear && "cursor-text")}>
+                          <span
+                            className={cn(
+                              "text-md font-medium text-primary",
+                              !isArchivedYear && "cursor-text",
+                            )}
+                          >
                             {tableDisplayLabel}
                           </span>
                         )}
@@ -923,7 +928,9 @@ export default function FinancesPage() {
                                   "min-w-0 whitespace-nowrap",
                                   !isArchivedYear && "cursor-text",
                                 )}
-                                onDoubleClick={!isArchivedYear ? () => startIssueNameEdit(issue) : undefined}
+                                onDoubleClick={
+                                  !isArchivedYear ? () => startIssueNameEdit(issue) : undefined
+                                }
                               >
                                 {issue.name}
                               </span>

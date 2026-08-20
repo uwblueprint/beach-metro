@@ -11,7 +11,12 @@ type ArchiveBannerProps = {
   className?: string;
 };
 
-export function ArchiveBanner({ dateRange, onDismiss, onUnarchive, className }: ArchiveBannerProps) {
+export function ArchiveBanner({
+  dateRange,
+  onDismiss,
+  onUnarchive,
+  className,
+}: ArchiveBannerProps) {
   return (
     <div
       className={cn(

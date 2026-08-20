@@ -6,7 +6,13 @@ import { ArrowUpRight, Check, ChevronDown, X } from "lucide-react";
 
 import { ArchiveBanner } from "@/components/archive-banner";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -99,7 +105,12 @@ function YtdRunningCostChart({
     }
   }
 
-  React.useEffect(() => () => { if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current); }, []);
+  React.useEffect(
+    () => () => {
+      if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+    },
+    [],
+  );
 
   const chartMax = Math.max(...months.map((m) => m.amount), 1);
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -334,7 +345,10 @@ export default function OverviewPage() {
                   </p>
                 </div>
 
-                <YtdRunningCostChart months={overview.monthlyCosts} onHover={setHoveredChartIndex} />
+                <YtdRunningCostChart
+                  months={overview.monthlyCosts}
+                  onHover={setHoveredChartIndex}
+                />
               </div>
 
               {/* Captain Payments */}
@@ -344,7 +358,8 @@ export default function OverviewPage() {
                     <h2 className="text-md font-semibold text-primary">Captain Payments</h2>
                     {captainOverview && (
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {formatIssueDate(captainOverview.range.from)} – {formatIssueDate(captainOverview.range.to)}
+                        {formatIssueDate(captainOverview.range.from)} –{" "}
+                        {formatIssueDate(captainOverview.range.to)}
                       </p>
                     )}
                   </div>
@@ -495,10 +510,7 @@ export default function OverviewPage() {
 
           <div className="max-h-[60vh] overflow-y-auto px-4">
             {papersPerIssue.map((issue) => (
-              <div
-                key={issue.issueId}
-                className="flex items-center justify-between gap-4 py-3"
-              >
+              <div key={issue.issueId} className="flex items-center justify-between gap-4 py-3">
                 <div className="flex min-w-0 items-baseline gap-2">
                   <span className="text-md font-medium text-primary">
                     {issue.name.split(",")[0]}
