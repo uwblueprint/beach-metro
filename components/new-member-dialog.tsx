@@ -1,5 +1,10 @@
 "use client";
 
+// NOTE: This dialog-based Add Member flow may be outdated. The preferred
+// experience (as of the right-panel creation work) puts the creation form
+// directly in MemberSidePanel. Keep this file until a product decision is made
+// on which flow to ship; delete it once the panel approach is confirmed.
+
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 

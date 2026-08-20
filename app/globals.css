@@ -285,6 +285,11 @@
   .page-header-container {
     @apply border-b border-border py-4 pl-6 pr-4 h-[64px] flex items-center justify-between;
   }
+
+  /** Shared panel bar (header or footer) — 64px tall, 16px padding all sides. */
+  .panel-header {
+    @apply h-[64px] p-4 flex items-center;
+  }
 }
 
 /* Table styles use @utility (not @layer components) because the names collide

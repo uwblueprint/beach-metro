@@ -8,7 +8,6 @@ import { PillGroup } from "@/components/ui/pill-group";
 import { SearchBar } from "@/components/ui/search-bar";
 import { MembersTable, type MembersTableState } from "@/components/members-table";
 import { MemberSidePanel, type MemberSelection } from "@/components/member-side-panel";
-import { NewMemberDialog } from "@/components/new-member-dialog";
 import { useMembers, type MemberRole } from "@/features/members/api";
 
 const STATES: { value: MembersTableState; label: string }[] = [
@@ -37,7 +36,7 @@ export default function MembersPage() {
   const [state, setState] = useState<MembersTableState>("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<MemberSelection | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   const debouncedSearch = useDebounced(search.trim(), 250);
 
@@ -52,6 +51,7 @@ export default function MembersPage() {
   function handleRowClick(memberId: string) {
     const member = rows.find((m) => m.id === memberId);
     if (!member) return;
+    setCreating(false);
     setSelected((current) =>
       current?.id === memberId ? null : { id: member.id, role: member.role, name: member.name },
     );
@@ -68,7 +68,13 @@ export default function MembersPage() {
                 Showing {rows.length} of {allMembers?.length ?? rows.length}
               </p>
             </div>
-            <Button variant="primary" onClick={() => setAddOpen(true)}>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setCreating(true);
+                setSelected(null);
+              }}
+            >
               <Plus data-icon="inline-start" />
               Add Member
             </Button>
@@ -111,18 +117,21 @@ export default function MembersPage() {
                 />
               )}
             </div>
-            <MemberSidePanel member={selected} onClose={() => setSelected(null)} />
+            <MemberSidePanel
+              member={selected}
+              creating={creating}
+              onClose={() => {
+                setCreating(false);
+                setSelected(null);
+              }}
+              onCreated={(created) => {
+                setCreating(false);
+                setSelected(created);
+              }}
+            />
           </div>
         </div>
       </div>
-
-      <NewMemberDialog
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        onSuccess={(created) => {
-          setSelected({ id: created.id, role: created.role, name: created.name });
-        }}
-      />
     </div>
   );
 }

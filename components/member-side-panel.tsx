@@ -1,7 +1,7 @@
 "use client";
 
-import { ChevronDown, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { AddressField } from "@/components/address-field";
@@ -11,20 +11,31 @@ import { NotesSection } from "@/components/notes-section";
 import { RouteDetailsDialog } from "@/components/route-details-dialog";
 import { SidePanelRow } from "@/components/side-panel-row";
 import { SidePanelSection } from "@/components/side-panel-section";
-import { Input, inputFieldClassName } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { ApiError } from "@/lib/api/client";
-import { cn } from "@/lib/utils";
 import {
   memberKeys,
   useCaptain,
   useCaptainPayouts,
+  useCreateCaptain,
+  useCreateVolunteer,
   useTerritory,
   useUpdateCaptain,
   useUpdateVolunteer,
   useVolunteer,
   type MemberRole,
 } from "@/features/members/api";
-import { territoryDropKeys } from "@/features/territory-drops/api";
+import { territoryDropKeys, useCaptainsList } from "@/features/territory-drops/api";
+
+function todayIso(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
 
 /** The row the user clicked. Name comes along so the header renders immediately. */
 export interface MemberSelection {
@@ -35,7 +46,9 @@ export interface MemberSelection {
 
 interface MemberSidePanelProps {
   member: MemberSelection | null;
+  creating: boolean;
   onClose: () => void;
+  onCreated: (member: MemberSelection) => void;
 }
 
 function readCssDurationMs(variable: string, fallback: number): number {
@@ -103,38 +116,6 @@ function EditableField({
         {label}
       </label>
       {children}
-    </div>
-  );
-}
-
-function SelectField({
-  id,
-  value,
-  onChange,
-  "aria-label": ariaLabel,
-  children,
-}: {
-  id: string;
-  value: string;
-  onChange: (value: string) => void;
-  "aria-label"?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="relative">
-      <select
-        id={id}
-        aria-label={ariaLabel}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={cn(inputFieldClassName, "appearance-none pr-8")}
-      >
-        {children}
-      </select>
-      <ChevronDown
-        aria-hidden
-        className="pointer-events-none absolute top-1/2 right-3 size-3 -translate-y-1/2 text-primary"
-      />
     </div>
   );
 }
@@ -574,27 +555,29 @@ function CaptainContent({ id }: { id: string }) {
                   onChange={(e) => setPayRate(e.target.value)}
                   className="min-w-0 tabular-nums"
                 />
-                <SelectField
+                <Select
                   id={`captain-pay-type-${id}`}
                   aria-label="Pay type"
                   value={payType}
                   onChange={(v) => setPayType(v as "bundle" | "paper" | "drop")}
-                >
-                  <option value="bundle">by bundle</option>
-                  <option value="paper">by paper</option>
-                  <option value="drop">by drop</option>
-                </SelectField>
+                  options={[
+                    { value: "bundle", label: "by bundle" },
+                    { value: "paper", label: "by paper" },
+                    { value: "drop", label: "by drop" },
+                  ]}
+                />
               </div>
             </EditableField>
             <EditableField label="Cadence" htmlFor={`captain-cadence-${id}`}>
-              <SelectField
+              <Select
                 id={`captain-cadence-${id}`}
                 value={payCadence}
                 onChange={(v) => setPayCadence(v as "biweekly" | "monthly")}
-              >
-                <option value="biweekly">Bi-Weekly</option>
-                <option value="monthly">Monthly</option>
-              </SelectField>
+                options={[
+                  { value: "biweekly", label: "Bi-Weekly" },
+                  { value: "monthly", label: "Monthly" },
+                ]}
+              />
             </EditableField>
             <EditableField label="Start Date" htmlFor={`captain-start-${id}`}>
               <Input
@@ -742,28 +725,310 @@ function CaptainContent({ id }: { id: string }) {
   );
 }
 
-function MemberSidePanel({ member, onClose }: MemberSidePanelProps) {
-  const [displayed, setDisplayed] = useState<MemberSelection | null>(member);
-  const [open, setOpen] = useState(false);
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hadMemberRef = useRef(false);
+const PAY_TYPES = [
+  { value: "bundle", label: "Per bundle" },
+  { value: "paper", label: "Per paper" },
+  { value: "drop", label: "Per drop" },
+] as const;
 
-  // Keep panel content in sync with the selected member during render.
-  // Clearing on close stays in the effect so the close animation can finish first.
-  // Compare by id — parent recreates the member object every render.
+const CADENCES = [
+  { value: "biweekly", label: "Biweekly" },
+  { value: "monthly", label: "Monthly" },
+] as const;
+
+function CreateMemberContent({
+  onCancel,
+  onCreated,
+  onBusyChange,
+}: {
+  onCancel: () => void;
+  onCreated: (member: MemberSelection) => void;
+  onBusyChange: (busy: boolean) => void;
+}) {
+  const createVolunteer = useCreateVolunteer();
+  const createCaptain = useCreateCaptain();
+  const { data: captains } = useCaptainsList();
+
+  const [role, setRole] = useState<MemberRole>("volunteer");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [startDate, setStartDate] = useState(todayIso);
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [addressPlaceId, setAddressPlaceId] = useState<string | null>(null);
+  const [captainTerritoryId, setCaptainTerritoryId] = useState("");
+  const [payType, setPayType] = useState<"bundle" | "paper" | "drop" | "">("");
+  const [payRate, setPayRate] = useState("");
+  const [payCadence, setPayCadence] = useState<"biweekly" | "monthly" | "">("");
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const busy = createVolunteer.isPending || createCaptain.isPending;
+
+  useLayoutEffect(() => {
+    onBusyChange(busy);
+  }, [busy, onBusyChange]);
+
+  function handleRoleChange(next: MemberRole) {
+    setRole(next);
+    setCreateError(null);
+  }
+
+  async function handleCreate() {
+    if (!firstName.trim() || !lastName.trim()) {
+      setCreateError("First and last name are required.");
+      return;
+    }
+    if (!startDate) {
+      setCreateError("Start date is required.");
+      return;
+    }
+    if (!email.trim() || !phone.trim()) {
+      setCreateError("Email and phone are required.");
+      return;
+    }
+    if (role === "volunteer" && !address.trim()) {
+      setCreateError("Street address is required.");
+      return;
+    }
+    if (role === "captain") {
+      if (!payType) {
+        setCreateError("Pay type is required.");
+        return;
+      }
+      if (payRate.trim() === "" || Number.isNaN(Number(payRate)) || Number(payRate) < 0) {
+        setCreateError("Enter a valid pay rate (0 or greater).");
+        return;
+      }
+      if (!payCadence) {
+        setCreateError("Cadence is required.");
+        return;
+      }
+    }
+
+    setCreateError(null);
+    try {
+      if (role === "volunteer") {
+        const created = await createVolunteer.mutateAsync({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          address: addressPlaceId
+            ? { placeId: addressPlaceId }
+            : { addressLines: [address.trim()] },
+          startDate,
+          captainTerritoryId: captainTerritoryId || null,
+        });
+        onCreated({
+          id: created.id,
+          role: "volunteer",
+          name: `${created.firstName} ${created.lastName}`,
+        });
+      } else {
+        const created = await createCaptain.mutateAsync({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          payType: payType as "bundle" | "paper" | "drop",
+          payRate: Number(payRate),
+          payCadence: payCadence as "biweekly" | "monthly",
+          startDate,
+        });
+        onCreated({
+          id: created.id,
+          role: "captain",
+          name: `${created.firstName} ${created.lastName}`,
+        });
+      }
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "Could not create member.");
+    }
+  }
+
+  return (
+    <form
+      id="cm-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void handleCreate();
+      }}
+      className="flex flex-col gap-1 px-1 pb-2 pt-1"
+    >
+      <EditableField label="Role" htmlFor="cm-role">
+        <Select
+          id="cm-role"
+          value={role}
+          onChange={(v) => handleRoleChange(v as MemberRole)}
+          options={[
+            { value: "volunteer", label: "Volunteer" },
+            { value: "captain", label: "Captain" },
+          ]}
+        />
+      </EditableField>
+      <EditableField label="First Name" htmlFor="cm-first">
+        <Input
+          id="cm-first"
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
+          placeholder="First name"
+          autoComplete="given-name"
+        />
+      </EditableField>
+      <EditableField label="Last Name" htmlFor="cm-last">
+        <Input
+          id="cm-last"
+          value={lastName}
+          onChange={(e) => setLastName(e.target.value)}
+          placeholder="Last name"
+          autoComplete="family-name"
+        />
+      </EditableField>
+      <EditableField label="Start Date" htmlFor="cm-start">
+        <Input
+          id="cm-start"
+          type="date"
+          name="startDate"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+        />
+      </EditableField>
+      <EditableField label="Email" htmlFor="cm-email">
+        <Input
+          id="cm-email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="name@example.com"
+          autoComplete="email"
+          spellCheck={false}
+        />
+      </EditableField>
+      <EditableField label="Phone" htmlFor="cm-phone">
+        <Input
+          id="cm-phone"
+          type="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="Phone number"
+          autoComplete="tel"
+        />
+      </EditableField>
+
+      {role === "volunteer" ? (
+        <>
+          <EditableField label="Address" htmlFor="cm-address">
+            <AddressField
+              id="cm-address"
+              label=""
+              placeholder="1900 Queen St E"
+              value={address}
+              onChange={(text) => {
+                setAddress(text);
+                setAddressPlaceId(null);
+              }}
+              onPick={(placeId, text) => {
+                setAddressPlaceId(placeId);
+                setAddress(text);
+              }}
+            />
+          </EditableField>
+          <EditableField label="Captain (optional)" htmlFor="cm-captain">
+            <Select
+              id="cm-captain"
+              value={captainTerritoryId}
+              onChange={setCaptainTerritoryId}
+              options={[
+                { value: "", label: "No captain" },
+                ...(captains ?? [])
+                  .filter((c) => c.territory)
+                  .map((c) => ({
+                    value: c.territory!.id,
+                    label: `${c.firstName} ${c.lastName}`,
+                  })),
+              ]}
+            />
+          </EditableField>
+        </>
+      ) : (
+        <>
+          <EditableField label="Pay Type" htmlFor="cm-pay-type">
+            <Select
+              id="cm-pay-type"
+              value={payType}
+              onChange={(v) => setPayType(v as typeof payType)}
+              options={PAY_TYPES.map((opt) => ({ value: opt.value, label: opt.label }))}
+              placeholder="Select pay type"
+            />
+          </EditableField>
+          <EditableField label="Pay Rate" htmlFor="cm-pay-rate">
+            <Input
+              id="cm-pay-rate"
+              type="number"
+              min={0}
+              step="0.01"
+              inputMode="decimal"
+              value={payRate}
+              onChange={(e) => setPayRate(e.target.value)}
+              placeholder="0.00"
+              className="tabular-nums"
+            />
+          </EditableField>
+          <EditableField label="Cadence" htmlFor="cm-cadence">
+            <Select
+              id="cm-cadence"
+              value={payCadence}
+              onChange={(v) => setPayCadence(v as typeof payCadence)}
+              options={CADENCES.map((opt) => ({ value: opt.value, label: opt.label }))}
+              placeholder="Select cadence"
+            />
+          </EditableField>
+        </>
+      )}
+
+      {createError ? (
+        <p className="px-2 text-md text-destructive" role="alert" aria-live="polite">
+          {createError}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
+function MemberSidePanel({ member, creating, onClose, onCreated }: MemberSidePanelProps) {
+  const [displayed, setDisplayed] = useState<MemberSelection | null>(member);
+  const [displayedCreating, setDisplayedCreating] = useState(creating);
+  const [open, setOpen] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wasActiveRef = useRef(false);
+
+  // Reset busy state whenever the create form is dismissed.
+  useEffect(() => {
+    if (!creating) setCreateBusy(false);
+  }, [creating]);
+
+  const isActive = creating || member !== null;
+
+  // Sync content immediately during render so there's no stale frame.
+  // Clearing on close is deferred to the effect so the animation can finish first.
+  if (creating !== displayedCreating) {
+    setDisplayedCreating(creating);
+  }
   if (member && member.id !== displayed?.id) {
     setDisplayed(member);
   }
 
   useEffect(() => {
-    if (member) {
+    if (isActive) {
       if (closeTimerRef.current) {
         clearTimeout(closeTimerRef.current);
         closeTimerRef.current = null;
       }
 
-      const isOpening = !hadMemberRef.current;
-      hadMemberRef.current = true;
+      const isOpening = !wasActiveRef.current;
+      wasActiveRef.current = true;
 
       if (isOpening) {
         setOpen(false);
@@ -774,13 +1039,14 @@ function MemberSidePanel({ member, onClose }: MemberSidePanelProps) {
       return;
     }
 
-    if (!hadMemberRef.current) return;
+    if (!wasActiveRef.current) return;
 
     setOpen(false);
     const closeMs = readCssDurationMs("--panel-close-dur", 350);
     closeTimerRef.current = setTimeout(() => {
       setDisplayed(null);
-      hadMemberRef.current = false;
+      setDisplayedCreating(false);
+      wasActiveRef.current = false;
       closeTimerRef.current = null;
     }, closeMs);
 
@@ -790,9 +1056,9 @@ function MemberSidePanel({ member, onClose }: MemberSidePanelProps) {
         closeTimerRef.current = null;
       }
     };
-  }, [member]);
+  }, [isActive]);
 
-  if (!displayed) return null;
+  if (!displayed && !displayedCreating) return null;
 
   return (
     <div
@@ -801,10 +1067,14 @@ function MemberSidePanel({ member, onClose }: MemberSidePanelProps) {
     >
       <div className="t-side-panel-content flex h-full w-[400px] flex-col">
         <div className="page-header-container">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-md font-semibold text-primary">{displayed.name}</span>
-            <RoleTag role={displayed.role} />
-          </div>
+          {displayedCreating ? (
+            <span className="truncate text-md font-semibold text-primary">New Member</span>
+          ) : (
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-md font-semibold text-primary">{displayed?.name}</span>
+              {displayed && <RoleTag role={displayed.role} />}
+            </div>
+          )}
           <Button
             variant="text"
             size="icon-sm"
@@ -816,12 +1086,35 @@ function MemberSidePanel({ member, onClose }: MemberSidePanelProps) {
           </Button>
         </div>
         <div className="flex-1 overflow-y-auto p-4">
-          {displayed.role === "volunteer" ? (
+          {displayedCreating ? (
+            <CreateMemberContent
+              onCancel={onClose}
+              onCreated={onCreated}
+              onBusyChange={setCreateBusy}
+            />
+          ) : displayed?.role === "volunteer" ? (
             <VolunteerContent key={displayed.id} id={displayed.id} />
-          ) : (
+          ) : displayed ? (
             <CaptainContent key={displayed.id} id={displayed.id} />
-          )}
+          ) : null}
         </div>
+
+        {displayedCreating && (
+          <div className="panel-header shrink-0 justify-end gap-2 border-t border-border">
+            <Button variant="text" onClick={onClose} disabled={createBusy}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              form="cm-form"
+              type="submit"
+              disabled={createBusy}
+              className="active:scale-[0.96]"
+            >
+              {createBusy ? "Creating…" : "Create Member"}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
