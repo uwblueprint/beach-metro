@@ -182,10 +182,6 @@ the `VolunteerInstruction` placeholder deferred in `docs/schema/data_model.md` �
   Kandavel, 1230 Kingston Rd.`) **is** a commercial drop. They also have no name
   field, so there is nowhere for "Councillor Kandavel" to live. Needs both a
   per-issue drop record and a name before it can be built.
-- **`[OPEN]` Route naming.** Labels and the table show `street_name` (plus side),
-  matching the rest of the app. The design shows cross streets
-  ("Queen St E · Woodbine → Landsdowne"), which we cannot derive — route endpoints
-  are house addresses, not intersections.
 - **`[OPEN]` Territory on the label.** The PRD says a label shows the territory.
   The Word template has no territory field, so ours does not either. Dropped
   intentionally, or an omission?
@@ -219,6 +215,11 @@ Export answers with **PDF bytes**, not the `{ data }` envelope every other
 endpoint uses — the response *is* the file. Failures still use the normal JSON
 envelope, so the client checks the content type before treating the body as a
 file.
+
+Route names come from the shared `routeLabel` helper in `lib/services/derive.ts`
+("Queen St E · 2038 → 2190"), the same one the members and routes screens use, so
+a route reads identically everywhere. It degrades to the bare street name when an
+endpoint has not been geocoded yet.
 
 Rows are grouped by captain because that is the physical workflow: labels come
 off the printer and get sorted into one pile per captain. A route whose volunteer

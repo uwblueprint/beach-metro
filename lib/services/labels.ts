@@ -21,6 +21,7 @@ import type {
 } from "@/types/db";
 
 import { getAddressDetails } from "./addresses";
+import { routeLabel } from "./derive";
 import { db, throwDb } from "./shared";
 
 export interface LabelBundle {
@@ -33,7 +34,7 @@ export interface LabelBundle {
 export interface LabelRoute {
   deliveryId: string;
   routeId: string;
-  /** Street name plus side, matching how routes read everywhere else in the app. */
+  /** e.g. "Queen St E · 2038 → 2190", via the shared routeLabel helper. */
   routeName: string;
   volunteerName: string | null;
   address: string | null;
@@ -79,10 +80,6 @@ export async function currentLabelIssue(): Promise<IssueRow> {
   return data as IssueRow;
 }
 
-function routeName(r: Pick<VolunteerRouteRow, "street_name" | "side">): string {
-  return r.side ? `${r.street_name} (${r.side})` : r.street_name;
-}
-
 /**
  * Every bundle in the current open issue, grouped by the captain who drops it.
  *
@@ -111,7 +108,7 @@ export async function listLabels(): Promise<LabelSheet> {
   const [routesRes, volunteersRes, territoriesRes, captainsRes, labelsRes] = await Promise.all([
     client
       .from("volunteer_routes")
-      .select("id, street_name, side, assigned_volunteer_id")
+      .select("id, street_name, assigned_volunteer_id, start_address_id, end_address_id")
       .in(
         "id",
         deliveries.map((d) => d.route_id),
@@ -135,7 +132,7 @@ export async function listLabels(): Promise<LabelSheet> {
 
   const routes = (routesRes.data ?? []) as Pick<
     VolunteerRouteRow,
-    "id" | "street_name" | "side" | "assigned_volunteer_id"
+    "id" | "street_name" | "assigned_volunteer_id" | "start_address_id" | "end_address_id"
   >[];
   const volunteers = (volunteersRes.data ?? []) as Pick<
     VolunteerRow,
@@ -161,7 +158,10 @@ export async function listLabels(): Promise<LabelSheet> {
     ),
   );
 
-  const addresses = await getAddressDetails(volunteers.map((v) => v.address_id));
+  const addresses = await getAddressDetails([
+    ...volunteers.map((v) => v.address_id),
+    ...routes.flatMap((r) => [r.start_address_id, r.end_address_id]),
+  ]);
 
   // Bucket by captain. A route whose volunteer has no territory (or whose
   // territory has no captain) still needs labelling, so it lands in a single
@@ -193,7 +193,11 @@ export async function listLabels(): Promise<LabelSheet> {
     const entry: LabelRoute = {
       deliveryId: delivery.id,
       routeId: route.id,
-      routeName: routeName(route),
+      routeName: routeLabel(
+        route.street_name,
+        addresses.get(route.start_address_id)?.formattedAddress ?? null,
+        addresses.get(route.end_address_id)?.formattedAddress ?? null,
+      ),
       volunteerName: volunteer ? `${volunteer.first_name} ${volunteer.last_name}` : null,
       address: volunteer ? (addresses.get(volunteer.address_id)?.formattedAddress ?? null) : null,
       papers: delivery.paper_count,
@@ -281,6 +285,8 @@ export async function setLabelled(
  */
 async function assertBundlesExist(
   refs: ReadonlyArray<{ deliveryId: string; bundleIndex: number }>,
+  /** When given, every bundle must belong to this issue. */
+  issueId?: string,
 ): Promise<Map<string, RouteDeliveryRow>> {
   const ids = [...new Set(refs.map((r) => r.deliveryId))];
   const { data, error } = await db().from("route_deliveries").select("*").in("id", ids);
@@ -290,6 +296,9 @@ async function assertBundlesExist(
   for (const ref of refs) {
     const delivery = byId.get(ref.deliveryId);
     if (!delivery) throw notFound("Delivery");
+    if (issueId !== undefined && delivery.issue_id !== issueId) {
+      throw conflict("Those bundles belong to a different issue.");
+    }
     if (ref.bundleIndex >= delivery.bundles.length) {
       throw conflict(
         `Bundle ${ref.bundleIndex + 1} no longer exists on this route — the bundle split changed.`,
@@ -309,18 +318,19 @@ async function assertBundlesExist(
 export async function exportLabelSheet(
   input: z.infer<typeof exportLabels>,
 ): Promise<{ filename: string; bytes: Uint8Array; labelCount: number }> {
-  const issue = await currentLabelIssue();
-  const deliveries = await assertBundlesExist(input.bundles);
-
+  // listLabels resolves the current issue itself, so take it from there rather
+  // than resolving twice and risking two different answers.
   const sheet = await listLabels();
+  const deliveries = await assertBundlesExist(input.bundles, sheet.issue.id);
+
   // Flatten the grouped view into a lookup so each ref picks up its route's
   // volunteer name and address without re-querying.
   const routeByDelivery = new Map(
-    sheet.groups.flatMap((g) => g.routes.map((r) => [r.deliveryId, { route: r, group: g }])),
+    sheet.groups.flatMap((g) => g.routes.map((r) => [r.deliveryId, r] as const)),
   );
 
   const labels: LabelContent[] = input.bundles.map((ref) => {
-    const entry = routeByDelivery.get(ref.deliveryId);
+    const route = routeByDelivery.get(ref.deliveryId);
     const delivery = deliveries.get(ref.deliveryId);
     const total = delivery?.bundles.length ?? 1;
     return {
@@ -331,8 +341,8 @@ export async function exportLabelSheet(
       // numbers that look authoritative. Pending client confirmation.
       routeCode: "XX",
       papers: delivery?.bundles[ref.bundleIndex]?.papers ?? 0,
-      name: entry?.route.volunteerName ?? "Vacant route",
-      address: entry?.route.address ?? "",
+      name: route?.volunteerName ?? "Vacant route",
+      address: route?.address ?? "",
       bundleLine: total > 1 ? `Bundle ${ref.bundleIndex + 1} of ${total}` : "",
     };
   });
@@ -343,12 +353,12 @@ export async function exportLabelSheet(
     await setLabelled({ bundles: input.bundles, labelled: true });
   }
 
-  const slug = issue.name
+  const slug = sheet.issue.name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
   return {
-    filename: `labels-${slug || issue.date}.pdf`,
+    filename: `labels-${slug || sheet.issue.date}.pdf`,
     bytes,
     labelCount: labels.length,
   };
