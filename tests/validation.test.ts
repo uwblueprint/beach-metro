@@ -5,7 +5,7 @@ import { addressInput } from "@/lib/validation/common";
 import { updateDelivery } from "@/lib/validation/delivery";
 import { createIssues } from "@/lib/validation/finance";
 import { setVacation } from "@/lib/validation/people";
-import { nearestVacantQuery } from "@/lib/validation/routes";
+import { createRoute, nearestVacantQuery, updateRoute } from "@/lib/validation/routes";
 
 describe("updateDelivery", () => {
   it("accepts bundles that sum to the same-request paperCount", () => {
@@ -68,6 +68,65 @@ describe("nearestVacantQuery", () => {
     expect(() => nearestVacantQuery.parse({})).toThrow();
     const parsed = nearestVacantQuery.parse({ placeId: "x", limit: "7" });
     expect(parsed.limit).toBe(7);
+  });
+});
+
+const sampleAddress = { addressLines: ["12 Willow Ave"], regionCode: "CA" as const };
+
+describe("createRoute bundles", () => {
+  it("accepts bundles that sum to papers", () => {
+    expect(() =>
+      createRoute.parse({
+        startAddress: sampleAddress,
+        endAddress: sampleAddress,
+        streetName: "Queen St E",
+        papers: 70,
+        bundles: [{ papers: 50 }, { papers: 20 }],
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects bundles that do not sum to papers", () => {
+    expect(() =>
+      createRoute.parse({
+        startAddress: sampleAddress,
+        endAddress: sampleAddress,
+        streetName: "Queen St E",
+        papers: 70,
+        bundles: [{ papers: 50 }, { papers: 25 }],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects zero and non-integer bundle sizes", () => {
+    expect(() =>
+      createRoute.parse({
+        startAddress: sampleAddress,
+        endAddress: sampleAddress,
+        streetName: "Queen St E",
+        bundles: [{ papers: 0 }],
+      }),
+    ).toThrow();
+    expect(() =>
+      createRoute.parse({
+        startAddress: sampleAddress,
+        endAddress: sampleAddress,
+        streetName: "Queen St E",
+        bundles: [{ papers: 10.5 }],
+      }),
+    ).toThrow();
+  });
+});
+
+describe("updateRoute bundles", () => {
+  it("rejects a patch where bundles do not sum to papers", () => {
+    expect(() =>
+      updateRoute.parse({ papers: 70, bundles: [{ papers: 50 }, { papers: 25 }] }),
+    ).toThrow();
+  });
+
+  it("accepts bundles alone (papers derived server-side)", () => {
+    expect(() => updateRoute.parse({ bundles: [{ papers: 50 }, { papers: 20 }] })).not.toThrow();
   });
 });
 

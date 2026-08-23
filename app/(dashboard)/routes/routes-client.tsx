@@ -5,11 +5,12 @@
 // assign) — the design engineers restyle it. Structural Tailwind only.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AddressField } from "@/components/address-field";
 import { cn } from "@/lib/utils";
 
 import { RouteMap, type MapHome, type MapRoute } from "./route-map";
@@ -442,125 +443,6 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
         )}
         {save.error && <span className="text-xs text-red-600">{save.error.message}</span>}
       </div>
-    </div>
-  );
-}
-
-interface AddressSuggestion {
-  placeId: string;
-  primaryText: string;
-  secondaryText: string;
-}
-
-/**
- * Address field with Places Autocomplete suggestions. Picking a suggestion
- * captures its placeId, which the API resolves exactly — no re-guessing from
- * free text. Typing again clears the placeId and falls back to text resolution,
- * so the field still works if Places is unavailable (endpoint returns []).
- *
- * One session token is reused for every keystroke and discarded after a pick,
- * so an address entry bills as a single autocomplete session (research doc §4).
- */
-function AddressField(props: {
-  label: string;
-  placeholder: string;
-  value: string;
-  onChange: (text: string) => void;
-  onPick: (placeId: string, text: string) => void;
-}) {
-  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
-  const [open, setOpen] = useState(false);
-  const [highlight, setHighlight] = useState(0);
-  const sessionRef = useRef<string>("");
-  // Set by a pick so the resulting value change doesn't refetch suggestions.
-  const justPickedRef = useRef(false);
-
-  const { value } = props;
-
-  // Too-short input hides suggestions by derivation rather than by clearing
-  // state in the effect (which would cost an extra render per keystroke).
-  const visible = value.trim().length >= 3 ? suggestions : [];
-
-  useEffect(() => {
-    if (justPickedRef.current) {
-      justPickedRef.current = false;
-      return;
-    }
-    if (value.trim().length < 3) return;
-    if (!sessionRef.current) sessionRef.current = crypto.randomUUID();
-
-    // Debounce: one request per pause, not per keystroke.
-    const timer = setTimeout(async () => {
-      try {
-        const params = new URLSearchParams({ q: value, session: sessionRef.current });
-        const results = await getJson<AddressSuggestion[]>(`/api/addresses/autocomplete?${params}`);
-        setSuggestions(results);
-        setHighlight(0);
-        setOpen(results.length > 0);
-      } catch {
-        setSuggestions([]); // stay silent; the field still accepts free text
-      }
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [value]);
-
-  function pick(s: AddressSuggestion) {
-    justPickedRef.current = true;
-    const text = [s.primaryText, s.secondaryText].filter(Boolean).join(", ");
-    props.onPick(s.placeId, text);
-    sessionRef.current = ""; // session ends at selection
-    setSuggestions([]);
-    setOpen(false);
-  }
-
-  return (
-    <div className="relative">
-      <Label className="text-xs">{props.label}</Label>
-      <Input
-        className="h-8 text-sm"
-        placeholder={props.placeholder}
-        value={value}
-        autoComplete="off"
-        onChange={(e) => props.onChange(e.target.value)}
-        onFocus={() => setOpen(visible.length > 0)}
-        // Delay so a click on a suggestion lands before the list unmounts.
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        onKeyDown={(e) => {
-          if (!open || visible.length === 0) return;
-          if (e.key === "ArrowDown") {
-            e.preventDefault();
-            setHighlight((h) => (h + 1) % visible.length);
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setHighlight((h) => (h - 1 + visible.length) % visible.length);
-          } else if (e.key === "Enter") {
-            e.preventDefault();
-            pick(visible[highlight]);
-          } else if (e.key === "Escape") {
-            setOpen(false);
-          }
-        }}
-      />
-      {open && visible.length > 0 && (
-        <ul className="bg-bg absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border shadow-md">
-          {visible.map((s, i) => (
-            <li key={s.placeId}>
-              <button
-                type="button"
-                className={cn(
-                  "block w-full px-2 py-1.5 text-left text-sm",
-                  i === highlight ? "bg-muted" : "hover:bg-muted/50",
-                )}
-                onMouseEnter={() => setHighlight(i)}
-                onClick={() => pick(s)}
-              >
-                <span className="block">{s.primaryText}</span>
-                <span className="text-muted-foreground block text-xs">{s.secondaryText}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }

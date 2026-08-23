@@ -31,6 +31,65 @@ export interface TerritoryDetail extends Omit<
   commercialDrops: AddressDetail[];
 }
 
+/** Every commercial drop in the system, for Drop Details pickers. */
+export interface CommercialDropCandidate {
+  addressId: string;
+  placeId: string;
+  label: string;
+  territoryId: string | null;
+  /** Captain name for the owning territory, when assigned. */
+  territoryBadge: string | null;
+}
+
+export async function listCommercialDropCandidates(): Promise<CommercialDropCandidate[]> {
+  const client = db();
+  const [aRes, tRes, cRes] = await Promise.all([
+    // Embed the cached label rather than re-selecting these same rows through
+    // getAddressDetails afterwards.
+    client
+      .from("addresses")
+      .select("id, google_maps_id, territory_id, google_maps_locations(cached_formatted_address)")
+      .eq("type", "commercial"),
+    client.from("captain_territories").select("id, assigned_captain_id"),
+    client.from("captains").select("id, first_name, last_name"),
+  ]);
+  if (aRes.error) throwDb(aRes.error);
+  if (tRes.error) throwDb(tRes.error);
+  if (cRes.error) throwDb(cRes.error);
+
+  const territories = (tRes.data ?? []) as Pick<
+    CaptainTerritoryRow,
+    "id" | "assigned_captain_id"
+  >[];
+  const captains = (cRes.data ?? []) as Pick<CaptainRow, "id" | "first_name" | "last_name">[];
+  const captainNameById = new Map(
+    captains.map((c) => [c.id, `${c.first_name} ${c.last_name}`] as const),
+  );
+  const badgeByTerritoryId = new Map(
+    territories.map((t) => [
+      t.id,
+      t.assigned_captain_id ? (captainNameById.get(t.assigned_captain_id) ?? null) : null,
+    ]),
+  );
+
+  // PostgREST returns the many-to-one embed as a single object; the untyped
+  // client infers an array, so cast through unknown (same as getAddressDetails).
+  const rows = (aRes.data ?? []) as unknown as Array<{
+    id: string;
+    google_maps_id: string;
+    territory_id: string | null;
+    google_maps_locations: { cached_formatted_address: string | null } | null;
+  }>;
+
+  return rows.map((row) => ({
+    addressId: row.id,
+    placeId: row.google_maps_id,
+    label: row.google_maps_locations?.cached_formatted_address ?? "Address not geocoded yet",
+    territoryId: row.territory_id,
+    territoryBadge: row.territory_id ? (badgeByTerritoryId.get(row.territory_id) ?? null) : null,
+  }));
+}
+
 export async function listTerritories(
   filters: z.infer<typeof territoriesQuery>,
 ): Promise<TerritorySummary[]> {

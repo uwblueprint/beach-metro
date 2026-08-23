@@ -10,14 +10,29 @@ interface SidePanelRowProps {
   children: ReactNode;
   meta?: string;
   onEdit?: () => void;
+  onClick?: () => void;
   className?: string;
 }
 
-function SidePanelRow({ children, meta, onEdit, className }: SidePanelRowProps) {
+function SidePanelRow({ children, meta, onEdit, onClick, className }: SidePanelRowProps) {
   return (
     <div
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
       className={cn(
         "group/row relative flex h-8 items-center gap-2 overflow-hidden rounded-[4px] px-2 py-1",
+        onClick && "cursor-pointer hover:bg-tag-hover/60",
         className,
       )}
     >
