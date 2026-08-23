@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, Filter, MoreHorizontal, Plus, X } from "lucide-react";
+import { ChevronDown, Filter, MoreHorizontal, Plus } from "lucide-react";
 
 import { PaymentCell } from "@/components/payment-cell";
 import { ArchiveBanner } from "@/components/archive-banner";

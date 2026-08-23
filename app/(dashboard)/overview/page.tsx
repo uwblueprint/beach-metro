@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowUpRight, Check, ChevronDown, X } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown } from "lucide-react";
 
 import { ArchiveBanner } from "@/components/archive-banner";
 import { Button } from "@/components/ui/button";
