@@ -372,20 +372,15 @@ function MapControls(props: {
 
       <div className="pointer-events-auto relative z-10 flex items-center gap-2 px-4">
         <Button
-          variant="outline"
-          size="icon"
+          variant="toolbar"
+          size="toolbar"
           shape="rounded"
           aria-label="Toggle filters"
           aria-expanded={props.filterOpen}
-          className={cn(
-            "size-[34px] hover:bg-tag-hover",
-            props.filterOpen || filterClosing
-              ? "border-active-border bg-tag-active text-active hover:bg-tag-active-hover"
-              : "border-border bg-bg",
-          )}
+          selected={props.filterOpen || filterClosing}
           onClick={props.onFilterToggle}
         >
-          <Filter className="size-4" />
+          <Filter />
         </Button>
 
         <SearchBar
@@ -396,39 +391,36 @@ function MapControls(props: {
         />
 
         <Button
-          variant="outline"
-          size="icon"
+          variant="toolbar"
+          size="toolbar"
           shape="rounded"
           aria-label="Zoom out"
-          className="size-[34px] border-border bg-bg hover:bg-tag-hover"
           onClick={handleZoomOut}
         >
-          <Minus className="size-4" />
+          <Minus />
         </Button>
         <Button
-          variant="outline"
-          size="icon"
+          variant="toolbar"
+          size="toolbar"
           shape="rounded"
           aria-label="Zoom in"
-          className="size-[34px] border-border bg-bg hover:bg-tag-hover"
           onClick={handleZoomIn}
         >
-          <Plus className="size-4" />
+          <Plus />
         </Button>
         <Button
-          variant="outline"
-          size="icon"
+          variant="toolbar"
+          size="toolbar"
           shape="rounded"
           aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-          className="size-[34px] border-border bg-bg hover:bg-tag-hover"
           onClick={handleFullscreen}
         >
           <span className="t-icon-swap size-4" data-state={isFullscreen ? "b" : "a"}>
             <span className="t-icon" data-icon="a">
-              <Maximize2 className="size-4" />
+              <Maximize2 />
             </span>
             <span className="t-icon" data-icon="b">
-              <Minimize2 className="size-4" />
+              <Minimize2 />
             </span>
           </span>
         </Button>
@@ -515,39 +507,36 @@ function MapZoomControls() {
     >
       <div className="pointer-events-auto flex items-center gap-2">
         <Button
-          variant="outline"
-          size="icon"
+          variant="toolbar"
+          size="toolbar"
           shape="rounded"
           aria-label="Zoom out"
-          className="size-[34px] border-border bg-bg hover:bg-tag-hover"
           onClick={handleZoomOut}
         >
-          <Minus className="size-4" />
+          <Minus />
         </Button>
         <Button
-          variant="outline"
-          size="icon"
+          variant="toolbar"
+          size="toolbar"
           shape="rounded"
           aria-label="Zoom in"
-          className="size-[34px] border-border bg-bg hover:bg-tag-hover"
           onClick={handleZoomIn}
         >
-          <Plus className="size-4" />
+          <Plus />
         </Button>
         <Button
-          variant="outline"
-          size="icon"
+          variant="toolbar"
+          size="toolbar"
           shape="rounded"
           aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-          className="size-[34px] border-border bg-bg hover:bg-tag-hover"
           onClick={handleFullscreen}
         >
           <span className="t-icon-swap size-4" data-state={isFullscreen ? "b" : "a"}>
             <span className="t-icon" data-icon="a">
-              <Maximize2 className="size-4" />
+              <Maximize2 />
             </span>
             <span className="t-icon" data-icon="b">
-              <Minimize2 className="size-4" />
+              <Minimize2 />
             </span>
           </span>
         </Button>

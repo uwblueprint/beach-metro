@@ -4,6 +4,10 @@ import { Search } from "lucide-react";
 import { useRef } from "react";
 
 import { cn } from "@/lib/utils";
+import {
+  toolbarControlHeightClass,
+  toolbarSearchBarShellClass,
+} from "@/components/ui/toolbar-control";
 
 interface SearchBarProps {
   value: string;
@@ -25,8 +29,9 @@ function SearchBar({
   return (
     <div
       className={cn(
-        "@container flex w-full items-center gap-3 rounded-full border border-border px-3 py-2 transition-colors",
-        "focus-within:border-active focus-within:ring-3 focus-within:ring-active/40",
+        "@container flex w-full items-center gap-3 px-3",
+        toolbarControlHeightClass,
+        toolbarSearchBarShellClass,
         disabled && "pointer-events-none opacity-50",
         className,
       )}

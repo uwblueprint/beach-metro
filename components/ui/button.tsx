@@ -1,6 +1,10 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
 
+import {
+  toolbarIconButtonClass,
+  toolbarIconButtonSelectedClass,
+} from "@/components/ui/toolbar-control";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
@@ -15,6 +19,8 @@ const buttonVariants = cva(
         danger: "bg-destructive text-bg hover:bg-destructive-hover disabled:bg-destructive/50",
         text: "text-primary hover:bg-secondary-fill-hover disabled:text-disabled",
         link: "text-active underline-offset-4 hover:underline",
+        /** Circular icon for toolbars (map chrome, filter toggles). Pair with size=toolbar shape=rounded. */
+        toolbar: toolbarIconButtonClass,
       },
       size: {
         default: "h-8 gap-2 px-3 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
@@ -25,6 +31,8 @@ const buttonVariants = cva(
         "icon-xs": "size-5 p-1 [&_svg:not([class*='size-'])]:size-2.5",
         "icon-sm": "size-6 p-1.5 [&_svg:not([class*='size-'])]:size-3",
         "icon-lg": "size-9 p-2.5",
+        /** Matches SearchBar height (36px). Use with variant=toolbar shape=rounded. */
+        toolbar: "size-9 shrink-0 p-0 [&_svg:not([class*='size-'])]:size-4",
       },
       shape: {
         default: "rounded-[4px]",
@@ -39,17 +47,29 @@ const buttonVariants = cva(
   },
 );
 
+type ButtonProps = ButtonPrimitive.Props &
+  VariantProps<typeof buttonVariants> & {
+    /** Pressed / toggled state for variant=toolbar (sets aria-pressed). */
+    selected?: boolean;
+  };
+
 function Button({
   className,
   variant = "default",
   size = "default",
   shape = "default",
+  selected,
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ButtonProps) {
   return (
     <ButtonPrimitive
       data-slot="button"
-      className={cn(buttonVariants({ variant, size, shape, className }))}
+      aria-pressed={selected ?? undefined}
+      className={cn(
+        buttonVariants({ variant, size, shape }),
+        variant === "toolbar" && selected && toolbarIconButtonSelectedClass,
+        className,
+      )}
       {...props}
     />
   );

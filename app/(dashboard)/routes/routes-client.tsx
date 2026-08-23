@@ -264,20 +264,15 @@ function DeliveriesFilterSection(props: {
           )}
 
           <Button
-            variant="outline"
-            size="icon"
+            variant="toolbar"
+            size="toolbar"
             shape="rounded"
             aria-label="Toggle filters"
             aria-expanded={props.filterOpen}
-            className={cn(
-              "size-8 shrink-0 hover:bg-tag-hover",
-              props.filterOpen || filterClosing
-                ? "border-active-border bg-tag-active text-active hover:bg-tag-active-hover"
-                : "border-border bg-bg",
-            )}
+            selected={props.filterOpen || filterClosing}
             onClick={props.onFilterToggle}
           >
-            <Filter className="size-4" />
+            <Filter />
           </Button>
         </div>
 
