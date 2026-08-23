@@ -8,6 +8,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Filter, Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
+import { AddressField } from "@/components/address-field";
+import { BundlePapersTable } from "@/components/bundle-papers-table";
+import { SidePanelField } from "@/components/side-panel-field";
 import { SidePanelRow } from "@/components/side-panel-row";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,8 +21,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { AddressField } from "@/components/address-field";
 import { Pill } from "@/components/ui/pill";
 import { PillGroup } from "@/components/ui/pill-group";
 import { SearchBar } from "@/components/ui/search-bar";
@@ -76,8 +77,25 @@ interface RouteSummary {
 }
 interface RouteDetail extends RouteSummary {
   notes: string | null;
+  bundles: Array<{ papers: number }>;
   startAddress: { formattedAddress: string | null };
   endAddress: { formattedAddress: string | null };
+}
+
+function papersRowsFromRoute(r: RouteDetail): number[] {
+  if (r.bundles.length > 0) return r.bundles.map((b) => b.papers);
+  const split = greedySplit(r.papers).map((b) => b.papers);
+  return split.length > 0 ? split : [0];
+}
+
+function toBundles(rows: number[]): Array<{ papers: number }> {
+  return rows.filter((p) => p > 0).map((papers) => ({ papers }));
+}
+
+function bundlesDiffer(rows: number[], original: Array<{ papers: number }>): boolean {
+  const next = toBundles(rows);
+  if (next.length !== original.length) return true;
+  return next.some((b, i) => b.papers !== original[i].papers);
 }
 interface VolunteerSummary {
   id: string;
@@ -218,7 +236,7 @@ function DeliveriesFilterSection(props: {
   return (
     <div
       ref={containerRef}
-      className="shrink-0 border-b border-border py-4 pr-4 pl-3"
+      className="shrink-0 border-b border-border px-3 py-4"
       style={
         {
           "--resize-dur": "150ms",
@@ -268,7 +286,7 @@ function DeliveriesFilterSection(props: {
             <div
               ref={filterInnerRef}
               className={cn(
-                "t-dropdown flex flex-col gap-5 pt-5",
+                "t-dropdown flex flex-col gap-4 pt-4 px-2",
                 dropdownOpen && "is-open",
                 filterClosing && "is-closing",
               )}
@@ -450,7 +468,7 @@ export function RoutesClient() {
               />
             ) : (
               <>
-                <div className="page-header-container !pl-5">
+                <div className="page-header-container">
                   <span className="text-md font-semibold text-primary">Deliveries</span>
                 </div>
                 {filterPlacement === "sidepanel" && (
@@ -465,7 +483,7 @@ export function RoutesClient() {
                     onDeliveryTypeChange={setDeliveryType}
                   />
                 )}
-                <div className="flex-1 overflow-y-auto py-4 pr-4 pl-3">
+                <div className="flex-1 overflow-y-auto px-3 py-4">
                   <RouteList
                     routes={listRoutes}
                     loading={routes.isLoading}
@@ -491,10 +509,9 @@ function RouteList(props: {
   error?: string;
   onSelect: (id: string) => void;
 }) {
-  if (props.loading) return <p className="px-2 text-md text-secondary">Loading routes…</p>;
-  if (props.error) return <p className="px-2 text-md text-destructive">{props.error}</p>;
-  if (props.routes.length === 0)
-    return <p className="px-2 text-md text-secondary">No routes match.</p>;
+  if (props.loading) return <p className="text-md text-secondary">Loading routes…</p>;
+  if (props.error) return <p className="text-md text-destructive">{props.error}</p>;
+  if (props.routes.length === 0) return <p className="text-md text-secondary">No routes match.</p>;
 
   return (
     <div className="flex flex-col gap-2">
@@ -505,9 +522,10 @@ function RouteList(props: {
           : "vacant";
 
         return (
+          // TODO: Harmonize SidePanelRow height with members (h-8 vs h-10 here).
           <SidePanelRow
             key={r.id}
-            className="h-10 py-2"
+            className="h-10 px-2 py-2"
             meta={meta}
             onClick={() => props.onSelect(r.id)}
           >
@@ -528,16 +546,19 @@ function DropdownField(props: {
   onChange?: (value: string) => void;
   disabled?: boolean;
 }) {
+  const isDisabled = props.disabled || !props.onChange;
+
   return (
-    <div className="flex flex-col gap-2">
-      <Label className="text-md font-normal text-primary">{props.label}</Label>
+    <SidePanelField label={props.label}>
       <DropdownMenu>
         <DropdownMenuTrigger
-          disabled={props.disabled || !props.onChange}
+          disabled={isDisabled}
           render={<button type="button" className={inputTriggerClassName} />}
         >
-          <span className="min-w-0 truncate">{props.display}</span>
-          <ChevronDown className="size-3 shrink-0 text-primary" />
+          <span className={cn("min-w-0 truncate", isDisabled && "text-secondary")}>
+            {props.display}
+          </span>
+          <ChevronDown className={cn("size-3 shrink-0", !isDisabled && "text-primary")} />
         </DropdownMenuTrigger>
         <DropdownMenuContent className="min-w-[var(--anchor-width)]">
           <DropdownMenuRadioGroup value={props.value} onValueChange={props.onChange}>
@@ -549,7 +570,7 @@ function DropdownField(props: {
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+    </SidePanelField>
   );
 }
 
@@ -563,11 +584,7 @@ function InputField(props: {
   labelSuffix?: string;
 }) {
   return (
-    <div className="flex flex-col gap-2">
-      <Label className="text-md font-normal text-primary">
-        {props.label}
-        {props.labelSuffix ? <span className="text-secondary"> {props.labelSuffix}</span> : null}
-      </Label>
+    <SidePanelField label={props.label} labelSuffix={props.labelSuffix}>
       <Input
         value={props.value}
         onChange={props.onChange ? (e) => props.onChange!(e.target.value) : undefined}
@@ -575,55 +592,7 @@ function InputField(props: {
         placeholder={props.placeholder}
         type={props.type}
       />
-    </div>
-  );
-}
-
-/**
- * Compact 2-column counts editor — reuses members-table `table-row` / `table-cell`
- * utilities (the closest existing “mini table” pattern in the design system).
- *
- * TODO: replace with `BundlePapersTable` from the `members-page-functionality`
- * branch (`components/bundle-papers-table.tsx`) — per-bundle papers rows with
- * add/remove, instead of derived bundle count + total papers inputs.
- */
-function CountsMiniTable(props: { papers: string; onPapersChange?: (value: string) => void }) {
-  const papersNum = Number(props.papers) || 0;
-  const bundles = String(greedySplit(Math.max(0, Math.floor(papersNum))).length);
-
-  return (
-    <div className="flex w-full flex-col gap-1">
-      <div className="flex h-10 w-full items-center gap-10 px-2 py-1 text-md text-secondary">
-        <div className="table-cell"># of Bundles</div>
-        <div className="table-cell">Total # of Papers</div>
-      </div>
-      <div className="flex h-10 w-full items-center gap-10 rounded-md px-2">
-        <div className="table-cell">
-          <Input
-            type="number"
-            min={0}
-            value={bundles}
-            readOnly
-            tabIndex={-1}
-            className="tabular-nums"
-            aria-label="# of Bundles (derived from papers)"
-          />
-        </div>
-        <div className="table-cell">
-          <Input
-            type="number"
-            min={0}
-            value={props.papers}
-            onChange={
-              props.onPapersChange ? (e) => props.onPapersChange!(e.target.value) : undefined
-            }
-            readOnly={!props.onPapersChange}
-            className="tabular-nums"
-            aria-label="Total # of Papers"
-          />
-        </div>
-      </div>
-    </div>
+    </SidePanelField>
   );
 }
 
@@ -651,7 +620,7 @@ function dropLabel(r: RouteDetail): string {
 
 function DetailBreadcrumb(props: { title: string; onBack: () => void }) {
   return (
-    <div className="flex h-[64px] items-center border-b border-border px-4">
+    <div className="flex h-[64px] items-center border-b border-border pl-6 pr-4">
       <div className="flex min-w-0 items-center gap-2.5 text-md font-semibold">
         <button
           type="button"
@@ -681,16 +650,17 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
   const [notes, setNotes] = useState<string | null>(null);
   const [volunteerId, setVolunteerId] = useState<string | null>(null);
   const [side, setSide] = useState<string | null>(null);
-  const [papers, setPapers] = useState<string | null>(null);
+  const [papersRows, setPapersRows] = useState<number[] | null>(null);
 
   const r = detail.data;
+  const baselineBundles = r ? (r.bundles.length > 0 ? r.bundles : greedySplit(r.papers)) : [];
   const dirtyStreet = streetName !== null && r && streetName !== r.streetName;
   const dirtyNotes = notes !== null && r && (notes || null) !== (r.notes || null);
   const dirtyVolunteer =
     volunteerId !== null && r && volunteerId !== (r.assignedVolunteer?.id ?? "");
   const dirtySide = side !== null && r && (side || null) !== (r.side || null);
-  const dirtyPapers = papers !== null && r && Number(papers) !== r.papers;
-  const dirty = dirtyStreet || dirtyNotes || dirtyVolunteer || dirtySide || dirtyPapers;
+  const dirtyBundles = papersRows !== null && r && bundlesDiffer(papersRows, baselineBundles);
+  const dirty = dirtyStreet || dirtyNotes || dirtyVolunteer || dirtySide || dirtyBundles;
 
   const save = useMutation({
     mutationFn: async () => {
@@ -698,7 +668,13 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
       if (dirtyStreet) body.streetName = streetName;
       if (dirtyNotes) body.note = notes ?? "";
       if (dirtySide) body.side = side || null;
-      if (dirtyPapers) body.papers = Number(papers) || 0;
+      if (dirtyBundles && papersRows) {
+        const bundles = toBundles(papersRows);
+        if (bundles.length === 0) {
+          throw new Error("Add at least one bundle with a paper count.");
+        }
+        body.bundles = bundles;
+      }
       if (Object.keys(body).length > 0) {
         await sendJson(`/api/routes/${props.routeId}`, "PATCH", body);
       }
@@ -717,7 +693,7 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
       setNotes(null);
       setVolunteerId(null);
       setSide(null);
-      setPapers(null);
+      setPapersRows(null);
       detail.refetch();
       props.onChanged();
     },
@@ -728,16 +704,17 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
     setNotes(null);
     setVolunteerId(null);
     setSide(null);
-    setPapers(null);
+    setPapersRows(null);
   }
 
-  if (detail.isLoading) return <p className="p-4 text-md text-secondary">Loading…</p>;
-  if (detail.error) return <p className="p-4 text-md text-destructive">{detail.error.message}</p>;
+  if (detail.isLoading) return <p className="px-6 py-4 text-md text-secondary">Loading…</p>;
+  if (detail.error)
+    return <p className="px-6 py-4 text-md text-destructive">{detail.error.message}</p>;
   if (!r) return null;
 
   const currentVolunteerId = volunteerId ?? r.assignedVolunteer?.id ?? "";
   const currentSide = side ?? r.side ?? "";
-  const currentPapers = papers ?? String(r.papers);
+  const currentPapersRows = papersRows ?? papersRowsFromRoute(r);
   const asDrop = isDropRoute(r);
 
   const volunteerOptions = [
@@ -757,7 +734,17 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
     <div className="flex h-full flex-col">
       <DetailBreadcrumb title={asDrop ? dropLabel(r) : routeLabel(r)} onBack={props.onClose} />
 
-      <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-4">
+      <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-4">
+        {!asDrop && (
+          <DropdownField
+            label="Volunteer"
+            value={currentVolunteerId}
+            display={volunteerDisplay}
+            options={volunteerOptions}
+            onChange={setVolunteerId}
+          />
+        )}
+
         {/* Captain is derived via the volunteer — display only (route flow §4). */}
         <DropdownField
           label="Captain"
@@ -770,16 +757,6 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
           }
           disabled
         />
-
-        {!asDrop && (
-          <DropdownField
-            label="Volunteer"
-            value={currentVolunteerId}
-            display={volunteerDisplay}
-            options={volunteerOptions}
-            onChange={setVolunteerId}
-          />
-        )}
 
         <InputField label="Name" value={streetName ?? r.streetName} onChange={setStreetName} />
 
@@ -815,24 +792,20 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
           </>
         )}
 
-        <CountsMiniTable papers={currentPapers} onPapersChange={setPapers} />
+        <BundlePapersTable value={currentPapersRows} onChange={setPapersRows} />
 
-        <div className="flex flex-col gap-2">
-          <Label className="text-md font-normal text-primary">
-            {asDrop ? "Drop Notes" : "Route Notes"}{" "}
-            <span className="text-secondary">(optional)</span>
-          </Label>
+        <SidePanelField label={asDrop ? "Drop Notes" : "Route Notes"} labelSuffix="(optional)">
           <textarea
             className="w-full rounded-[8px] border border-hairline bg-bg px-3 py-2 text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40"
             rows={4}
             value={notes ?? r.notes ?? ""}
             onChange={(e) => setNotes(e.target.value)}
           />
-        </div>
+        </SidePanelField>
       </div>
 
       {dirty && (
-        <div className="flex items-center justify-end gap-2 border-t border-border p-4">
+        <div className="panel-header shrink-0 justify-end gap-2 border-t border-border">
           <Button variant="outline" onClick={discard}>
             Discard Changes
           </Button>
@@ -863,7 +836,7 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
   const [endLine, setEndLine] = useState("");
   const [startPlaceId, setStartPlaceId] = useState<string | null>(null);
   const [endPlaceId, setEndPlaceId] = useState<string | null>(null);
-  const [papers, setPapers] = useState("0");
+  const [papersRows, setPapersRows] = useState<number[]>([0]);
   const [side, setSide] = useState("");
   const [volunteerId, setVolunteerId] = useState("");
   const [note, setNote] = useState("");
@@ -878,8 +851,7 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
           regionCode: "CA" as const,
         };
 
-  const papersNum = Number(papers) || 0;
-  const derivedBundles = greedySplit(Math.max(0, Math.floor(papersNum))).length;
+  const bundles = toBundles(papersRows);
 
   const create = useMutation({
     mutationFn: () =>
@@ -887,9 +859,8 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
         streetName: streetName.trim(),
         startAddress: address(startLine, startPlaceId),
         endAddress: address(endLine, endPlaceId),
-        // houseCount is still required by the API; seed from derived bundles for now.
-        houseCount: derivedBundles,
-        papers: papersNum,
+        houseCount: 0,
+        bundles,
         ...(side ? { side } : {}),
         ...(volunteerId ? { assignedVolunteerId: volunteerId } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
@@ -897,7 +868,7 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
     onSuccess: (route) => props.onCreated(route.id),
   });
 
-  const ready = streetName.trim() && startLine.trim() && endLine.trim();
+  const ready = streetName.trim() && startLine.trim() && endLine.trim() && bundles.length > 0;
 
   const volunteerOptions = [
     { value: "", label: "— leave vacant —" },
@@ -914,7 +885,7 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
     <div className="flex h-full flex-col">
       <DetailBreadcrumb title="New route" onBack={props.onClose} />
 
-      <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-4">
+      <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-4">
         <DropdownField
           label="Volunteer"
           value={volunteerId}
@@ -966,24 +937,21 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
           onChange={setSide}
         />
 
-        <CountsMiniTable papers={papers} onPapersChange={setPapers} />
+        <BundlePapersTable value={papersRows} onChange={setPapersRows} startEditingLast />
 
-        <div className="flex flex-col gap-2">
-          <Label className="text-md font-normal text-primary">
-            Route Notes <span className="text-secondary">(optional)</span>
-          </Label>
+        <SidePanelField label="Route Notes" labelSuffix="(optional)">
           <textarea
             className="w-full rounded-[8px] border border-hairline bg-bg px-3 py-2 text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40"
             rows={4}
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
-        </div>
+        </SidePanelField>
 
         {create.error && <p className="text-md text-destructive">{create.error.message}</p>}
       </div>
 
-      <div className="flex items-center justify-end gap-2 border-t border-border p-4">
+      <div className="panel-header shrink-0 justify-end gap-2 border-t border-border">
         <Button variant="outline" onClick={props.onClose}>
           Cancel
         </Button>

@@ -286,9 +286,9 @@
     @apply border-b border-border py-4 pl-6 pr-4 h-[64px] flex items-center justify-between;
   }
 
-  /** Shared panel bar (header or footer) — 64px tall, 16px padding all sides. */
+  /** Shared panel bar (header or footer) — 64px tall; 24px left / 16px right like page-header. */
   .panel-header {
-    @apply h-[64px] p-4 flex items-center;
+    @apply h-[64px] flex items-center py-4 pl-6 pr-4;
   }
 }
 

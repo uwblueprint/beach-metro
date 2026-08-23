@@ -648,15 +648,16 @@ export function RouteMap(props: {
               onRouteLeave={handleRouteLeave}
             />
           ))}
-          {hoveredRoute && hoverPosition && (
-            <RouteHoverCard
-              route={hoveredRoute}
-              position={hoverPosition}
-              onSelect={() => props.onSelect(hoveredRoute.id)}
-              onPointerEnter={handleCardEnter}
-              onPointerLeave={handleCardLeave}
-            />
-          )}
+          <RouteHoverCard
+            open={!!hoveredRoute && !!hoverPosition}
+            route={hoveredRoute}
+            position={hoverPosition}
+            onSelect={() => {
+              if (hoveredRoute) props.onSelect(hoveredRoute.id);
+            }}
+            onPointerEnter={handleCardEnter}
+            onPointerLeave={handleCardLeave}
+          />
           {props.homes.map((h) => (
             <HomeMarker key={h.id} home={h} />
           ))}
