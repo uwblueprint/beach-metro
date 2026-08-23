@@ -15,8 +15,5 @@ Consolidate once the file passes ~100 entries, via `/blueprint-consolidate-learn
 - What happened, what failed, what to do instead next time. One or two lines.
 -->
 
-### 2026-08-03 territory-drops-auth
-- Territory drop and route mutations hit real APIs; a signed-in session is required for changes to persist.
-
-### 2026-08-03 routes-auth
-- Same as above for route create/edit from the members side panel.
+### 2026-08-22 client-components
+- Don't import `today()` from `lib/services/shared.ts` into a client component: it pulls the Supabase admin client into the browser bundle. Inline the `Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto" })` form instead (see `notes-section.tsx`, `member-side-panel.tsx`). Dates are Toronto-local everywhere, so `new Date().toISOString()` is wrong after 8pm ET.

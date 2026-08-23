@@ -449,3 +449,123 @@ describe.skipIf(!RUN)("retiring a captain zeros their open-issue cells", () => {
     }
   });
 });
+
+// Standing route bundles: the DB trigger that keeps bundles/papers consistent,
+// and the service-level reseed rule that decides which of the two wins.
+describe.skipIf(!RUN)("route standing bundles", () => {
+  const ids = { routeId: "", addressIds: [] as string[] };
+
+  async function makeRoute(): Promise<string> {
+    const r = await S().routes.createRouteRecord({
+      startAddress: { addressLines: ["1 Bundle Way"] },
+      endAddress: { addressLines: ["99 Bundle Way"] },
+      streetName: "Bundle Way",
+      side: null,
+      assignedVolunteerId: null,
+      houseCount: 10,
+      papers: 130,
+      note: null,
+    });
+    ids.routeId = r.id;
+    ids.addressIds.push(r.startAddress.id, r.endAddress.id);
+    return r.id;
+  }
+
+  it("seeds the standing split from papers on create", async () => {
+    const id = await makeRoute();
+    const r = await S().routes.getRoute(id);
+    expect(r.papers).toBe(130);
+    expect(r.bundles).toEqual([{ papers: 50 }, { papers: 50 }, { papers: 25 }, { papers: 5 }]);
+  });
+
+  it("reseeds bundles when papers changes alone, and derives papers when bundles are sent", async () => {
+    // papers alone → the standing split is regenerated.
+    const reseeded = await S().routes.updateRouteRecord(ids.routeId, { papers: 70 });
+    expect(reseeded.papers).toBe(70);
+    expect(reseeded.bundles).toEqual([{ papers: 50 }, { papers: 20 }]);
+
+    // bundles sent → kept verbatim (irregular split survives) and papers follows.
+    const manual = await S().routes.updateRouteRecord(ids.routeId, {
+      bundles: [{ papers: 40 }, { papers: 30 }],
+    });
+    expect(manual.bundles).toEqual([{ papers: 40 }, { papers: 30 }]);
+    expect(manual.papers).toBe(70);
+
+    // Both fields in one patch is only reachable when they agree — the schema
+    // rejects a mismatch before the service sees it (covered in validation.test.ts).
+    const both = await S().routes.updateRouteRecord(ids.routeId, {
+      papers: 60,
+      bundles: [{ papers: 35 }, { papers: 25 }],
+    });
+    expect(both.papers).toBe(60);
+    expect(both.bundles).toEqual([{ papers: 35 }, { papers: 25 }]);
+
+    // An unrelated edit leaves the custom split alone.
+    const renamed = await S().routes.updateRouteRecord(ids.routeId, { streetName: "Bundle Way N" });
+    expect(renamed.bundles).toEqual([{ papers: 35 }, { papers: 25 }]);
+    expect(renamed.papers).toBe(60);
+  });
+
+  // These write through the admin client on purpose: the trigger is the last
+  // line of defence for anything that does not go through the service layer.
+  it("rejects, at the database, bundles that do not sum to papers", async () => {
+    const { error } = await createAdminClient()
+      .from("volunteer_routes")
+      .update({ papers: 60, bundles: [{ papers: 50 }] })
+      .eq("id", ids.routeId);
+    expect(error).not.toBeNull();
+    expect(error!.message).toMatch(/bundles must sum to papers/);
+  });
+
+  it("rejects, at the database, a zero or negative bundle", async () => {
+    const client = createAdminClient();
+    for (const bad of [0, -5]) {
+      const { error } = await client
+        .from("volunteer_routes")
+        .update({ papers: 60, bundles: [{ papers: 60 }, { papers: bad }] })
+        .eq("id", ids.routeId);
+      expect(error).not.toBeNull();
+      expect(error!.message).toMatch(/positive integer/);
+    }
+  });
+
+  it("rejects, at the database, a fractional bundle", async () => {
+    const { error } = await createAdminClient()
+      .from("volunteer_routes")
+      .update({ papers: 60, bundles: [{ papers: 30.5 }, { papers: 29.5 }] })
+      .eq("id", ids.routeId);
+    expect(error).not.toBeNull();
+    expect(error!.message).toMatch(/positive integer/);
+  });
+
+  it("rejects, at the database, bundles that are not an array of objects", async () => {
+    const client = createAdminClient();
+
+    const notArray = await client
+      .from("volunteer_routes")
+      .update({ papers: 60, bundles: { papers: 60 } })
+      .eq("id", ids.routeId);
+    expect(notArray.error).not.toBeNull();
+    expect(notArray.error!.message).toMatch(/JSON array/);
+
+    const notObjects = await client
+      .from("volunteer_routes")
+      .update({ papers: 60, bundles: [60] })
+      .eq("id", ids.routeId);
+    expect(notObjects.error).not.toBeNull();
+    expect(notObjects.error!.message).toMatch(/positive integer/);
+  });
+
+  it("leaves the row untouched after every rejected write", async () => {
+    const r = await S().routes.getRoute(ids.routeId);
+    expect(r.papers).toBe(60);
+    expect(r.bundles).toEqual([{ papers: 35 }, { papers: 25 }]);
+  });
+
+  afterAll(async () => {
+    if (!RUN) return;
+    const client = createAdminClient();
+    if (ids.routeId) await client.from("volunteer_routes").delete().eq("id", ids.routeId);
+    for (const id of ids.addressIds) await client.from("addresses").delete().eq("id", id);
+  });
+});
