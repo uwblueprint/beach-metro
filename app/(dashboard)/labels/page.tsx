@@ -3,6 +3,7 @@
 import { Check, ChevronDown, ChevronRight, Printer, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PillGroup } from "@/components/ui/pill-group";
@@ -216,7 +217,9 @@ export default function LabelsPage() {
   }, [captains, searchQuery]);
 
   const selectedCount = selectedBundleIds.size;
-  const busy = markLabels.isPending || exportLabels.isPending;
+  // Sheet still loading/failed counts as busy too, so Export can't run
+  // against stale-empty data and claim "everything's already labelled."
+  const busy = isPending || isError || markLabels.isPending || exportLabels.isPending;
 
   function clearSelection() {
     setSelectedBundleIds(new Set());
@@ -245,6 +248,7 @@ export default function LabelsPage() {
    */
   async function handleExport() {
     setActionError(null);
+    if (isPending || isError) return; // guarded by the disabled button; defensive here too
     const bundles: BundleRef[] =
       selectedBundleIds.size > 0
         ? [...selectedBundleIds].map(parseBundleKey)
@@ -309,9 +313,9 @@ export default function LabelsPage() {
             </div>
 
             {actionError ? (
-              <p role="alert" className="text-md text-destructive px-2">
+              <Banner variant="danger" onDismiss={() => setActionError(null)}>
                 {actionError}
-              </p>
+              </Banner>
             ) : null}
 
             <div className="flex w-full flex-col gap-1">
@@ -366,7 +370,7 @@ export default function LabelsPage() {
 
                       {captainExpanded
                         ? captain.routes.map((route) => {
-                            const routeExpanded = expandedRoutes.has(route.id);
+                            const routeExpanded = revealResults || expandedRoutes.has(route.id);
                             const labelled = labelledBundleCount(route.bundles);
                             const selection = routeBundleSelection(route, selectedBundleIds);
 
