@@ -212,6 +212,12 @@ function DatePicker({
         align="start"
         side="bottom"
         sideOffset={4}
+        collisionPadding={16}
+        collisionAvoidance={{
+          side: "flip",
+          align: "shift",
+          fallbackAxisSide: "end",
+        }}
         className="w-auto min-w-[280px] gap-0 rounded-xl border border-border bg-bg p-3 shadow-sm ring-0"
       >
         <DatePickerCalendar

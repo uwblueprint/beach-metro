@@ -67,6 +67,7 @@ function PaymentAmountPopover({
   paymentDetail: PaymentDetail;
   substituteCaptain: SubstituteCaptainAssignment;
   comment?: string;
+  readOnly?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const openTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -430,7 +431,7 @@ export function PaymentCell({
         />
       )}
 
-      {paymentDetail && !nonInteractive ? (
+      {paymentDetail ? (
         <PaymentAmountPopover
           value={value}
           paid={paid}
@@ -439,6 +440,7 @@ export function PaymentCell({
           paymentDetail={paymentDetail}
           substituteCaptain={substituteCaptain}
           comment={comment}
+          readOnly={nonInteractive}
         />
       ) : (
         <span

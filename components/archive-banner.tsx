@@ -7,10 +7,16 @@ import { cn } from "@/lib/utils";
 type ArchiveBannerProps = {
   dateRange: string;
   onDismiss: () => void;
+  onUnarchive?: () => void;
   className?: string;
 };
 
-export function ArchiveBanner({ dateRange, onDismiss, className }: ArchiveBannerProps) {
+export function ArchiveBanner({
+  dateRange,
+  onDismiss,
+  onUnarchive,
+  className,
+}: ArchiveBannerProps) {
   return (
     <div
       className={cn(
@@ -22,14 +28,25 @@ export function ArchiveBanner({ dateRange, onDismiss, className }: ArchiveBanner
         <Info className="size-4 shrink-0 text-muted-foreground" />
         <p className="text-sm text-muted-foreground">Viewing {dateRange} (archived) • Read-only</p>
       </div>
-      <button
-        type="button"
-        aria-label="Dismiss archive banner"
-        onClick={onDismiss}
-        className="shrink-0 text-muted-foreground hover:text-primary"
-      >
-        <X className="size-4" />
-      </button>
+      <div className="flex shrink-0 items-center gap-3">
+        {onUnarchive && (
+          <button
+            type="button"
+            onClick={onUnarchive}
+            className="text-sm text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
+          >
+            Unarchive
+          </button>
+        )}
+        <button
+          type="button"
+          aria-label="Dismiss archive banner"
+          onClick={onDismiss}
+          className="text-muted-foreground hover:text-primary"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
     </div>
   );
 }

@@ -2,11 +2,24 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowUpRight, Check, ChevronDown, MoreHorizontal, X } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown } from "lucide-react";
 
 import { ArchiveBanner } from "@/components/archive-banner";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useOverview, useYears, type Overview } from "@/features/finances/api";
 import { cn } from "@/lib/utils";
@@ -17,6 +30,7 @@ import {
   formatCurrency,
   formatIssueDate,
   monthLabel,
+  monthYearLabel,
   yearDateRange,
   type PaymentPeriod,
 } from "./data";
@@ -34,7 +48,11 @@ type MonthlyCost = Overview["monthlyCosts"][number];
 
 function getTodayLineLeft(monthIndex: number, monthCount: number) {
   const gapTotal = (monthCount - 1) * CHART_BAR_GAP;
-  return `calc(${monthIndex + 1} * (100% - ${gapTotal}px) / ${monthCount} + ${monthIndex * CHART_BAR_GAP}px)`;
+  // Place the line after the current month bar (middle of the following gap).
+  if (monthIndex >= monthCount - 1) {
+    return "100%";
+  }
+  return `calc(${monthIndex + 1} * (100% - ${gapTotal}px) / ${monthCount} + ${monthIndex} * ${CHART_BAR_GAP}px + ${CHART_BAR_GAP / 2}px)`;
 }
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub: React.ReactNode }) {
@@ -49,7 +67,7 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub: Re
 
 function PaymentRow({ name, meta, amount }: { name: string; meta: string; amount: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-hairline py-3.5 last:border-b-0">
+    <div className="flex items-center justify-between gap-4 py-3.5">
       <div className="min-w-0">
         <span className="text-md font-semibold text-primary">{name}</span>
         <span className="ml-2 text-md text-muted-foreground">{meta}</span>
@@ -64,8 +82,35 @@ function PaymentRow({ name, meta, amount }: { name: string; meta: string; amount
  * marker is worked out here rather than stored: the API returns amounts, and which
  * month is current is a question about the browser's clock, not the data.
  */
-function YtdRunningCostChart({ months }: { months: MonthlyCost[] }) {
+function YtdRunningCostChart({
+  months,
+  onHover,
+}: {
+  months: MonthlyCost[];
+  onHover?: (index: number | null) => void;
+}) {
   const [hoveredBarIndex, setHoveredBarIndex] = React.useState<number | null>(null);
+  const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleHover(index: number | null) {
+    if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+    if (index !== null) {
+      setHoveredBarIndex(index);
+      onHover?.(index);
+    } else {
+      leaveTimerRef.current = setTimeout(() => {
+        setHoveredBarIndex(null);
+        onHover?.(null);
+      }, 150);
+    }
+  }
+
+  React.useEffect(
+    () => () => {
+      if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+    },
+    [],
+  );
 
   const chartMax = Math.max(...months.map((m) => m.amount), 1);
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -78,7 +123,7 @@ function YtdRunningCostChart({ months }: { months: MonthlyCost[] }) {
       <div className="relative w-full" style={{ height: CHART_BAR_MAX_HEIGHT }}>
         {todayLineLeft !== null && (
           <div
-            className="pointer-events-none absolute z-10 flex flex-col items-center"
+            className="pointer-events-none absolute z-10 flex -translate-x-1/2 flex-col items-center"
             style={{ left: todayLineLeft, top: "-1.25rem", bottom: 0 }}
           >
             <span className="mb-1 text-xs text-muted-foreground">Today</span>
@@ -88,20 +133,21 @@ function YtdRunningCostChart({ months }: { months: MonthlyCost[] }) {
 
         <div className="flex h-full items-end" style={{ gap: CHART_BAR_GAP }}>
           {months.map((month, index) => {
-            const height =
-              month.amount === 0
-                ? 0
-                : Math.max((month.amount / chartMax) * CHART_BAR_MAX_HEIGHT, 8);
+            const isEmpty = month.amount === 0;
+            const isPast = month.month <= currentMonth;
+            const height = isEmpty
+              ? 4
+              : Math.max((month.amount / chartMax) * CHART_BAR_MAX_HEIGHT, 8);
             const isHovered = hoveredBarIndex === index;
 
             return (
               <div
                 key={month.month}
                 className="relative flex-1"
-                onMouseEnter={() => setHoveredBarIndex(index)}
-                onMouseLeave={() => setHoveredBarIndex(null)}
+                onMouseEnter={() => handleHover(index)}
+                onMouseLeave={() => handleHover(null)}
               >
-                {isHovered && month.amount > 0 && (
+                {isHovered && isPast && (
                   <div className="absolute -top-7 left-1/2 z-20 -translate-x-1/2 rounded-md bg-primary px-2 py-1 text-xs whitespace-nowrap text-bg">
                     {formatCurrency(month.amount)}
                   </div>
@@ -110,7 +156,11 @@ function YtdRunningCostChart({ months }: { months: MonthlyCost[] }) {
                   className="w-full rounded-t-md transition-[background-color] duration-200"
                   style={{
                     height,
-                    backgroundColor: isHovered ? CHART_COLORS.pastHover : CHART_COLORS.past,
+                    backgroundColor: !isPast
+                      ? "#E5E7EB"
+                      : isHovered
+                        ? CHART_COLORS.pastHover
+                        : CHART_COLORS.past,
                   }}
                 />
               </div>
@@ -132,10 +182,10 @@ function YtdRunningCostChart({ months }: { months: MonthlyCost[] }) {
 
 export default function OverviewPage() {
   const [selectedYearId, setSelectedYearId] = React.useState<string | null>(null);
-  const [yearOpen, setYearOpen] = React.useState(false);
   const [showArchiveBanner, setShowArchiveBanner] = React.useState(false);
-  const [period, setPeriod] = React.useState<PaymentPeriod>("ytd");
+  const [captainPeriod, setCaptainPeriod] = React.useState<PaymentPeriod>("ytd");
   const [periodOpen, setPeriodOpen] = React.useState(false);
+  const [hoveredChartIndex, setHoveredChartIndex] = React.useState<number | null>(null);
   const [papersDialogOpen, setPapersDialogOpen] = React.useState(false);
 
   const { data: years } = useYears();
@@ -144,16 +194,23 @@ export default function OverviewPage() {
   const defaultYear = years?.find((y) => !y.archived) ?? years?.[0];
   const activeYearId = selectedYearId ?? defaultYear?.id;
   const selectedYearOption = years?.find((y) => y.id === activeYearId);
+  const yearOptions = (years ?? []).map((y) => ({
+    id: y.id,
+    label: y.archived ? `${y.name} (archived)` : y.name,
+    archived: y.archived,
+  }));
 
-  const { data: overview, isPending, isError, error } = useOverview(activeYearId, period);
+  // Chart, stat cards, and papers always show YTD. Captain payments use their own period picker.
+  const { data: overview, isPending, isError, error } = useOverview(activeYearId, "ytd");
+  const { data: captainOverview } = useOverview(activeYearId, captainPeriod);
 
-  function handleSelectYear(yearId: string, archived: boolean) {
+  function handleSelectYear(yearId: string) {
+    const next = yearOptions.find((o) => o.id === yearId);
     setSelectedYearId(yearId);
-    setYearOpen(false);
-    setShowArchiveBanner(archived);
+    setShowArchiveBanner(next?.archived ?? false);
   }
 
-  const periodLabel = PERIOD_OPTIONS.find((o) => o.id === period)?.menuLabel ?? "YTD";
+  const periodLabel = PERIOD_OPTIONS.find((o) => o.id === captainPeriod)?.menuLabel ?? "YTD";
   const papersPerIssue = overview?.papersPerIssue ?? [];
 
   return (
@@ -167,51 +224,51 @@ export default function OverviewPage() {
                   carries the h1. Same classes, so it renders identically. */}
               <h1 className="text-md text-muted-foreground">Overview</h1>
               <span className="text-md text-muted-foreground">/</span>
-              <Popover open={yearOpen} onOpenChange={setYearOpen}>
-                <PopoverTrigger
+              <DropdownMenu>
+                <DropdownMenuTrigger
                   render={
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 text-md font-medium text-primary"
+                      aria-label="Switch year"
+                      className="inline-flex items-center gap-1"
                     >
-                      {selectedYearOption?.name ?? "…"}
+                      <span className="text-md font-medium text-primary">
+                        {selectedYearOption?.name ?? "…"}
+                      </span>
                       <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
                     </button>
                   }
                 />
-                <PopoverContent
+                <DropdownMenuContent
                   align="start"
                   side="bottom"
                   sideOffset={4}
-                  className="w-auto gap-0 rounded-xl p-2 shadow-md ring-1 ring-foreground/10"
+                  className="min-w-56"
                 >
-                  {(years ?? []).map((option) => {
-                    const isSelected = activeYearId === option.id;
+                  <DropdownMenuRadioGroup
+                    value={activeYearId ?? ""}
+                    onValueChange={handleSelectYear}
+                  >
+                    {yearOptions.map((option) => {
+                      const isSelected = option.id === activeYearId;
 
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => handleSelectYear(option.id, option.archived)}
-                        className="flex w-full rounded-md px-3 py-2.5 text-left text-md text-primary hover:bg-tag-hover"
-                      >
-                        <span className={cn(isSelected && "font-medium")}>
-                          {option.name}
-                          {option.archived && (
-                            <span className="text-muted-foreground"> (archived)</span>
+                      return (
+                        <DropdownMenuRadioItem
+                          key={option.id}
+                          value={option.id}
+                          className={cn(
+                            "data-checked:font-medium",
+                            option.archived && !isSelected && "text-muted-foreground",
                           )}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </PopoverContent>
-              </Popover>
+                        >
+                          {option.label}
+                        </DropdownMenuRadioItem>
+                      );
+                    })}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-
-            <Button variant="outline" size="icon-sm" className="text-muted-foreground">
-              <MoreHorizontal className="size-4" />
-              <span className="sr-only">More actions</span>
-            </Button>
           </div>
 
           {showArchiveBanner && selectedYearOption?.archived && (
@@ -269,15 +326,29 @@ export default function OverviewPage() {
               <div className="rounded-lg border border-border bg-bg px-6 py-5">
                 <div className="mb-6 flex items-center justify-between gap-4">
                   <h2 className="text-md font-semibold text-primary">YTD Running Cost</h2>
-                  <p className="text-md text-muted-foreground">
-                    {overview.year.name} total{" "}
-                    <span className="font-semibold text-primary">
-                      {formatCurrency(overview.monthlyCosts.reduce((s, m) => s + m.amount, 0))}
-                    </span>
+                  <p className="text-md text-muted-foreground transition-opacity duration-300">
+                    {hoveredChartIndex !== null ? (
+                      <>
+                        {monthYearLabel(overview.monthlyCosts[hoveredChartIndex].month)}{" "}
+                        <span className="font-semibold text-primary">
+                          {formatCurrency(overview.monthlyCosts[hoveredChartIndex].amount)}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        {overview.year.name} total{" "}
+                        <span className="font-semibold text-primary">
+                          {formatCurrency(overview.monthlyCosts.reduce((s, m) => s + m.amount, 0))}
+                        </span>
+                      </>
+                    )}
                   </p>
                 </div>
 
-                <YtdRunningCostChart months={overview.monthlyCosts} />
+                <YtdRunningCostChart
+                  months={overview.monthlyCosts}
+                  onHover={setHoveredChartIndex}
+                />
               </div>
 
               {/* Captain Payments */}
@@ -285,9 +356,12 @@ export default function OverviewPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h2 className="text-md font-semibold text-primary">Captain Payments</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {formatIssueDate(overview.range.from)} – {formatIssueDate(overview.range.to)}
-                    </p>
+                    {captainOverview && (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {formatIssueDate(captainOverview.range.from)} –{" "}
+                        {formatIssueDate(captainOverview.range.to)}
+                      </p>
+                    )}
                   </div>
 
                   <Popover open={periodOpen} onOpenChange={setPeriodOpen}>
@@ -308,13 +382,13 @@ export default function OverviewPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setPeriod("ytd");
+                          setCaptainPeriod("ytd");
                           setPeriodOpen(false);
                         }}
                         className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-muted"
                       >
-                        <span className={cn(period === "ytd" && "font-medium")}>YTD</span>
-                        {period === "ytd" && (
+                        <span className={cn(captainPeriod === "ytd" && "font-medium")}>YTD</span>
+                        {captainPeriod === "ytd" && (
                           <Check className="size-3.5 text-active" strokeWidth={2.5} />
                         )}
                       </button>
@@ -326,15 +400,15 @@ export default function OverviewPage() {
                           key={option.id}
                           type="button"
                           onClick={() => {
-                            setPeriod(option.id);
+                            setCaptainPeriod(option.id);
                             setPeriodOpen(false);
                           }}
                           className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-muted"
                         >
-                          <span className={cn(period === option.id && "font-medium")}>
+                          <span className={cn(captainPeriod === option.id && "font-medium")}>
                             {option.menuLabel}
                           </span>
-                          {period === option.id && (
+                          {captainPeriod === option.id && (
                             <Check className="size-3.5 text-active" strokeWidth={2.5} />
                           )}
                         </button>
@@ -344,12 +418,12 @@ export default function OverviewPage() {
                 </div>
 
                 <div className="mt-4">
-                  {overview.captainPayments.length === 0 ? (
+                  {(captainOverview?.captainPayments.length ?? 0) === 0 ? (
                     <p className="py-3.5 text-md text-muted-foreground">
                       No captain payments in this period.
                     </p>
                   ) : (
-                    overview.captainPayments.map((captain) => (
+                    captainOverview!.captainPayments.map((captain) => (
                       <PaymentRow
                         key={captain.captainId}
                         name={captain.captainName}
@@ -360,12 +434,12 @@ export default function OverviewPage() {
                   )}
                 </div>
 
-                {overview.substitutePayments.length > 0 && (
+                {(captainOverview?.substitutePayments.length ?? 0) > 0 && (
                   <>
                     <p className="mt-6 mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
                       Substitute Payments
                     </p>
-                    {overview.substitutePayments.map((sub) => (
+                    {captainOverview!.substitutePayments.map((sub) => (
                       <PaymentRow
                         key={sub.captainId}
                         name={sub.captainName}
@@ -392,11 +466,13 @@ export default function OverviewPage() {
                     papersPerIssue.slice(0, PAPERS_PREVIEW_COUNT).map((issue) => (
                       <div
                         key={issue.issueId}
-                        className="flex items-center justify-between gap-4 border-b border-hairline py-3.5 last:border-b-0"
+                        className="flex items-center justify-between gap-4 py-3.5"
                       >
-                        <div>
-                          <span className="text-md font-semibold text-primary">{issue.name}</span>
-                          <span className="ml-2 text-md text-muted-foreground">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-md font-semibold text-primary">
+                            {issue.name.split(",")[0]}
+                          </span>
+                          <span className="text-sm text-muted-foreground">
                             {formatIssueDate(issue.date)}
                           </span>
                         </div>
@@ -425,35 +501,21 @@ export default function OverviewPage() {
       </div>
 
       <Dialog open={papersDialogOpen} onOpenChange={setPapersDialogOpen}>
-        <DialogContent className="gap-0 border-hairline p-5">
-          <div className="mb-4 flex items-center justify-between gap-4">
+        <DialogContent className="gap-0 border-hairline">
+          <DialogHeader>
             <DialogTitle className="text-lg font-semibold text-primary">
               Papers per issue
             </DialogTitle>
-            <Button
-              type="button"
-              variant="text"
-              size="icon-sm"
-              className="shrink-0 text-muted-foreground"
-              onClick={() => setPapersDialogOpen(false)}
-            >
-              <X className="size-4" />
-              <span className="sr-only">Close</span>
-            </Button>
-          </div>
+          </DialogHeader>
 
-          <div className="max-h-[60vh] overflow-y-auto">
-            {papersPerIssue.map((issue, index) => (
-              <div
-                key={issue.issueId}
-                className={cn(
-                  "flex items-center justify-between gap-4 border-b border-hairline py-3",
-                  index === papersPerIssue.length - 1 && "border-b-0",
-                )}
-              >
-                <div className="min-w-0">
-                  <span className="text-md font-medium text-primary">{issue.name}</span>
-                  <span className="ml-2 text-md text-muted-foreground">
+          <div className="max-h-[60vh] overflow-y-auto px-4">
+            {papersPerIssue.map((issue) => (
+              <div key={issue.issueId} className="flex items-center justify-between gap-4 py-3">
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <span className="text-md font-medium text-primary">
+                    {issue.name.split(",")[0]}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
                     {formatIssueDate(issue.date)}
                   </span>
                 </div>
@@ -464,7 +526,7 @@ export default function OverviewPage() {
             ))}
           </div>
 
-          <DialogFooter className="mt-4">
+          <DialogFooter>
             <Button
               type="button"
               variant="outline"

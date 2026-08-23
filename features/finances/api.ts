@@ -121,6 +121,18 @@ export function useArchiveYear() {
   });
 }
 
+export function useUnarchiveYear() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (yearId: string) =>
+      api.post<YearSummary>(`/api/financial-years/${yearId}/unarchive`),
+    onSuccess: (_data, yearId) => {
+      queryClient.invalidateQueries({ queryKey: financeKeys.years() });
+      queryClient.invalidateQueries({ queryKey: financeKeys.year(yearId) });
+    },
+  });
+}
+
 /**
  * Add an issue. Creating one auto-populates a payout cell per active captain and a
  * delivery row per carried route, so the whole grid changes, not just one row.
@@ -136,17 +148,65 @@ export function useAddIssue(yearId: string | null) {
   });
 }
 
+/** Rename an issue (name/date are always editable, regardless of status). */
+export function useRenameIssue(yearId: string | null) {
+  const invalidate = useGridInvalidation(yearId);
+  return useMutation({
+    mutationFn: ({ issueId, name }: { issueId: string; name: string }) =>
+      api.patch<IssueSummary>(`/api/issues/${issueId}`, { name }),
+    onSuccess: invalidate,
+  });
+}
+
 /**
  * Lock or unlock a whole issue. Locking means the numbers are settled and a later
  * route edit must not move them; it says nothing about anyone having been paid.
  * Calls a bulk endpoint that freezes every unpaid cell, over the per-cell freeze.
+ *
+ * Optimistic so the lock icon flips on click instead of waiting on the round-trip.
  */
 export function useToggleIssueLock(yearId: string | null) {
+  const queryClient = useQueryClient();
   const invalidate = useGridInvalidation(yearId);
   return useMutation({
     mutationFn: ({ issueId, locked }: { issueId: string; locked: boolean }) =>
       api.post<IssueSummary>(`/api/issues/${issueId}/${locked ? "unlock" : "lock"}`),
-    onSuccess: invalidate,
+    onMutate: async ({ issueId, locked }) => {
+      if (!yearId) return;
+      const key = financeKeys.year(yearId);
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<YearDetail>(key);
+      if (!previous) return { previous };
+      const nextLocked = !locked;
+      queryClient.setQueryData<YearDetail>(key, {
+        ...previous,
+        issues: previous.issues.map((issue) => {
+          if (issue.id !== issueId) return issue;
+          return {
+            ...issue,
+            locked: nextLocked,
+            cells: issue.cells.map((cell) => {
+              if (cell.paid) return cell;
+              if (nextLocked) {
+                return cell.calculationStatus === "overridden"
+                  ? cell
+                  : { ...cell, calculationStatus: "frozen" as const };
+              }
+              return cell.calculationStatus === "frozen"
+                ? { ...cell, calculationStatus: "calculated" as const }
+                : cell;
+            }),
+          };
+        }),
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (yearId && context?.previous) {
+        queryClient.setQueryData(financeKeys.year(yearId), context.previous);
+      }
+    },
+    onSettled: invalidate,
   });
 }
 
