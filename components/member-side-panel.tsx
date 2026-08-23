@@ -659,11 +659,21 @@ function CaptainContent({ id }: { id: string }) {
         ) : (
           (payouts ?? []).map((entry) => (
             <SidePanelRow key={entry.id} meta={formatDate(entry.issueDate)}>
-              <span className="text-primary">
-                ${entry.amount.toFixed(2)} · {entry.issueName}
-                {entry.paid ? " · paid" : ""}
-                {entry.substitutedBy ? ` · covered by ${entry.substitutedBy}` : ""}
-              </span>
+              {entry.role === "covered_by" ? (
+                // Someone else covered and was paid, so no amount is shown here:
+                // under a "Reimbursements" heading a figure would read as income.
+                <span className="text-secondary">
+                  {entry.issueName} · covered by {entry.substitutedBy}
+                </span>
+              ) : (
+                <span className="text-primary">
+                  ${entry.amount.toFixed(2)} ·{" "}
+                  {entry.role === "covered_for"
+                    ? `Covered for ${entry.coveredFor}`
+                    : entry.issueName}
+                  {entry.paid ? " · paid" : ""}
+                </span>
+              )}
             </SidePanelRow>
           ))
         )}

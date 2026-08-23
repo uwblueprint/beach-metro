@@ -206,6 +206,12 @@ type CreateCaptain = {
 // Read-only reimbursement history for the member panel. Amounts use the SAME
 // precedence as the finances screen (override ?? frozen ?? calculated) via the
 // shared derivation, so the two views cannot disagree about what is owed.
+//
+// Covers every cell the captain is INVOLVED in, not just the ones they own: a
+// substitute is the payee for the cell they covered (finances flow §1), so a
+// captain's history includes cells they covered for someone else. `role` says
+// which side of a substitution the row is, and therefore whether the money went
+// to this captain — `covered_by` means it did not.
 type CaptainPayoutHistoryEntry = {
   id: string;
   issueId: string;
@@ -217,7 +223,9 @@ type CaptainPayoutHistoryEntry = {
   overrideReason: string | null;
   paid: boolean;
   paidAt: string | null;
-  substitutedBy: string | null; // name of the captain who covered, when recorded
+  role: "own" | "covered_by" | "covered_for";
+  substitutedBy: string | null; // `covered_by`: who covered and was paid
+  coveredFor: string | null; // `covered_for`: whose cell this captain covered
 };
 ```
 

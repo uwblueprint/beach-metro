@@ -376,14 +376,33 @@ export async function clearPayoutSubstitute(id: string): Promise<PayoutDetail> {
 // its own captain and re-attributes the payment, which is reportable.
 
 /**
+ * Where a history row sits relative to the captain being viewed.
+ *
+ * A substitute is the payee for the cell they covered (finances flow §1), so
+ * "whose cell is this" and "who got the money" come apart, and the panel has to
+ * show both without implying the captain received money they did not.
+ */
+export type CaptainPayoutRole =
+  /** Their own cell, nobody covered it. They are the payee. */
+  | "own"
+  /** Their own cell, someone else covered it and was paid. They are NOT the payee. */
+  | "covered_by"
+  /** Another captain's cell that they covered. They are the payee. */
+  | "covered_for";
+
+/**
  * One captain's payout history across every issue, newest issue first. Read-only,
  * for the member side panel's Reimbursements section (people flow §4i).
  *
  * Amounts use the same `effectiveAmount` precedence as the finances screen rather
  * than re-deriving anything, so the two views cannot disagree about what a captain
- * is owed. Includes cells where someone else covered, flagged via `substitutedBy`,
- * because the captain's own history should still show the issue they were
- * responsible for even when the money went elsewhere.
+ * is owed.
+ *
+ * Scope is every cell the captain is *involved* in, not just the ones they own:
+ * their own cells (covered or not), plus cells they covered as a substitute and
+ * were therefore paid for. Their own covered cells stay in the list because the
+ * history should still show issues they were responsible for, but `role` marks
+ * them `covered_by` so the reader can tell that money went elsewhere.
  */
 export interface CaptainPayoutHistoryEntry {
   id: string;
@@ -396,13 +415,22 @@ export interface CaptainPayoutHistoryEntry {
   overrideReason: string | null;
   paid: boolean;
   paidAt: string | null;
-  /** Name of the captain who covered this issue, when one is recorded. */
+  role: CaptainPayoutRole;
+  /** `covered_by` only: the captain who covered this cell and was paid for it. */
   substitutedBy: string | null;
+  /** `covered_for` only: the captain whose cell this is. */
+  coveredFor: string | null;
 }
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function listCaptainPayoutHistory(
   captainId: string,
 ): Promise<CaptainPayoutHistoryEntry[]> {
+  // The id is interpolated into the .or() filter below, which is a raw PostgREST
+  // expression rather than a bound parameter, so it is checked before use.
+  if (!UUID_PATTERN.test(captainId)) throw notFound("Captain");
+
   const client = db();
 
   const { data: captainData, error: captainError } = await client
@@ -413,27 +441,39 @@ export async function listCaptainPayoutHistory(
   if (captainError) throwDb(captainError);
   if (!captainData) throw notFound("Captain");
 
+  // Their own cells, plus cells they covered for someone else and were paid for.
   const { data: payoutData, error: payoutError } = await client
     .from("captain_payouts")
     .select("*")
-    .eq("captain_id", captainId);
+    .or(`captain_id.eq.${captainId},substitute_captain_id.eq.${captainId}`);
   if (payoutError) throwDb(payoutError);
   const payouts = ((payoutData ?? []) as CaptainPayoutRow[]).map(coercePayoutNumerics);
   if (payouts.length === 0) return [];
 
+  const roleOf = (p: CaptainPayoutRow): CaptainPayoutRole => {
+    if (p.captain_id !== captainId) return "covered_for";
+    return p.substitute_captain_id ? "covered_by" : "own";
+  };
+
+  // The other captain named on each row: who covered for them, or whose cell
+  // they covered. One lookup serves both directions.
   const issueIds = [...new Set(payouts.map((p) => p.issue_id))];
-  const substituteIds = [
-    ...new Set(payouts.map((p) => p.substitute_captain_id).filter((id): id is string => !!id)),
+  const otherCaptainIds = [
+    ...new Set(
+      payouts
+        .map((p) => (p.captain_id === captainId ? p.substitute_captain_id : p.captain_id))
+        .filter((id): id is string => !!id),
+    ),
   ];
 
-  const [issuesRes, substitutesRes] = await Promise.all([
+  const [issuesRes, othersRes] = await Promise.all([
     client.from("issues").select("id, name, date, status").in("id", issueIds),
-    substituteIds.length > 0
-      ? client.from("captains").select("id, first_name, last_name").in("id", substituteIds)
+    otherCaptainIds.length > 0
+      ? client.from("captains").select("id, first_name, last_name").in("id", otherCaptainIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
   if (issuesRes.error) throwDb(issuesRes.error);
-  if (substitutesRes.error) throwDb(substitutesRes.error);
+  if (othersRes.error) throwDb(othersRes.error);
 
   const issues = new Map(
     ((issuesRes.data ?? []) as Pick<IssueRow, "id" | "name" | "date" | "status">[]).map((i) => [
@@ -441,15 +481,17 @@ export async function listCaptainPayoutHistory(
       i,
     ]),
   );
-  const substitutes = new Map(
-    ((substitutesRes.data ?? []) as Pick<CaptainRow, "id" | "first_name" | "last_name">[]).map(
-      (c) => [c.id, `${c.first_name} ${c.last_name}`],
-    ),
+  const nameById = new Map(
+    ((othersRes.data ?? []) as Pick<CaptainRow, "id" | "first_name" | "last_name">[]).map((c) => [
+      c.id,
+      `${c.first_name} ${c.last_name}`,
+    ]),
   );
 
   return payouts
     .map((p) => {
       const issue = issues.get(p.issue_id);
+      const role = roleOf(p);
       return {
         id: p.id,
         issueId: p.issue_id,
@@ -461,9 +503,13 @@ export async function listCaptainPayoutHistory(
         overrideReason: p.override_reason,
         paid: p.paid,
         paidAt: p.paid_at,
-        substitutedBy: p.substitute_captain_id
-          ? (substitutes.get(p.substitute_captain_id) ?? "Unknown captain")
-          : null,
+        role,
+        substitutedBy:
+          role === "covered_by"
+            ? (nameById.get(p.substitute_captain_id!) ?? "Unknown captain")
+            : null,
+        coveredFor:
+          role === "covered_for" ? (nameById.get(p.captain_id) ?? "Unknown captain") : null,
       };
     })
     .sort((a, b) => b.issueDate.localeCompare(a.issueDate));

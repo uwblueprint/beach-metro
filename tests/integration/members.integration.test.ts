@@ -371,6 +371,75 @@ describe.skipIf(!RUN)("captain payout history", () => {
       404,
     );
   });
+
+  // A substitute is the payee for the cell they covered (finances flow §1), so the
+  // same cell has to appear in BOTH captains' histories, on opposite sides.
+  it("shows a covered cell to the owner and the substitute, on opposite sides", async () => {
+    const makeCaptain = async (label: string) => {
+      const c = await S().captains.createCaptainRecord({
+        firstName: TEST_FIRST_NAME,
+        lastName: unique(label),
+        email: `${unique(`it-${label.toLowerCase()}`)}@example.com`,
+        phone: "416-555-0421",
+        payType: "bundle",
+        payRate: 2,
+        payCadence: "biweekly",
+        startDate: "2026-01-01",
+        endDate: null,
+        note: null,
+      });
+      created.captainIds.push(c.id);
+      if (c.territory) created.territoryIds.push(c.territory.id);
+      return c;
+    };
+
+    const owner = await makeCaptain("Owner");
+    const cover = await makeCaptain("Cover");
+
+    const years = await import("@/lib/services/financial-years");
+    const issues = await import("@/lib/services/issues");
+
+    const year = await years.createYear({
+      name: `IT-SUB ${crypto.randomUUID().slice(0, 8)}`,
+      startDate: "2026-01-01",
+    });
+    createdYearIds.push(year.id);
+
+    const [issue] = await issues.createIssuesBatch(year.id, {
+      issues: [{ name: "Sub A", date: "2026-06-10" }],
+    });
+
+    const ownerCell = (await S().payouts.listPayouts(issue.id)).find(
+      (c) => c.captainId === owner.id,
+    )!;
+    expect(ownerCell).toBeDefined();
+    await S().payouts.setPayoutSubstitute(ownerCell.id, cover.id);
+
+    // The owner still sees the issue they were responsible for, marked as money
+    // that went elsewhere.
+    const ownerHistory = await S().payouts.listCaptainPayoutHistory(owner.id);
+    const ownerRow = ownerHistory.find((h) => h.id === ownerCell.id)!;
+    expect(ownerRow).toBeDefined();
+    expect(ownerRow.role).toBe("covered_by");
+    expect(ownerRow.substitutedBy).toContain("Cover");
+    expect(ownerRow.coveredFor).toBeNull();
+
+    // The substitute sees the same cell as money they were paid — this is the row
+    // that was missing entirely before.
+    const coverHistory = await S().payouts.listCaptainPayoutHistory(cover.id);
+    const coverRow = coverHistory.find((h) => h.id === ownerCell.id)!;
+    expect(coverRow).toBeDefined();
+    expect(coverRow.role).toBe("covered_for");
+    expect(coverRow.coveredFor).toContain("Owner");
+    expect(coverRow.substitutedBy).toBeNull();
+    expect(coverRow.amount).toBe(ownerRow.amount);
+
+    // The substitute's own cell for that issue is untouched and still their own.
+    const coverOwnRow = coverHistory.find(
+      (h) => h.issueId === issue.id && h.role !== "covered_for",
+    );
+    expect(coverOwnRow?.role).toBe("own");
+  });
 });
 
 describe.skipIf(!RUN)("commercial drop standing counts", () => {
