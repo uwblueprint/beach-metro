@@ -21,6 +21,8 @@ import { PillGroup } from "@/components/ui/pill-group";
 import { SearchBar } from "@/components/ui/search-bar";
 import { cn } from "@/lib/utils";
 
+import { RouteHoverCard, routeMidpoint } from "./route-hover-card";
+
 export interface MapRoute {
   id: string;
   streetName: string;
@@ -31,6 +33,10 @@ export interface MapRoute {
   end: { latitude: number; longitude: number } | null;
   /** Road-following vertices from the Routes API; falls back to start→end. */
   path?: { lat: number; lng: number }[] | null;
+  label: string;
+  volunteerName: string | null;
+  bundleCount: number;
+  papers: number;
 }
 
 export interface MapHome {
@@ -64,18 +70,30 @@ const MAP_STYLE: google.maps.MapTypeStyle[] = [
   { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#aab1ba" }] },
 ];
 
-// Raw hex (Maps overlays can't use CSS variables). Matches the list badges.
+/**
+ * Raw hex for Maps overlays (can't use CSS variables).
+ *
+ * TODO: Duplicates design tokens as hand-maintained hex and will drift from
+ * globals.css. Prefer a shared token→hex pipeline or reading computed styles once.
+ */
 const ROUTE_COLORS = {
-  assigned: "#059669",
-  vacant: "#dc2626",
-  suspended: "#d97706",
-  selected: "#2563eb",
+  vacant: {
+    base: "#ff4828", // --destructive (tag-destructive pair)
+    hover: "#ce0000",
+    selected: "#b60000",
+  },
+  assigned: {
+    base: "#0cb1f2", // --active
+    hover: "#0084c2",
+    selected: "#006eab",
+  },
 } as const;
 
-function routeColor(route: MapRoute, selected: boolean): string {
-  if (selected) return ROUTE_COLORS.selected;
-  if (route.suspended) return ROUTE_COLORS.suspended;
-  return ROUTE_COLORS[route.lifecycle];
+function routeColor(route: MapRoute, selected: boolean, hovered: boolean): string {
+  const palette = ROUTE_COLORS[route.lifecycle];
+  if (selected) return palette.selected;
+  if (hovered) return palette.hover;
+  return palette.base;
 }
 
 /**
@@ -83,13 +101,22 @@ function routeColor(route: MapRoute, selected: boolean): string {
  * segment reads as a real stretch of street (not a line between random points).
  * Managed imperatively — vis.gl has no Polyline/Marker component.
  */
-function RouteOverlay(props: { route: MapRoute; selected: boolean; onSelect: () => void }) {
+function RouteOverlay(props: {
+  route: MapRoute;
+  selected: boolean;
+  hovered: boolean;
+  onSelect: () => void;
+  onRouteEnter: (id: string) => void;
+  onRouteLeave: () => void;
+}) {
   const map = useMap();
-  const { route, selected, onSelect } = props;
+  const { route, selected, hovered, onSelect, onRouteEnter, onRouteLeave } = props;
+  const handleHover = useCallback(() => onRouteEnter(route.id), [onRouteEnter, route.id]);
+  const handleUnhover = useCallback(() => onRouteLeave(), [onRouteLeave]);
 
   useEffect(() => {
     if (!map || !route.start || !route.end) return;
-    const color = routeColor(route, selected);
+    const color = routeColor(route, selected, hovered);
     const from = { lat: route.start.latitude, lng: route.start.longitude };
     const to = { lat: route.end.latitude, lng: route.end.longitude };
     const dashed = route.suspended; // suspended reads as a dashed / "paused" line
@@ -119,6 +146,8 @@ function RouteOverlay(props: { route: MapRoute; selected: boolean; onSelect: () 
       zIndex: selected ? 20 : 2,
     });
     line.addListener("click", onSelect);
+    line.addListener("mouseover", handleHover);
+    line.addListener("mouseout", handleUnhover);
 
     const endpoint = (position: google.maps.LatLngLiteral) =>
       new google.maps.Marker({
@@ -136,7 +165,11 @@ function RouteOverlay(props: { route: MapRoute; selected: boolean; onSelect: () 
         zIndex: selected ? 21 : 3,
       });
     const markers = [endpoint(from), endpoint(to)];
-    markers.forEach((m) => m.addListener("click", onSelect));
+    markers.forEach((m) => {
+      m.addListener("click", onSelect);
+      m.addListener("mouseover", handleHover);
+      m.addListener("mouseout", handleUnhover);
+    });
 
     return () => {
       google.maps.event.clearInstanceListeners(line);
@@ -146,7 +179,7 @@ function RouteOverlay(props: { route: MapRoute; selected: boolean; onSelect: () 
         m.setMap(null);
       });
     };
-  }, [map, route, selected, onSelect]);
+  }, [map, route, selected, hovered, onSelect, handleHover, handleUnhover]);
 
   return null;
 }
@@ -220,6 +253,8 @@ function readCssDurationMsFrom(el: Element, variable: string, fallback: number):
   return parseFloat(raw) || fallback;
 }
 
+export type FilterPlacement = "map" | "sidepanel";
+
 /** Custom map controls overlay: filter, search, zoom ±, fullscreen. */
 function MapControls(props: {
   search: string;
@@ -250,7 +285,6 @@ function MapControls(props: {
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
-  // Keep panel mounted through the close animation; measure for card-resize height tween.
   useLayoutEffect(() => {
     if (props.filterOpen) {
       if (closeTimerRef.current) {
@@ -259,7 +293,6 @@ function MapControls(props: {
       }
       setFilterClosing(false);
       setDropdownOpen(false);
-      // Double rAF so the dropdown mounts at pre-scale before .is-open tweens in.
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           setDropdownOpen(true);
@@ -274,7 +307,6 @@ function MapControls(props: {
     setDropdownOpen(false);
     setFilterHeight(0);
     setFilterClosing(true);
-    // Local overlay overrides are 150ms / 100ms — read from the element, not :root.
     const el = containerRef.current;
     const closeMs = el
       ? Math.max(
@@ -293,7 +325,6 @@ function MapControls(props: {
         closeTimerRef.current = null;
       }
     };
-    // Close orchestration is keyed on open only; height/closing are driven inside.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.filterOpen]);
 
@@ -328,14 +359,12 @@ function MapControls(props: {
       className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col pt-4 pb-6"
       style={
         {
-          // Quick open/close for this overlay (overrides root durations locally).
           "--resize-dur": "150ms",
           "--dropdown-open-dur": "150ms",
           "--dropdown-close-dur": "100ms",
         } as CSSProperties
       }
     >
-      {/* Fill + blur grow/shrink with the overlay as filters open/close */}
       <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-white to-transparent" />
         <div className="map-ui-blur-fill absolute inset-0" />
@@ -405,7 +434,6 @@ function MapControls(props: {
         </Button>
       </div>
 
-      {/* Height tween (card resize) expands the gradient fill; dropdown scales/fades content */}
       <div className="t-resize relative z-10 overflow-hidden px-4" style={{ height: filterHeight }}>
         {filterVisible && (
           <div
@@ -446,11 +474,94 @@ function MapControls(props: {
   );
 }
 
+/** Map controls pinned top-right: zoom ± and fullscreen. */
+function MapZoomControls() {
+  const map = useMap("routes-map");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    function onFsChange() {
+      setIsFullscreen(!!document.fullscreenElement);
+    }
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
+    if (!map) return;
+    map.setZoom((map.getZoom() ?? 14) + 1);
+  }, [map]);
+
+  const handleZoomOut = useCallback(() => {
+    if (!map) return;
+    map.setZoom((map.getZoom() ?? 14) - 1);
+  }, [map]);
+
+  const handleFullscreen = useCallback(() => {
+    const el = containerRef.current?.closest("[data-map-container]") as HTMLElement | null;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      el.requestFullscreen();
+    }
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-end p-4"
+    >
+      <div className="pointer-events-auto flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          shape="rounded"
+          aria-label="Zoom out"
+          className="size-[34px] border-border bg-bg hover:bg-tag-hover"
+          onClick={handleZoomOut}
+        >
+          <Minus className="size-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          shape="rounded"
+          aria-label="Zoom in"
+          className="size-[34px] border-border bg-bg hover:bg-tag-hover"
+          onClick={handleZoomIn}
+        >
+          <Plus className="size-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          shape="rounded"
+          aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          className="size-[34px] border-border bg-bg hover:bg-tag-hover"
+          onClick={handleFullscreen}
+        >
+          <span className="t-icon-swap size-4" data-state={isFullscreen ? "b" : "a"}>
+            <span className="t-icon" data-icon="a">
+              <Maximize2 className="size-4" />
+            </span>
+            <span className="t-icon" data-icon="b">
+              <Minimize2 className="size-4" />
+            </span>
+          </span>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function RouteMap(props: {
   routes: MapRoute[];
   homes: MapHome[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  filterPlacement: FilterPlacement;
   search: string;
   onSearchChange: (value: string) => void;
   filterOpen: boolean;
@@ -460,6 +571,49 @@ export function RouteMap(props: {
   deliveryType: DeliveryTypeFilter;
   onDeliveryTypeChange: (value: DeliveryTypeFilter) => void;
 }) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const cardHoverRef = useRef(false);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelHide = useCallback(() => {
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = null;
+  }, []);
+
+  const scheduleHide = useCallback(() => {
+    cancelHide();
+    hideTimerRef.current = setTimeout(() => {
+      if (!cardHoverRef.current) setHoveredId(null);
+    }, 150);
+  }, [cancelHide]);
+
+  const handleRouteEnter = useCallback(
+    (id: string) => {
+      cancelHide();
+      setHoveredId(id);
+    },
+    [cancelHide],
+  );
+
+  const handleRouteLeave = useCallback(() => {
+    scheduleHide();
+  }, [scheduleHide]);
+
+  const handleCardEnter = useCallback(() => {
+    cardHoverRef.current = true;
+    cancelHide();
+  }, [cancelHide]);
+
+  const handleCardLeave = useCallback(() => {
+    cardHoverRef.current = false;
+    scheduleHide();
+  }, [scheduleHide]);
+
+  const hoveredRoute = hoveredId ? (props.routes.find((r) => r.id === hoveredId) ?? null) : null;
+  const hoverPosition = hoveredRoute ? routeMidpoint(hoveredRoute) : null;
+
+  useEffect(() => () => cancelHide(), [cancelHide]);
+
   const browserKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY;
   if (!browserKey) {
     return (
@@ -488,24 +642,40 @@ export function RouteMap(props: {
               key={r.id}
               route={r}
               selected={r.id === props.selectedId}
+              hovered={r.id === hoveredId}
               onSelect={() => props.onSelect(r.id)}
+              onRouteEnter={handleRouteEnter}
+              onRouteLeave={handleRouteLeave}
             />
           ))}
+          {hoveredRoute && hoverPosition && (
+            <RouteHoverCard
+              route={hoveredRoute}
+              position={hoverPosition}
+              onSelect={() => props.onSelect(hoveredRoute.id)}
+              onPointerEnter={handleCardEnter}
+              onPointerLeave={handleCardLeave}
+            />
+          )}
           {props.homes.map((h) => (
             <HomeMarker key={h.id} home={h} />
           ))}
           <FitBounds routes={props.routes} homes={props.homes} />
         </Map>
-        <MapControls
-          search={props.search}
-          onSearchChange={props.onSearchChange}
-          filterOpen={props.filterOpen}
-          onFilterToggle={props.onFilterToggle}
-          vacancy={props.vacancy}
-          onVacancyChange={props.onVacancyChange}
-          deliveryType={props.deliveryType}
-          onDeliveryTypeChange={props.onDeliveryTypeChange}
-        />
+        {props.filterPlacement === "map" ? (
+          <MapControls
+            search={props.search}
+            onSearchChange={props.onSearchChange}
+            filterOpen={props.filterOpen}
+            onFilterToggle={props.onFilterToggle}
+            vacancy={props.vacancy}
+            onVacancyChange={props.onVacancyChange}
+            deliveryType={props.deliveryType}
+            onDeliveryTypeChange={props.onDeliveryTypeChange}
+          />
+        ) : (
+          <MapZoomControls />
+        )}
       </APIProvider>
     </div>
   );

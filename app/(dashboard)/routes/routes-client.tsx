@@ -5,8 +5,8 @@
 // assign) — the design engineers restyle it. Structural Tailwind only.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ChevronDown, Filter, Plus } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { SidePanelRow } from "@/components/side-panel-row";
 import { Button } from "@/components/ui/button";
@@ -20,10 +20,21 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AddressField } from "@/components/address-field";
+import { Pill } from "@/components/ui/pill";
+import { PillGroup } from "@/components/ui/pill-group";
+import { SearchBar } from "@/components/ui/search-bar";
 import { greedySplit } from "@/lib/services/derive";
 import { cn } from "@/lib/utils";
 
-import { RouteMap, type DeliveryTypeFilter, type MapHome, type MapRoute } from "./route-map";
+import {
+  RouteMap,
+  type DeliveryTypeFilter,
+  type FilterPlacement,
+  type MapHome,
+  type MapRoute,
+  type VacancyFilter,
+} from "./route-map";
+import { RouteTag } from "./route-tag";
 
 const SIDE_OPTIONS = [
   { value: "", label: "— none —" },
@@ -95,7 +106,203 @@ async function sendJson<T>(url: string, method: string, body?: unknown): Promise
   return json.data as T;
 }
 
-type Vacancy = "all" | "vacant" | "assigned";
+function isTypingTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
+
+type Vacancy = VacancyFilter;
+
+const ASSIGNED_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "assigned", label: "Assigned" },
+  { value: "vacant", label: "Vacant" },
+] as const;
+
+const DELIVERY_TYPE_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "routes", label: "Routes" },
+  { value: "drops", label: "Drops" },
+] as const;
+
+function deliveryTypeLabel(value: DeliveryTypeFilter): string {
+  return DELIVERY_TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value;
+}
+
+function vacancyLabel(value: Vacancy): string {
+  return ASSIGNED_OPTIONS.find((o) => o.value === value)?.label ?? value;
+}
+
+function readCssDurationMsFrom(el: Element, variable: string, fallback: number): number {
+  const raw = getComputedStyle(el).getPropertyValue(variable).trim();
+  if (!raw) return fallback;
+  if (raw.endsWith("ms")) return parseFloat(raw);
+  if (raw.endsWith("s")) return parseFloat(raw) * 1000;
+  return parseFloat(raw) || fallback;
+}
+
+/** Collapsible filter block in the Deliveries side panel (Figma filter subsection). */
+function DeliveriesFilterSection(props: {
+  search: string;
+  onSearchChange: (value: string) => void;
+  filterOpen: boolean;
+  onFilterToggle: () => void;
+  vacancy: Vacancy;
+  onVacancyChange: (value: Vacancy) => void;
+  deliveryType: DeliveryTypeFilter;
+  onDeliveryTypeChange: (value: DeliveryTypeFilter) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const filterInnerRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [filterClosing, setFilterClosing] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [filterHeight, setFilterHeight] = useState(0);
+
+  const filterVisible = props.filterOpen || filterClosing;
+  const showActivePills =
+    props.filterOpen && (props.deliveryType !== "all" || props.vacancy !== "all");
+
+  useLayoutEffect(() => {
+    if (props.filterOpen) {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+      setFilterClosing(false);
+      setDropdownOpen(false);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setDropdownOpen(true);
+          setFilterHeight(filterInnerRef.current?.scrollHeight ?? 0);
+        });
+      });
+      return;
+    }
+
+    if (!filterClosing && filterHeight === 0) return;
+
+    setDropdownOpen(false);
+    setFilterHeight(0);
+    setFilterClosing(true);
+    const el = containerRef.current;
+    const closeMs = el
+      ? Math.max(
+          readCssDurationMsFrom(el, "--dropdown-close-dur", 100),
+          readCssDurationMsFrom(el, "--resize-dur", 150),
+        )
+      : 150;
+    closeTimerRef.current = setTimeout(() => {
+      setFilterClosing(false);
+      closeTimerRef.current = null;
+    }, closeMs);
+
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.filterOpen]);
+
+  useLayoutEffect(() => {
+    if (!dropdownOpen || !filterInnerRef.current) return;
+    setFilterHeight(filterInnerRef.current.scrollHeight);
+  }, [dropdownOpen, props.vacancy, props.deliveryType]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="shrink-0 border-b border-border py-4 pr-4 pl-3"
+      style={
+        {
+          "--resize-dur": "150ms",
+          "--dropdown-open-dur": "150ms",
+          "--dropdown-close-dur": "100ms",
+        } as CSSProperties
+      }
+    >
+      <div className="flex flex-col">
+        <div className="flex items-center gap-2.5">
+          <SearchBar
+            value={props.search}
+            onChange={props.onSearchChange}
+            placeholder="Search Delivery"
+            className="min-w-0 flex-1"
+          />
+
+          {showActivePills && (
+            <div className="flex shrink-0 items-center gap-2">
+              {props.deliveryType !== "all" && (
+                <Pill selected>{deliveryTypeLabel(props.deliveryType)}</Pill>
+              )}
+              {props.vacancy !== "all" && <Pill selected>{vacancyLabel(props.vacancy)}</Pill>}
+            </div>
+          )}
+
+          <Button
+            variant="outline"
+            size="icon"
+            shape="rounded"
+            aria-label="Toggle filters"
+            aria-expanded={props.filterOpen}
+            className={cn(
+              "size-8 shrink-0 hover:bg-tag-hover",
+              props.filterOpen || filterClosing
+                ? "border-active-border bg-tag-active text-active hover:bg-tag-active-hover"
+                : "border-border bg-bg",
+            )}
+            onClick={props.onFilterToggle}
+          >
+            <Filter className="size-4" />
+          </Button>
+        </div>
+
+        <div className="t-resize overflow-hidden" style={{ height: filterHeight }}>
+          {filterVisible && (
+            <div
+              ref={filterInnerRef}
+              className={cn(
+                "t-dropdown flex flex-col gap-5 pt-5",
+                dropdownOpen && "is-open",
+                filterClosing && "is-closing",
+              )}
+              data-origin="top-left"
+            >
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-secondary">Delivery Type</p>
+                <PillGroup
+                  exclusive
+                  options={[...DELIVERY_TYPE_OPTIONS]}
+                  value={props.deliveryType}
+                  onChange={(value) => {
+                    if (value != null) props.onDeliveryTypeChange(value as DeliveryTypeFilter);
+                  }}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-secondary">Assigned</p>
+                <PillGroup
+                  exclusive
+                  options={[...ASSIGNED_OPTIONS]}
+                  value={props.vacancy}
+                  onChange={(value) => {
+                    if (value != null) props.onVacancyChange(value as Vacancy);
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function RoutesClient() {
   const qc = useQueryClient();
@@ -106,6 +313,19 @@ export function RoutesClient() {
   const [creating, setCreating] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [deliveryType, setDeliveryType] = useState<DeliveryTypeFilter>("routes");
+  // TEMP: Shift+F toggles filter UI between map overlay and side panel.
+  const [filterPlacement, setFilterPlacement] = useState<FilterPlacement>("sidepanel");
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "F" || !e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isTypingTarget(e.target)) return;
+      e.preventDefault();
+      setFilterPlacement((p) => (p === "map" ? "sidepanel" : "map"));
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const listUrl = useMemo(() => {
     const params = new URLSearchParams();
@@ -146,6 +366,12 @@ export function RoutesClient() {
       start: r.start,
       end: r.end,
       path: pathById.get(r.id) ?? null,
+      label: routeLabel(r),
+      volunteerName: r.assignedVolunteer
+        ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
+        : null,
+      bundleCount: greedySplit(Math.max(0, Math.floor(r.papers))).length,
+      papers: r.papers,
     }));
   const listRoutes = deliveryType === "drops" ? [] : (routes.data ?? []);
   const mapHomes: MapHome[] = showHomes
@@ -189,6 +415,7 @@ export function RoutesClient() {
                 setCreating(false);
                 setSelectedId(id);
               }}
+              filterPlacement={filterPlacement}
               search={q}
               onSearchChange={setQ}
               filterOpen={filterOpen}
@@ -223,10 +450,22 @@ export function RoutesClient() {
               />
             ) : (
               <>
-                <div className="page-header-container">
+                <div className="page-header-container !pl-5">
                   <span className="text-md font-semibold text-primary">Deliveries</span>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4">
+                {filterPlacement === "sidepanel" && (
+                  <DeliveriesFilterSection
+                    search={q}
+                    onSearchChange={setQ}
+                    filterOpen={filterOpen}
+                    onFilterToggle={() => setFilterOpen((o) => !o)}
+                    vacancy={vacancy}
+                    onVacancyChange={setVacancy}
+                    deliveryType={deliveryType}
+                    onDeliveryTypeChange={setDeliveryType}
+                  />
+                )}
+                <div className="flex-1 overflow-y-auto py-4 pr-4 pl-3">
                   <RouteList
                     routes={listRoutes}
                     loading={routes.isLoading}
@@ -246,20 +485,6 @@ export function RoutesClient() {
   );
 }
 
-/** Route label chip — same surfaces/radii/type as member side-panel route tags. */
-function RouteTag({ label, vacant }: { label: string; vacant?: boolean }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex max-w-full items-center truncate rounded-lg px-2 py-1 text-md",
-        vacant ? "bg-tag-destructive text-destructive" : "bg-secondary-fill text-primary",
-      )}
-    >
-      {label}
-    </span>
-  );
-}
-
 function RouteList(props: {
   routes: RouteSummary[];
   loading: boolean;
@@ -272,7 +497,7 @@ function RouteList(props: {
     return <p className="px-2 text-md text-secondary">No routes match.</p>;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-2">
       {props.routes.map((r) => {
         const isVacant = r.lifecycle === "vacant";
         const meta = r.assignedVolunteer
@@ -280,7 +505,12 @@ function RouteList(props: {
           : "vacant";
 
         return (
-          <SidePanelRow key={r.id} meta={meta} onClick={() => props.onSelect(r.id)}>
+          <SidePanelRow
+            key={r.id}
+            className="h-10 py-2"
+            meta={meta}
+            onClick={() => props.onSelect(r.id)}
+          >
             <RouteTag label={routeLabel(r)} vacant={isVacant} />
           </SidePanelRow>
         );
