@@ -25,6 +25,20 @@ function CheckGlyph({ className }: { className?: string }) {
   );
 }
 
+function IndeterminateGlyph({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 12 12"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden
+    >
+      <path d="M2.5 6H9.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 const checkboxSurfaceClassName = [
   "flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-[4px] border bg-bg",
   "transition-colors outline-none",
@@ -55,16 +69,18 @@ function CheckboxIcon({ checked = false, className }: { checked?: boolean; class
  * Interactive checkbox — Figma Design System Checkbox (16px, 4px radius).
  * Unchecked: border/divider. Checked: border text/secondary + check.
  */
-function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
+function Checkbox({ className, indeterminate, ...props }: CheckboxPrimitive.Root.Props) {
   return (
     <CheckboxPrimitive.Root
       data-slot="checkbox"
+      indeterminate={indeterminate}
       className={cn(
         checkboxSurfaceClassName,
         "border-border text-secondary",
         "focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40",
         "disabled:cursor-not-allowed disabled:opacity-50",
         "data-checked:border-secondary",
+        "data-indeterminate:border-secondary",
         "aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20",
         className,
       )}
@@ -74,7 +90,11 @@ function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
         data-slot="checkbox-indicator"
         className="grid place-content-center text-current"
       >
-        <CheckGlyph className="size-3" />
+        {indeterminate ? (
+          <IndeterminateGlyph className="size-3" />
+        ) : (
+          <CheckGlyph className="size-3" />
+        )}
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   );
