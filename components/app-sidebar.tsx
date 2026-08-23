@@ -1,16 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import {
-  Briefcase,
-  ClipboardList,
-  LayoutGrid,
-  MapPin,
-  Send,
-  Settings,
-  User,
-  Users,
-} from "lucide-react";
+import { Briefcase, LayoutGrid, MapPin, Send, Settings, User, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { ListItem } from "@/components/ui/list-item";
@@ -20,7 +11,6 @@ const NAV_ITEMS: { label: string; href: string; icon: LucideIcon }[] = [
   { label: "Routes", href: "/routes", icon: MapPin },
   { label: "Members", href: "/members", icon: Users },
   { label: "Finances", href: "/finances", icon: Briefcase },
-  { label: "Labels", href: "/labels", icon: ClipboardList },
 ];
 
 function displayName(email: string | null) {

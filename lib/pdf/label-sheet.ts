@@ -14,6 +14,7 @@ import {
   CHIP_W,
   COLS,
   COPIES_W,
+  CUT_RULE_WIDTH,
   HEADLINE_GAP,
   INNER_W,
   LABELS_PER_PAGE,
@@ -114,6 +115,17 @@ function drawLabel(
   fonts: { bold: PDFFont; regular: PDFFont },
 ): void {
   const innerLeft = left + (LABEL_W - INNER_W) / 2;
+
+  // Cut guide first, so any fill drawn below sits over the rule rather than
+  // leaving it half-covered where the chip meets the label edge.
+  page.drawRectangle({
+    x: left,
+    y: top - LABEL_H,
+    width: LABEL_W,
+    height: LABEL_H,
+    borderColor: INK,
+    borderWidth: CUT_RULE_WIDTH,
+  });
 
   // Headline row: reversed RT chip + copy count.
   const chipTop = top - PAD;

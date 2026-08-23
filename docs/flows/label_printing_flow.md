@@ -116,6 +116,13 @@ Every dimension is lifted from `MasterLabelsMELINDA.docx` and lives in
 `lib/pdf/label-geometry.ts`, with the original twip values in comments so the two
 can be diffed if the template ever changes.
 
+One thing is **not** from the docx: a hairline cut guide around each label. Word
+prints them borderless because the office runs pre-scored stock; on plain paper
+there is nothing to cut against. Labels stay flush rather than gaining a gutter,
+so neighbours stroke the same coordinate and one scissor pass down a shared line
+separates both. A part-full final sheet only draws guides around the labels that
+exist, leaving the rest of the stock clean for reuse.
+
 | | |
 | --- | --- |
 | Page | US Letter, 8.5 × 11" (612 × 792 pt) |

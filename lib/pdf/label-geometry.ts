@@ -53,3 +53,17 @@ export const SIZE_ADDRESS = 16; // w:sz 32
 export const SIZE_BUNDLE = 11; // document default
 
 export const LABELS_PER_PAGE = COLS * ROWS;
+
+// --- Cut guides --------------------------------------------------------------
+/**
+ * NOT from the docx. Word prints the labels borderless and the office cuts by
+ * eye, which is fine on their pre-scored stock but not on plain paper.
+ *
+ * Every label draws its own full-perimeter rule, so neighbours stroke the same
+ * coordinate twice. That is deliberate: labels stay flush (no gutter to widen
+ * the sheet or shift the grid off the docx dimensions), and one scissor pass
+ * down a shared line separates both sides at once. Drawing per label rather
+ * than as a page-wide grid means a part-full final page only gets guides around
+ * the labels that exist, leaving the rest of the stock clean for reuse.
+ */
+export const CUT_RULE_WIDTH = 0.5; // hairline
