@@ -46,8 +46,8 @@ export interface VolunteerSummary {
   id: string;
   firstName: string;
   lastName: string;
-  email: string;
-  phone: string;
+  email: string | null;
+  phone: string | null;
   status: VolunteerStatus;
   needsAttention: boolean;
   territory: { id: string; captainId: string | null; captainName: string | null } | null;
@@ -178,7 +178,9 @@ export async function listVolunteers(
   }
   if (filters.q) {
     const q = filters.q.toLowerCase();
-    all = all.filter((v) => `${v.firstName} ${v.lastName} ${v.email}`.toLowerCase().includes(q));
+    all = all.filter((v) =>
+      `${v.firstName} ${v.lastName} ${v.email ?? ""}`.toLowerCase().includes(q),
+    );
   }
   return all;
 }

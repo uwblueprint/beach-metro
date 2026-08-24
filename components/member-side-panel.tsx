@@ -168,8 +168,8 @@ function VolunteerContent({ id }: { id: string }) {
   }
 
   function startEditing() {
-    setEmail(volunteer!.email);
-    setPhone(volunteer!.phone);
+    setEmail(volunteer!.email ?? "");
+    setPhone(volunteer!.phone ?? "");
     setAddress(currentAddress);
     setAddressPlaceId(volunteer!.address.placeId);
     setStartDate(volunteer!.startDate);
@@ -186,10 +186,6 @@ function VolunteerContent({ id }: { id: string }) {
     const trimmedEmail = email.trim();
     const trimmedPhone = phone.trim();
     const trimmedAddress = address.trim();
-    if (!trimmedEmail || !trimmedPhone) {
-      setSaveError("Email and phone are required.");
-      return;
-    }
     if (!trimmedAddress) {
       setSaveError("Address is required.");
       return;
@@ -205,8 +201,8 @@ function VolunteerContent({ id }: { id: string }) {
       startDate?: string;
       address?: { addressLines: string[] } | { placeId: string };
     } = {};
-    if (trimmedEmail !== volunteer!.email) body.email = trimmedEmail;
-    if (trimmedPhone !== volunteer!.phone) body.phone = trimmedPhone;
+    if (trimmedEmail !== (volunteer!.email ?? "")) body.email = trimmedEmail;
+    if (trimmedPhone !== (volunteer!.phone ?? "")) body.phone = trimmedPhone;
     if (startDate !== volunteer!.startDate) body.startDate = startDate;
     if (trimmedAddress !== currentAddress) {
       body.address = addressPlaceId
@@ -285,8 +281,8 @@ function VolunteerContent({ id }: { id: string }) {
           </>
         ) : (
           <>
-            <InfoField label="Email" value={volunteer.email} />
-            <InfoField label="Phone" value={volunteer.phone} />
+            <InfoField label="Email" value={volunteer.email ?? "Not on file"} />
+            <InfoField label="Phone" value={volunteer.phone ?? "Not on file"} />
             <InfoField
               label="Address"
               value={volunteer.address.formattedAddress ?? "Not geocoded yet"}
@@ -454,8 +450,8 @@ function CaptainContent({ id }: { id: string }) {
   }
 
   function startEditing() {
-    setEmail(captain!.email);
-    setPhone(captain!.phone);
+    setEmail(captain!.email ?? "");
+    setPhone(captain!.phone ?? "");
     setPayRate(String(captain!.payRate));
     setPayType(captain!.payType);
     setPayCadence(captain!.payCadence);
@@ -473,10 +469,6 @@ function CaptainContent({ id }: { id: string }) {
     const trimmedEmail = email.trim();
     const trimmedPhone = phone.trim();
     const rate = Number(payRate);
-    if (!trimmedEmail || !trimmedPhone) {
-      setSaveError("Email and phone are required.");
-      return;
-    }
     if (payRate.trim() === "" || Number.isNaN(rate) || rate < 0) {
       setSaveError("Enter a valid pay rate (0 or greater).");
       return;
@@ -494,8 +486,8 @@ function CaptainContent({ id }: { id: string }) {
       payCadence?: "biweekly" | "monthly";
       startDate?: string;
     } = {};
-    if (trimmedEmail !== captain!.email) body.email = trimmedEmail;
-    if (trimmedPhone !== captain!.phone) body.phone = trimmedPhone;
+    if (trimmedEmail !== (captain!.email ?? "")) body.email = trimmedEmail;
+    if (trimmedPhone !== (captain!.phone ?? "")) body.phone = trimmedPhone;
     if (rate !== captain!.payRate) body.payRate = rate;
     if (payType !== captain!.payType) body.payType = payType;
     if (payCadence !== captain!.payCadence) body.payCadence = payCadence;
@@ -591,8 +583,8 @@ function CaptainContent({ id }: { id: string }) {
           </>
         ) : (
           <>
-            <InfoField label="Email" value={captain.email} />
-            <InfoField label="Phone" value={captain.phone} />
+            <InfoField label="Email" value={captain.email ?? "Not on file"} />
+            <InfoField label="Phone" value={captain.phone ?? "Not on file"} />
             <InfoField
               label="Rate"
               value={`$${captain.payRate.toFixed(2)} ${PAY_TYPE_LABEL[captain.payType] ?? captain.payType}`}
@@ -789,10 +781,6 @@ function CreateMemberContent({
     }
     if (!startDate) {
       setCreateError("Start date is required.");
-      return;
-    }
-    if (!email.trim() || !phone.trim()) {
-      setCreateError("Email and phone are required.");
       return;
     }
     if (role === "volunteer" && !address.trim()) {

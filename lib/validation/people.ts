@@ -3,6 +3,28 @@ import { z } from "zod";
 
 import { addressInput, boolQuery, isoDate, noteField, uuid } from "./common";
 
+/**
+ * Contact details are optional for everyone — volunteers and captains, on create
+ * and on update. Only 19% of the office's real roster has a phone on file and
+ * 42% an email (docs/reference/route_labels_spreadsheet.md §2.2), so requiring
+ * either would block most of their people from being entered at all.
+ *
+ * A cleared form field arrives as `""`, which `z.email()` would reject, so both
+ * accept the empty string and normalise every absent form — `undefined`, `null`,
+ * `""`, whitespace — to `null`. That keeps one representation of "not on file"
+ * in the database instead of three.
+ */
+const optionalEmail = z
+  .union([z.email(), z.literal("")])
+  .nullish()
+  .transform((v) => v || null);
+
+const optionalPhone = z
+  .string()
+  .trim()
+  .nullish()
+  .transform((v) => v || null);
+
 // ---------------------------------------------------------------------------
 // Volunteers
 // ---------------------------------------------------------------------------
@@ -30,8 +52,8 @@ export const volunteersQuery = z.object({
 export const createVolunteer = z.object({
   firstName: z.string().trim().min(1),
   lastName: z.string().trim().min(1),
-  email: z.email(),
-  phone: z.string().trim().min(1),
+  email: optionalEmail,
+  phone: optionalPhone,
   address: addressInput,
   captainTerritoryId: uuid.nullish(),
   startDate: isoDate,
@@ -43,8 +65,8 @@ export const updateVolunteer = z
   .object({
     firstName: z.string().trim().min(1),
     lastName: z.string().trim().min(1),
-    email: z.email(),
-    phone: z.string().trim().min(1),
+    email: optionalEmail,
+    phone: optionalPhone,
     address: addressInput, // re-validates + swaps the home address
     captainTerritoryId: uuid.nullable(),
     startDate: isoDate,
@@ -77,8 +99,8 @@ export const captainsQuery = z.object({
 export const createCaptain = z.object({
   firstName: z.string().trim().min(1),
   lastName: z.string().trim().min(1),
-  email: z.email(),
-  phone: z.string().trim().min(1),
+  email: optionalEmail,
+  phone: optionalPhone,
   payType: z.enum(["bundle", "paper", "drop"]),
   payRate: z.number().min(0), // 0 is valid (donate-back)
   payCadence: z.enum(["biweekly", "monthly"]),
@@ -91,8 +113,8 @@ export const updateCaptain = z
   .object({
     firstName: z.string().trim().min(1),
     lastName: z.string().trim().min(1),
-    email: z.email(),
-    phone: z.string().trim().min(1),
+    email: optionalEmail,
+    phone: optionalPhone,
     payType: z.enum(["bundle", "paper", "drop"]),
     payRate: z.number().min(0),
     payCadence: z.enum(["biweekly", "monthly"]),

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { addressInput } from "@/lib/validation/common";
 import { updateDelivery } from "@/lib/validation/delivery";
 import { createIssues } from "@/lib/validation/finance";
-import { setVacation } from "@/lib/validation/people";
+import { createCaptain, createVolunteer, setVacation } from "@/lib/validation/people";
 import { createRoute, nearestVacantQuery, updateRoute } from "@/lib/validation/routes";
 
 describe("updateDelivery", () => {
@@ -31,6 +31,58 @@ describe("updateDelivery", () => {
     // bundleCount is derived — the schema has no such field, so it is ignored
     const parsed = updateDelivery.parse({ dropCount: 3, bundleCount: 99 });
     expect("bundleCount" in parsed).toBe(false);
+  });
+});
+
+describe("optional contact details", () => {
+  const volunteer = {
+    firstName: "Ada",
+    lastName: "Lovelace",
+    address: { street: "1 Queen St E", placeId: "place-1" },
+    startDate: "2026-01-06",
+  };
+  const captain = {
+    firstName: "Ada",
+    lastName: "Lovelace",
+    payType: "bundle" as const,
+    payRate: 1.25,
+    payCadence: "biweekly" as const,
+    startDate: "2026-01-06",
+  };
+
+  it("creates a volunteer with no contact details at all", () => {
+    const parsed = createVolunteer.parse(volunteer);
+    expect(parsed.email).toBeNull();
+    expect(parsed.phone).toBeNull();
+  });
+
+  it("creates a captain with no contact details at all", () => {
+    const parsed = createCaptain.parse(captain);
+    expect(parsed.email).toBeNull();
+    expect(parsed.phone).toBeNull();
+  });
+
+  // A cleared form field arrives as "", not as an absent key. All three absent
+  // forms have to land on one representation or "not on file" is three states.
+  it("normalises empty, blank and null to null", () => {
+    expect(createVolunteer.parse({ ...volunteer, email: "", phone: "   " }).email).toBeNull();
+    expect(createVolunteer.parse({ ...volunteer, email: "", phone: "   " }).phone).toBeNull();
+    expect(createVolunteer.parse({ ...volunteer, email: null, phone: null }).phone).toBeNull();
+  });
+
+  it("still rejects a malformed email when one is given", () => {
+    expect(() => createVolunteer.parse({ ...volunteer, email: "not-an-address" })).toThrow();
+    expect(() => createCaptain.parse({ ...captain, email: "not-an-address" })).toThrow();
+  });
+
+  it("keeps real contact details intact and trims the phone", () => {
+    const parsed = createVolunteer.parse({
+      ...volunteer,
+      email: "ada@example.com",
+      phone: "  416-555-0134  ",
+    });
+    expect(parsed.email).toBe("ada@example.com");
+    expect(parsed.phone).toBe("416-555-0134");
   });
 });
 

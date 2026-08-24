@@ -202,8 +202,8 @@ export function useSetVacation(volunteerId: string) {
 export type CreateVolunteerBody = {
   firstName: string;
   lastName: string;
-  email: string;
-  phone: string;
+  email: string | null;
+  phone: string | null;
   address: { addressLines: string[] } | { placeId: string };
   startDate: string;
   captainTerritoryId?: string | null;
@@ -214,8 +214,8 @@ export type CreateVolunteerBody = {
 export type CreateCaptainBody = {
   firstName: string;
   lastName: string;
-  email: string;
-  phone: string;
+  email: string | null;
+  phone: string | null;
   payType: "bundle" | "paper" | "drop";
   payRate: number;
   payCadence: "biweekly" | "monthly";

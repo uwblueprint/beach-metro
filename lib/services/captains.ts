@@ -14,8 +14,8 @@ export interface CaptainSummary {
   id: string;
   firstName: string;
   lastName: string;
-  email: string;
-  phone: string;
+  email: string | null;
+  phone: string | null;
   status: "active" | "retired";
   payType: PayType;
   payRate: number;
@@ -64,7 +64,9 @@ export async function listCaptains(
   if (filters.status) all = all.filter((c) => c.status === filters.status);
   if (filters.q) {
     const q = filters.q.toLowerCase();
-    all = all.filter((c) => `${c.firstName} ${c.lastName} ${c.email}`.toLowerCase().includes(q));
+    all = all.filter((c) =>
+      `${c.firstName} ${c.lastName} ${c.email ?? ""}`.toLowerCase().includes(q),
+    );
   }
   return all;
 }

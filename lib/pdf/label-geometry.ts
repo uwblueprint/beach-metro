@@ -47,7 +47,13 @@ export const NAME_H = 20;
 export const ADDRESS_H = 24;
 export const BUNDLE_H = 14; // 44+20+24+14 = 102 of 108pt, leaving a hair of bottom slack
 
-export const SIZE_HEADLINE = 28; // w:sz 56
+export const SIZE_HEADLINE = 28; // w:sz 56 — the RT chip
+/**
+ * The copy count is a size smaller than the RT chip in the docx (`w:sz` 48 vs
+ * 56). Both cells are `vAlign` centre, so the two sit on different baselines but
+ * share an optical centre — see `centreCapHeight` in label-sheet.ts.
+ */
+export const SIZE_COPIES = 24;
 export const SIZE_NAME = 14; // w:sz 28
 export const SIZE_ADDRESS = 16; // w:sz 32
 export const SIZE_BUNDLE = 11; // document default

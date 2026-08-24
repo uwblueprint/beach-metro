@@ -44,8 +44,8 @@ export interface CaptainRow {
   id: string;
   first_name: string;
   last_name: string;
-  email: string;
-  phone: string;
+  email: string | null;
+  phone: string | null;
   pay_type: PayType;
   pay_rate: number;
   pay_cadence: PayCadence;
@@ -58,8 +58,8 @@ export interface VolunteerRow {
   id: string;
   first_name: string;
   last_name: string;
-  email: string;
-  phone: string;
+  email: string | null;
+  phone: string | null;
   address_id: string;
   captain_territory_id: string | null;
   start_date: string;
