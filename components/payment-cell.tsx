@@ -247,7 +247,10 @@ function PaymentAmountPopover({
   );
 
   React.useEffect(() => {
-    if (commentEditRequest > 0) handleCommentEditingChange(true);
+    if (commentEditRequest > 0) {
+      const id = setTimeout(() => handleCommentEditingChange(true), 0);
+      return () => clearTimeout(id);
+    }
   }, [commentEditRequest, handleCommentEditingChange]);
 
   React.useEffect(() => {

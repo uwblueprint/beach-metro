@@ -289,30 +289,8 @@ export default function FinancesPage() {
   // render, which would make every downstream memo recompute for nothing.
   const allIssues = React.useMemo<GridIssue[]>(() => year?.issues ?? [], [year]);
 
-  // Keep column order stable across refetches. Payouts are unordered, so a new
-  // year payload can shuffle captains and make a cell look like it swapped.
-  const columnOrderRef = React.useRef<{ yearId: string | null; ids: string[] }>({
-    yearId: null,
-    ids: [],
-  });
-  const allCaptains = React.useMemo(() => {
-    const captains = year?.captains ?? [];
-    if (!activeYearId) {
-      columnOrderRef.current = { yearId: null, ids: [] };
-      return captains;
-    }
-    if (columnOrderRef.current.yearId !== activeYearId) {
-      columnOrderRef.current = { yearId: activeYearId, ids: captains.map((c) => c.id) };
-      return captains;
-    }
-    const byId = new Map(captains.map((c) => [c.id, c]));
-    const ids = columnOrderRef.current.ids.filter((id) => byId.has(id));
-    for (const captain of captains) {
-      if (!ids.includes(captain.id)) ids.push(captain.id);
-    }
-    columnOrderRef.current = { yearId: activeYearId, ids };
-    return ids.map((id) => byId.get(id)!);
-  }, [year, activeYearId]);
+  // Captains are sorted alphabetically server-side, so column order is stable.
+  const allCaptains = React.useMemo(() => year?.captains ?? [], [year]);
 
   const visibleCaptains = React.useMemo(
     () => filterFinancesCaptains(allCaptains, filters),
