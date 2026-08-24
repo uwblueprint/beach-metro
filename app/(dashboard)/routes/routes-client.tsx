@@ -30,6 +30,7 @@ import { ChevronDown, Filter, MoreHorizontal, Plus } from "lucide-react";
 import { FilterPillSlot, readCssDurationMsFrom } from "./filter-pills";
 import {
   RouteMap,
+  type CaptainFilterOption,
   type DeliveryTypeFilter,
   type FilterPlacement,
   type MapHome,
@@ -156,6 +157,10 @@ function vacancyLabel(value: Vacancy): string {
   return ASSIGNED_OPTIONS.find((o) => o.value === value)?.label ?? value;
 }
 
+function captainFilterLabel(captainId: string, options: CaptainFilterOption[]): string {
+  return options.find((o) => o.value === captainId)?.label ?? captainId;
+}
+
 /** Collapsible filter block in the Deliveries side panel (Figma filter subsection). */
 function DeliveriesFilterSection(props: {
   search: string;
@@ -166,6 +171,9 @@ function DeliveriesFilterSection(props: {
   onVacancyChange: (value: Vacancy) => void;
   deliveryType: DeliveryTypeFilter;
   onDeliveryTypeChange: (value: DeliveryTypeFilter) => void;
+  captainId: string;
+  onCaptainChange: (value: string) => void;
+  captainOptions: CaptainFilterOption[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const filterInnerRef = useRef<HTMLDivElement>(null);
@@ -246,7 +254,7 @@ function DeliveriesFilterSection(props: {
       cancelAnimationFrame(outer);
       cancelAnimationFrame(nested);
     };
-  }, [filterVisible, props.vacancy, props.deliveryType]);
+  }, [filterVisible, props.vacancy, props.deliveryType, props.captainId, props.captainOptions]);
 
   return (
     <div
@@ -277,6 +285,11 @@ function DeliveriesFilterSection(props: {
             open={props.vacancy !== "all"}
             label={vacancyLabel(props.vacancy)}
             onClear={() => props.onVacancyChange("all")}
+          />
+          <FilterPillSlot
+            open={props.captainId !== "all"}
+            label={captainFilterLabel(props.captainId, props.captainOptions)}
+            onClear={() => props.onCaptainChange("all")}
           />
 
           <Button
@@ -322,6 +335,17 @@ function DeliveriesFilterSection(props: {
                   }}
                 />
               </div>
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-secondary">Captain</p>
+                <PillGroup
+                  exclusive
+                  options={props.captainOptions}
+                  value={props.captainId}
+                  onChange={(value) => {
+                    if (value != null) props.onCaptainChange(value);
+                  }}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -339,6 +363,7 @@ export function RoutesClient() {
   const [creating, setCreating] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [deliveryType, setDeliveryType] = useState<DeliveryTypeFilter>("routes");
+  const [captainId, setCaptainId] = useState("all");
   // TEMP: Shift+F toggles filter UI between map overlay and side panel.
   const [filterPlacement, setFilterPlacement] = useState<FilterPlacement>("map");
 
@@ -356,18 +381,31 @@ export function RoutesClient() {
   const listUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (vacancy !== "all") params.set("vacancy", vacancy);
+    if (captainId !== "all") params.set("captainId", captainId);
     if (q.trim()) params.set("q", q.trim());
     const qs = params.toString();
     return `/api/routes${qs ? `?${qs}` : ""}`;
-  }, [vacancy, q]);
+  }, [vacancy, captainId, q]);
 
   const routes = useQuery({
-    queryKey: ["routes", vacancy, q],
+    queryKey: ["routes", vacancy, captainId, q],
     queryFn: () => getJson<RouteSummary[]>(listUrl),
   });
   const volunteers = useQuery({
     queryKey: ["volunteers", "for-map"],
     queryFn: () => getJson<VolunteerSummary[]>("/api/volunteers"),
+  });
+  const captains = useQuery({
+    queryKey: ["captains", "for-filter"],
+    queryFn: () =>
+      getJson<
+        {
+          id: string;
+          firstName: string;
+          lastName: string;
+          status: string;
+        }[]
+      >("/api/captains?status=active"),
   });
   const paths = useQuery({
     queryKey: ["route-paths"],
@@ -378,6 +416,17 @@ export function RoutesClient() {
   const pathById = useMemo(
     () => new Map((paths.data ?? []).map((p) => [p.id, p.path])),
     [paths.data],
+  );
+
+  const captainOptions: CaptainFilterOption[] = useMemo(
+    () => [
+      { value: "all", label: "All" },
+      ...(captains.data ?? []).map((c) => ({
+        value: c.id,
+        label: `${c.firstName} ${c.lastName}`,
+      })),
+    ],
+    [captains.data],
   );
 
   const mapRoutes: MapRoute[] = (routes.data ?? [])
@@ -441,7 +490,7 @@ export function RoutesClient() {
                 setCreating(false);
                 setSelectedId(id);
               }}
-              boundsFitKey={`${vacancy}|${q.trim()}|${deliveryType}|${showHomes ? "homes" : "no-homes"}`}
+              boundsFitKey={`${vacancy}|${q.trim()}|${deliveryType}|${captainId}|${showHomes ? "homes" : "no-homes"}`}
               boundsFitReady={!routes.isFetching && (!showHomes || !volunteers.isFetching)}
               filterPlacement={filterPlacement}
               search={q}
@@ -452,6 +501,9 @@ export function RoutesClient() {
               onVacancyChange={setVacancy}
               deliveryType={deliveryType}
               onDeliveryTypeChange={setDeliveryType}
+              captainId={captainId}
+              onCaptainChange={setCaptainId}
+              captainOptions={captainOptions}
             />
           </div>
 
@@ -491,6 +543,9 @@ export function RoutesClient() {
                     onVacancyChange={setVacancy}
                     deliveryType={deliveryType}
                     onDeliveryTypeChange={setDeliveryType}
+                    captainId={captainId}
+                    onCaptainChange={setCaptainId}
+                    captainOptions={captainOptions}
                   />
                 )}
                 <div className="flex-1 overflow-y-auto px-4 py-4">

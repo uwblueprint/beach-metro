@@ -8,6 +8,8 @@ const routeBundle = z.object({ papers: z.number().int().min(1) });
 export const routesQuery = z.object({
   vacancy: z.enum(["vacant", "assigned"]).optional(),
   territoryId: uuid.optional(),
+  /** Routes whose assigned volunteer falls under this captain's territory. */
+  captainId: uuid.optional(),
   volunteerId: uuid.optional(),
   needsAttention: boolQuery,
   side: z.enum(["NORTH", "SOUTH", "EAST", "WEST", "BOTH"]).optional(),
