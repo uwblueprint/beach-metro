@@ -149,6 +149,27 @@ export async function updateCaptainRecord(
 }
 
 /** Soft retire; the territory becomes captain-less and awaits reassignment (§4k). */
+/**
+ * Undo a retirement. Clears `retired_at` and nothing else.
+ *
+ * Deliberately does NOT reclaim the territory retirement detached. A territory
+ * holds at most one captain, so it may already have been handed to someone
+ * else; taking it back here would silently displace them. Reassign by hand.
+ *
+ * No recalculation follows: the captain comes back with no territory, so there
+ * is nothing for the open-issue cells to roll up from and every amount they
+ * would touch is already zero.
+ */
+export async function reactivateCaptain(id: string): Promise<CaptainSummary> {
+  const c = await fetchCaptain(id);
+  if (!c.retired_at) throw conflict("Captain is not retired.");
+
+  const { error } = await db().from("captains").update({ retired_at: null }).eq("id", id);
+  if (error) throwDb(error);
+
+  return getCaptain(id);
+}
+
 export async function retireCaptain(id: string): Promise<CaptainSummary> {
   const c = await fetchCaptain(id);
   if (c.retired_at) throw conflict("Captain is already retired.");

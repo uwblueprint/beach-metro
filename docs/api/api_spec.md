@@ -138,6 +138,7 @@ person. Listing notes for an unknown person is a `404`, not an empty list.
 | PATCH  | `/api/volunteers/{id}`          | Edit fields / territory assignment (notes have their own resource)                                     | 4d        |
 | POST   | `/api/volunteers/{id}/vacation` | Set or clear the vacation window (suspends/auto-resumes routes)                                        | 4e        |
 | POST   | `/api/volunteers/{id}/retire`   | Soft retire (`retiredAt`); detaches routes → they become vacant                                        | 4f        |
+| POST   | `/api/volunteers/{id}/reactivate` | Clear `retiredAt`. Does **not** re-attach routes — they may already be reassigned                    | 4f        |
 
 No `DELETE` — volunteers are soft-retired, never deleted.
 
@@ -182,6 +183,7 @@ type AddressInput =
 | GET    | `/api/captains/{id}`        | Detail (includes territory)                                                        | 4i        |
 | PATCH  | `/api/captains/{id}`        | Edit fields / pay config (type, rate, cadence); notes have their own resource       | 4j        |
 | POST   | `/api/captains/{id}/retire` | Soft retire; leaves the territory captain-less and prompts reassignment            | 4k        |
+| POST   | `/api/captains/{id}/reactivate` | Clear `retiredAt`. Does **not** reclaim the territory — it may have a new captain | 4k        |
 | GET    | `/api/captains/{id}/payouts` | This captain's payout across every issue, newest first (read-only)               | people 4i |
 
 ```ts
@@ -531,7 +533,8 @@ the resulting `Address` + `GoogleMapsLocation`. A scheduled refresh job re-resol
   Delete only on `routes` (soft — sets `deletedAt`, row retained) and on a payout's
   `substitute` sub-resource — people are soft-retired, finance/delivery rows are
   lifecycle-bound.
-- **Custom actions:** volunteer `vacation`/`retire`; captain `retire`; route
+- **Custom actions:** volunteer `vacation`/`retire`/`reactivate`; captain
+  `retire`/`reactivate`; route
   `assign`/`unassign`/`reassign`/`refresh-house-count` + `nearest-vacant`; year
   `archive`/`export`; issue `close`/`reopen`; payout
   `override`/`clear-override`/`mark-paid`/`unmark-paid`/`freeze`/

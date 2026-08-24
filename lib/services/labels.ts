@@ -42,6 +42,15 @@ export interface LabelRoute {
   bundles: LabelBundle[];
   bundleCount: number;
   labelledCount: number;
+  /**
+   * Confirmed by design (Kristen, Slack, 2026-08-23): Carrier = a normal
+   * volunteer route; Commercial = a bulk drop at a business; Residential =
+   * a bulk drop at an apartment/condo. Always "carrier" today — this service
+   * only reads `route_deliveries`, which only ever comes from
+   * `volunteer_routes`. Widen this union once commercial/residential drops
+   * get a per-issue delivery record of their own (label_printing_flow.md §7).
+   */
+  type: "carrier";
 }
 
 export interface LabelGroup {
@@ -204,6 +213,7 @@ export async function listLabels(): Promise<LabelSheet> {
       bundles,
       bundleCount: bundles.length,
       labelledCount: labelledHere,
+      type: "carrier",
     };
 
     const key = captain?.id ?? "unassigned";
