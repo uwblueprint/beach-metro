@@ -56,6 +56,13 @@ insert into captains (id, display_name, first_name, last_name, email, phone, pay
   ('c0000000-0000-4000-8000-000000000002', 'Oliver Martinez', 'Oliver', 'Martinez', 'oliver.m@example.com',    '416-555-0102', 'drop',   2.00, 'biweekly', '2024-08-30', null, null),
   ('c0000000-0000-4000-8000-000000000003', 'Maya Singh', 'Maya',   'Singh',    'maya.singh@example.com',  '416-555-0103', 'paper',  0.00, 'monthly',   '2024-07-27', null, null);
 
+-- RT numbers: the code printed largest on every label. Carried by the captain,
+-- with gaps in the sequence once one absorbs another's area (see
+-- docs/reference/route_labels_spreadsheet.md §7). Maya is deliberately left
+-- without one, so the RTXX fallback stays exercised.
+update captains set rt_number = '01' where id = 'c0000000-0000-4000-8000-000000000001';
+update captains set rt_number = '04' where id = 'c0000000-0000-4000-8000-000000000002';
+
 update captain_territories set assigned_captain_id = 'c0000000-0000-4000-8000-000000000001' where id = 'a0000000-0000-4000-8000-000000000001';
 update captain_territories set assigned_captain_id = 'c0000000-0000-4000-8000-000000000002' where id = 'a0000000-0000-4000-8000-000000000002';
 update captain_territories set assigned_captain_id = 'c0000000-0000-4000-8000-000000000003' where id = 'a0000000-0000-4000-8000-000000000003';

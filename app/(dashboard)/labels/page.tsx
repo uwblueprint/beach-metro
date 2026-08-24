@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PillGroup } from "@/components/ui/pill-group";
 import { SearchBar } from "@/components/ui/search-bar";
+import { Select } from "@/components/ui/select";
 import { useExportLabels, useLabels, useMarkLabels } from "@/features/labels/api";
 import type { BundleRef, LabelSheet } from "@/features/labels/api";
 import { cn } from "@/lib/utils";
@@ -196,7 +197,10 @@ function HoverCheckbox({
 }
 
 export default function LabelsPage() {
-  const { data: sheet, isPending, isError, error } = useLabels();
+  // undefined = the open issue, which is the everyday case. Setting this points
+  // the screen at a past issue so a jammed or torn run can be reprinted.
+  const [issueId, setIssueId] = useState<string | undefined>(undefined);
+  const { data: sheet, isPending, isError, error } = useLabels(issueId);
   const markLabels = useMarkLabels();
   const exportLabels = useExportLabels();
 
@@ -209,6 +213,18 @@ export default function LabelsPage() {
 
   const captains = useMemo(() => toCaptains(sheet), [sheet]);
   const totalBundles = sheet?.bundleCount ?? 0;
+
+  // Reprint mode: the chosen issue has already shipped. Everything is normally
+  // labelled already, so "export what is unlabelled" would find nothing.
+  const isReprint = sheet != null && sheet.issue.status !== "open";
+  const issueOptions = useMemo(
+    () =>
+      (sheet?.issues ?? []).map((i) => ({
+        value: i.id,
+        label: i.status === "open" ? `${i.name} (current)` : `${i.name} — ${i.date}`,
+      })),
+    [sheet],
+  );
 
   const searchQuery = search.trim().toLowerCase();
   const revealResults = searchQuery.length > 0 || typeFilter !== "all";
@@ -264,17 +280,25 @@ export default function LabelsPage() {
         ? [...selectedBundleIds].map(parseBundleKey)
         : captains.flatMap((captain) =>
             captain.routes.flatMap((route) =>
-              route.bundles.filter((b) => !b.labelled).map((b) => parseBundleKey(b.id)),
+              // Reprinting takes every bundle; a live run takes only what has
+              // not been labelled yet.
+              route.bundles
+                .filter((b) => isReprint || !b.labelled)
+                .map((b) => parseBundleKey(b.id)),
             ),
           );
 
     if (bundles.length === 0) {
-      setActionError("Nothing to export: every bundle is already labelled.");
+      setActionError(
+        isReprint
+          ? "Nothing to export: this issue has no bundles."
+          : "Nothing to export: every bundle is already labelled.",
+      );
       return;
     }
 
     try {
-      await exportLabels.mutateAsync({ bundles });
+      await exportLabels.mutateAsync({ bundles, issueId: sheet?.issue.id });
       clearSelection();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Could not export labels.");
@@ -320,6 +344,21 @@ export default function LabelsPage() {
                 }}
                 className="shrink-0"
               />
+              {issueOptions.length > 1 ? (
+                <Select
+                  aria-label="Issue"
+                  value={sheet?.issue.id ?? ""}
+                  onChange={(value) => {
+                    // Selecting the open issue clears the override, so the screen
+                    // goes back to following whichever issue is current.
+                    const picked = sheet?.issues.find((i) => i.id === value);
+                    setIssueId(picked && picked.status === "open" ? undefined : value);
+                    clearSelection();
+                  }}
+                  options={issueOptions}
+                  className="shrink-0"
+                />
+              ) : null}
             </div>
 
             {actionError ? (

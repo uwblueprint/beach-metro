@@ -586,6 +586,10 @@ function CaptainContent({ id }: { id: string }) {
             <InfoField label="Email" value={captain.email ?? "Not on file"} />
             <InfoField label="Phone" value={captain.phone ?? "Not on file"} />
             <InfoField
+              label="RT"
+              value={captain.rtNumber ? `RT${captain.rtNumber}` : "Not assigned"}
+            />
+            <InfoField
               label="Rate"
               value={`$${captain.payRate.toFixed(2)} ${PAY_TYPE_LABEL[captain.payType] ?? captain.payType}`}
             />
@@ -760,6 +764,7 @@ function CreateMemberContent({
   const [address, setAddress] = useState("");
   const [addressPlaceId, setAddressPlaceId] = useState<string | null>(null);
   const [captainTerritoryId, setCaptainTerritoryId] = useState("");
+  const [rtNumber, setRtNumber] = useState("");
   const [payType, setPayType] = useState<"bundle" | "paper" | "drop" | "">("");
   const [payRate, setPayRate] = useState("");
   const [payCadence, setPayCadence] = useState<"biweekly" | "monthly" | "">("");
@@ -837,6 +842,7 @@ function CreateMemberContent({
           ...namePayload,
           email: email.trim(),
           phone: phone.trim(),
+          rtNumber: rtNumber.trim() || null,
           payType: payType as "bundle" | "paper" | "drop",
           payRate: Number(payRate),
           payCadence: payCadence as "biweekly" | "monthly",
@@ -983,6 +989,14 @@ function CreateMemberContent({
         </>
       ) : (
         <>
+          <EditableField label="RT Number" htmlFor="cm-rt">
+            <Input
+              id="cm-rt"
+              value={rtNumber}
+              onChange={(e) => setRtNumber(e.target.value)}
+              placeholder="01"
+            />
+          </EditableField>
           <EditableField label="Pay Type" htmlFor="cm-pay-type">
             <Select
               id="cm-pay-type"

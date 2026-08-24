@@ -56,28 +56,74 @@ export interface LabelRoute {
 export interface LabelGroup {
   captainId: string | null;
   captainName: string;
+  /**
+   * The captain's RT number, printed as the label's chip. Null when the office
+   * has not assigned one, or when the route has no captain at all.
+   */
+  rtNumber: string | null;
   routes: LabelRoute[];
   bundleCount: number;
   labelledCount: number;
 }
 
+/** An issue the label screen can be pointed at. */
+export interface LabelIssueOption {
+  id: string;
+  name: string;
+  date: string;
+  status: string;
+}
+
 export interface LabelSheet {
-  issue: { id: string; name: string; date: string };
+  issue: { id: string; name: string; date: string; status: string };
+  /**
+   * Issues this screen can show, newest first — the open one plus recent closed
+   * ones, so a past run can be reprinted. Returned with the sheet rather than
+   * from a second endpoint: the picker is useless without the sheet anyway.
+   */
+  issues: LabelIssueOption[];
   groups: LabelGroup[];
   bundleCount: number;
   labelledCount: number;
 }
 
+/** How many past issues the picker offers alongside the open one. */
+const REPRINTABLE_ISSUES = 12;
+
 /**
- * The issue labels belong to: the most recent OPEN one.
+ * Issues the label screen offers, newest first.
  *
- * There is no issue picker in the design, and the flow is inherently "this run" —
- * you label the bundles you are about to send out. A closed issue has already
- * shipped, so it is not a label target. Reprinting an old issue would need an
- * explicit picker; deliberately not built (see the flow doc's open items).
+ * Capped rather than unbounded: reprints are for "we jammed the printer on the
+ * last run", not for trawling years of history.
  */
-export async function currentLabelIssue(): Promise<IssueRow> {
+export async function listLabelIssues(): Promise<IssueRow[]> {
   const { data, error } = await db()
+    .from("issues")
+    .select("*")
+    .order("date", { ascending: false })
+    .limit(REPRINTABLE_ISSUES);
+  if (error) throwDb(error);
+  return (data ?? []) as IssueRow[];
+}
+
+/**
+ * The issue labels belong to.
+ *
+ * Defaults to the most recent OPEN one, because the flow is inherently "this
+ * run" — you label the bundles you are about to send out. An explicit id lets
+ * the office reprint a past issue after a printer jam or a torn sheet, which
+ * they asked for on 2026-08-24. Reprinting is read-only in spirit: nothing about
+ * a closed issue changes except the `labelled` flags the caller opts into.
+ */
+export async function resolveLabelIssue(issueId?: string): Promise<IssueRow> {
+  const client = db();
+  if (issueId) {
+    const { data, error } = await client.from("issues").select("*").eq("id", issueId).maybeSingle();
+    if (error) throwDb(error);
+    if (!data) throw notFound("Issue");
+    return data as IssueRow;
+  }
+  const { data, error } = await client
     .from("issues")
     .select("*")
     .eq("status", "open")
@@ -90,14 +136,16 @@ export async function currentLabelIssue(): Promise<IssueRow> {
 }
 
 /**
- * Every bundle in the current open issue, grouped by the captain who drops it.
+ * Every bundle in an issue, grouped by the captain who drops it.
  *
  * Grouping is by captain because that is the physical workflow: labels come off
  * the printer and get sorted into one pile per captain.
+ *
+ * Defaults to the open issue; pass `issueId` to reprint a past one.
  */
-export async function listLabels(): Promise<LabelSheet> {
+export async function listLabels(issueId?: string): Promise<LabelSheet> {
   const client = db();
-  const issue = await currentLabelIssue();
+  const [issue, issues] = await Promise.all([resolveLabelIssue(issueId), listLabelIssues()]);
 
   const { data: deliveryData, error: deliveryError } = await client
     .from("route_deliveries")
@@ -107,7 +155,8 @@ export async function listLabels(): Promise<LabelSheet> {
   const deliveries = (deliveryData ?? []) as RouteDeliveryRow[];
 
   const summary = {
-    issue: { id: issue.id, name: issue.name, date: issue.date },
+    issue: { id: issue.id, name: issue.name, date: issue.date, status: issue.status },
+    issues: issues.map((i) => ({ id: i.id, name: i.name, date: i.date, status: i.status })),
     groups: [] as LabelGroup[],
     bundleCount: 0,
     labelledCount: 0,
@@ -124,7 +173,7 @@ export async function listLabels(): Promise<LabelSheet> {
       ),
     client.from("volunteers").select("id, display_name, address_id, captain_territory_id"),
     client.from("captain_territories").select("id, assigned_captain_id"),
-    client.from("captains").select("id, display_name"),
+    client.from("captains").select("id, display_name, rt_number"),
     client
       .from("bundle_labels")
       .select("delivery_id, bundle_index")
@@ -151,7 +200,10 @@ export async function listLabels(): Promise<LabelSheet> {
     CaptainTerritoryRow,
     "id" | "assigned_captain_id"
   >[];
-  const captains = (captainsRes.data ?? []) as Pick<CaptainRow, "id" | "display_name">[];
+  const captains = (captainsRes.data ?? []) as Pick<
+    CaptainRow,
+    "id" | "display_name" | "rt_number"
+  >[];
 
   const routeById = new Map(routes.map((r) => [r.id, r]));
   const volunteerById = new Map(volunteers.map((v) => [v.id, v]));
@@ -217,6 +269,7 @@ export async function listLabels(): Promise<LabelSheet> {
     const group = groups.get(key) ?? {
       captainId: captain?.id ?? null,
       captainName: captain ? captain.display_name : "Unassigned",
+      rtNumber: captain?.rt_number ?? null,
       routes: [],
       bundleCount: 0,
       labelledCount: 0,
@@ -325,9 +378,9 @@ async function assertBundlesExist(
 export async function exportLabelSheet(
   input: z.infer<typeof exportLabels>,
 ): Promise<{ filename: string; bytes: Uint8Array; labelCount: number }> {
-  // listLabels resolves the current issue itself, so take it from there rather
-  // than resolving twice and risking two different answers.
-  const sheet = await listLabels();
+  // listLabels resolves the issue itself, so take it from there rather than
+  // resolving twice and risking two different answers.
+  const sheet = await listLabels(input.issueId);
   const deliveries = await assertBundlesExist(input.bundles, sheet.issue.id);
 
   // Flatten the grouped view into a lookup so each ref picks up its route's
@@ -335,18 +388,21 @@ export async function exportLabelSheet(
   const routeByDelivery = new Map(
     sheet.groups.flatMap((g) => g.routes.map((r) => [r.deliveryId, r] as const)),
   );
+  // The RT belongs to the captain, and groups are keyed by captain, so the chip
+  // is looked up per group rather than per route.
+  const rtByDelivery = new Map(
+    sheet.groups.flatMap((g) => g.routes.map((r) => [r.deliveryId, g.rtNumber] as const)),
+  );
 
   const labels: LabelContent[] = input.bundles.map((ref) => {
     const route = routeByDelivery.get(ref.deliveryId);
     const delivery = deliveries.get(ref.deliveryId);
     const total = delivery?.bundles.length ?? 1;
     return {
-      // STUB: the RT number on the printed label has no source in our schema yet
-      // — it comes from a `Route` column in the office's RouteLabelsFile.xlsx and
-      // we do not know what it means. Printing a literal RTXX keeps the physical
-      // layout intact and makes the gap obvious on paper rather than inventing
-      // numbers that look authoritative. Pending client confirmation.
-      routeCode: "XX",
+      // "XX" when the captain has no RT yet, or the route has no captain. Keeps
+      // the physical layout intact and makes the gap obvious on paper rather
+      // than inventing a number that would look authoritative.
+      routeCode: rtByDelivery.get(ref.deliveryId) ?? "XX",
       papers: delivery?.bundles[ref.bundleIndex]?.papers ?? 0,
       name: route?.volunteerName ?? "Vacant route",
       address: route?.address ?? "",

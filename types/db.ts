@@ -44,6 +44,8 @@ export interface CaptainRow {
   id: string;
   /** Authoritative name; what prints and what search matches. */
   display_name: string;
+  /** Territory code printed as RT<value>; null until the office assigns one. */
+  rt_number: string | null;
   /** Populated only when the recipient is one person. */
   first_name: string | null;
   last_name: string | null;

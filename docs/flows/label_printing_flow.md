@@ -71,8 +71,12 @@ Scoping falls out of the schema for free — `bundle_labels.delivery_id` points 
 a `route_deliveries` row, which belongs to exactly one issue — so a new issue
 starts with every bundle unlabelled without any reset step.
 
-`[OPEN]` Reprinting a past issue's labels would need an explicit picker.
-Deliberately not built.
+**Reprinting.** Built 2026-08-24, at the office's request. The screen defaults
+to the open issue — the everyday case — and an issue picker appears once more
+than one issue exists, offering the open one plus the twelve most recent. Picking
+a closed issue puts the screen in **reprint mode**, where "Export" with nothing
+selected takes *every* bundle rather than only the unlabelled ones, since a past
+run is normally fully labelled and the usual default would find nothing.
 
 ---
 
@@ -181,29 +185,24 @@ Commercial/Residential item below).
 
 ## 7. Open items
 
-- **`[OPEN]` The RT number — still blocking a real value, but no longer a
-  mystery.** Read the actual `RouteLabelsFileBMN.xlsx` (2026-08-23). Strong
-  evidence it is a **per-captain/territory number, not a per-route one**:
-  - The `LABELS` sheet's `Route` column ("01", "02", …) groups many unrelated
-    rows together — different volunteers, a business, a church, an apartment
-    building — under one code. Route "02" alone spans 21 rows across a dozen
-    different people and addresses. A single street-segment route wouldn't do
-    that; a captain's collection area would.
-  - The `Payments2026` sheet keys one row per **captain** by the exact same
-    code (`RT` column) — `01 → Bob Norman`, `02 → Sue Stuart`, etc. — matching
-    the `LABELS` grouping 1:1.
-  - `SKIP HOUSES` also keys by `RT`, again clearly a territory-level list, not
-    a single route's.
+- ~~**`[OPEN]` The RT number.**~~ **Resolved 2026-08-24.** It is a designation
+  carried by the **captain** — confirmed by the team after reading the office's
+  own sheet, where `Payments2026` keys one row per captain by the same code that
+  groups the `LABELS` rows, and `SKIP HOUSES` keys by it too. Numbering has gaps
+  (05, 11, 13, 16, 19, 21, 27-29 are all absent) because absorbing another
+  captain's area retires the absorbed number.
 
-  If this holds, the RT chip is really **the captain's territory number** —
-  and `docs/open_items.md`'s separate "Territories have no name or number"
-  item is the *same missing piece*: add a territory number and the RT chip
-  has a real source. Still `[OPEN]` because this is strong inference from
-  their own spreadsheet, not a client confirmation, and nothing can be wired
-  up regardless until that schema field exists. Confirm with the client (does
-  the number ever get reassigned when a territory changes hands? is it
-  captain-stable or territory-stable if a captain leaves mid-year?) before
-  building it.
+  Now `captains.rt_number` — text, not an integer, since the office prints the
+  leading zero of `01` and one captain's designation is the span `31-71`. Unique
+  where set, so a chip is never ambiguous, and nullable, so a captain can exist
+  before being given one. The label prints `RTXX` when it is unset or the route
+  has no captain, which is the same visible gap as before rather than an invented
+  number.
+
+  One divergence worth remembering: the file keeps a *separate* payment row per
+  RT, and twelve captains cover 22 carrier RTs between them (one holds eight).
+  We are deliberately modelling one RT per captain and ignoring that case — see
+  `docs/reference/route_labels_spreadsheet.md` §7.
 - ~~**The Type column (Carrier / Commercial / Residential).**~~ **Resolved
   2026-08-23** (Kristen, Slack). It confirms the guess this item used to make:
   Type is a property of the *delivery*, not a route-vs-drop split of one thing.

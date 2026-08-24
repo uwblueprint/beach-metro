@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { addressInput } from "@/lib/validation/common";
 import { updateDelivery } from "@/lib/validation/delivery";
 import { createIssues } from "@/lib/validation/finance";
+import { exportLabels } from "@/lib/validation/labels";
 import { createCaptain, createVolunteer, setVacation } from "@/lib/validation/people";
 import { createRoute, nearestVacantQuery, updateRoute } from "@/lib/validation/routes";
 
@@ -31,6 +32,49 @@ describe("updateDelivery", () => {
     // bundleCount is derived — the schema has no such field, so it is ignored
     const parsed = updateDelivery.parse({ dropCount: 3, bundleCount: 99 });
     expect("bundleCount" in parsed).toBe(false);
+  });
+});
+
+describe("captain RT number", () => {
+  const captain = {
+    displayName: "Wally Hucker",
+    payType: "bundle" as const,
+    payRate: 1.25,
+    payCadence: "biweekly" as const,
+    startDate: "2026-01-06",
+  };
+
+  // Text, not a number: the office prints the leading zero, and one captain's
+  // designation is a span of driven routes.
+  it("keeps a leading zero and accepts a range", () => {
+    expect(createCaptain.parse({ ...captain, rtNumber: "01" }).rtNumber).toBe("01");
+    expect(createCaptain.parse({ ...captain, rtNumber: "31-71" }).rtNumber).toBe("31-71");
+  });
+
+  it("is optional — a captain can exist before the office assigns one", () => {
+    expect(createCaptain.parse(captain).rtNumber).toBeUndefined();
+  });
+
+  it("rejects a blank number rather than storing whitespace", () => {
+    expect(() => createCaptain.parse({ ...captain, rtNumber: "   " })).toThrow();
+  });
+});
+
+describe("label export", () => {
+  const bundles = [{ deliveryId: "11111111-1111-4111-8111-111111111111", bundleIndex: 0 }];
+
+  it("defaults to the open issue when no issue is named", () => {
+    expect(exportLabels.parse({ bundles }).issueId).toBeUndefined();
+  });
+
+  it("carries an issue id for a reprint", () => {
+    const id = "22222222-2222-4222-8222-222222222222";
+    expect(exportLabels.parse({ bundles, issueId: id }).issueId).toBe(id);
+  });
+
+  // Exporting the whole issue by accident wastes a stack of label stock.
+  it("still refuses an empty selection", () => {
+    expect(() => exportLabels.parse({ bundles: [] })).toThrow();
   });
 });
 

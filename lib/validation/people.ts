@@ -58,6 +58,13 @@ function composeDisplayName<
   return { ...o, displayName };
 }
 
+/**
+ * The RT number printed on the label chip. Text because the office's live values
+ * include '01' (the leading zero prints) and '31-71' for a span of driven
+ * routes. Optional: a captain can exist before the office assigns one.
+ */
+const rtNumber = z.string().trim().min(1).nullish();
+
 // ---------------------------------------------------------------------------
 // Volunteers
 // ---------------------------------------------------------------------------
@@ -136,6 +143,7 @@ export const createCaptain = z
     ...nameFields,
     email: optionalEmail,
     phone: optionalPhone,
+    rtNumber,
     payType: z.enum(["bundle", "paper", "drop"]),
     payRate: z.number().min(0), // 0 is valid (donate-back)
     payCadence: z.enum(["biweekly", "monthly"]),
@@ -152,6 +160,7 @@ export const updateCaptain = z
     lastName: z.string().trim().min(1).nullable(),
     email: optionalEmail,
     phone: optionalPhone,
+    rtNumber: z.string().trim().min(1).nullable(),
     payType: z.enum(["bundle", "paper", "drop"]),
     payRate: z.number().min(0),
     payCadence: z.enum(["biweekly", "monthly"]),

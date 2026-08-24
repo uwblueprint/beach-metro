@@ -5,20 +5,31 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, api } from "@/lib/api/client";
-import type { LabelBundle, LabelGroup, LabelRoute, LabelSheet } from "@/lib/services/labels";
+import type {
+  LabelBundle,
+  LabelGroup,
+  LabelIssueOption,
+  LabelRoute,
+  LabelSheet,
+} from "@/lib/services/labels";
 import type { BundleRef } from "@/lib/validation/labels";
 
-export type { LabelBundle, LabelGroup, LabelRoute, LabelSheet, BundleRef };
+export type { LabelBundle, LabelGroup, LabelIssueOption, LabelRoute, LabelSheet, BundleRef };
 
 export const labelKeys = {
   all: ["labels"] as const,
-  sheet: () => ["labels", "sheet"] as const,
+  // The issue is part of the key: switching to a past issue is a different
+  // sheet, and both should stay cached while the office flips between them.
+  sheet: (issueId?: string) => ["labels", "sheet", issueId ?? "open"] as const,
 };
 
-export function useLabels() {
+export function useLabels(issueId?: string) {
   return useQuery({
-    queryKey: labelKeys.sheet(),
-    queryFn: () => api.get<LabelSheet>("/api/labels"),
+    queryKey: labelKeys.sheet(issueId),
+    queryFn: () =>
+      api.get<LabelSheet>(
+        issueId ? `/api/labels?issueId=${encodeURIComponent(issueId)}` : "/api/labels",
+      ),
   });
 }
 
@@ -38,7 +49,10 @@ export function useMarkLabels() {
  * with PDF bytes instead of the `{ data }` envelope. Failures still come back as
  * that envelope, so the content type decides how to read the body.
  */
-async function downloadLabelPdf(input: { bundles: BundleRef[] }): Promise<number> {
+async function downloadLabelPdf(input: {
+  bundles: BundleRef[];
+  issueId?: string;
+}): Promise<number> {
   let res: Response;
   try {
     res = await fetch("/api/labels/export", {

@@ -220,6 +220,8 @@ export type CreateCaptainBody = {
   lastName?: string;
   email: string | null;
   phone: string | null;
+  /** Territory code printed on the label chip; null until the office assigns one. */
+  rtNumber?: string | null;
   payType: "bundle" | "paper" | "drop";
   payRate: number;
   payCadence: "biweekly" | "monthly";

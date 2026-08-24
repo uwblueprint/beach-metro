@@ -12,6 +12,8 @@ import { coerceCaptainNumerics, db, throwDb, today } from "./shared";
 
 export interface CaptainSummary {
   id: string;
+  /** Territory code printed on the label chip; null until assigned. */
+  rtNumber: string | null;
   /** Authoritative name; what lists and labels show. */
   displayName: string;
   /** Null when the recipient is not one person. */
@@ -33,6 +35,7 @@ function toSummary(c: CaptainRow, territories: CaptainTerritoryRow[]): CaptainSu
   const territory = territories.find((t) => t.assigned_captain_id === c.id) ?? null;
   return {
     id: c.id,
+    rtNumber: c.rt_number,
     displayName: c.display_name,
     firstName: c.first_name,
     lastName: c.last_name,
@@ -96,6 +99,7 @@ export async function createCaptainRecord(
     .from("captains")
     .insert({
       display_name: input.displayName,
+      rt_number: input.rtNumber ?? null,
       first_name: input.firstName ?? null,
       last_name: input.lastName ?? null,
       email: input.email,
@@ -135,6 +139,7 @@ export async function updateCaptainRecord(
 
   const patch: Record<string, unknown> = {};
   if (input.displayName !== undefined) patch.display_name = input.displayName;
+  if (input.rtNumber !== undefined) patch.rt_number = input.rtNumber;
   if (input.firstName !== undefined) patch.first_name = input.firstName;
   if (input.lastName !== undefined) patch.last_name = input.lastName;
   if (input.email !== undefined) patch.email = input.email;
