@@ -131,8 +131,15 @@ export async function resolveLabelIssue(issueId?: string): Promise<IssueRow> {
     .limit(1)
     .maybeSingle();
   if (error) throwDb(error);
-  if (!data) throw conflict("No open issue — create one before printing labels.");
-  return data as IssueRow;
+  if (data) return data as IssueRow;
+
+  // No open issue. Fall back to the most recent closed one rather than failing,
+  // so the screen still loads and the issue picker is reachable — otherwise
+  // reprinting would be impossible in exactly the situation that most often
+  // calls for it, the stretch after the last run of the year was closed.
+  const [latest] = await listLabelIssues();
+  if (!latest) throw conflict("No issues yet — create one before printing labels.");
+  return latest;
 }
 
 /**
@@ -412,7 +419,13 @@ export async function exportLabelSheet(
 
   const bytes = await renderLabelSheet(labels);
 
-  if (input.markLabelled) {
+  // Only a live run records what was labelled. Reprinting a shipped issue is
+  // read-only: its bundles are history, and some were deliberately never
+  // labelled (whole 50s and 25s go out unlabelled — see
+  // docs/reference/route_labels_spreadsheet.md §3). Marking them here would
+  // rewrite that record with no way back. Enforced server-side rather than by
+  // the caller passing markLabelled: false, so no client can get it wrong.
+  if (input.markLabelled && sheet.issue.status === "open") {
     await setLabelled({ bundles: input.bundles, labelled: true });
   }
 

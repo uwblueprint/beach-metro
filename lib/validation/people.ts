@@ -15,8 +15,13 @@ import { addressInput, boolQuery, isoDate, noteField, uuid } from "./common";
  * in the database instead of three.
  */
 const optionalEmail = z
-  .union([z.email(), z.literal("")])
-  .nullish()
+  .preprocess(
+    // z.email() does not trim, so "   " would fail both branches and surface as
+    // "Invalid email address" instead of "not on file". Trim first, matching
+    // optionalPhone, so every blank form lands on the same answer.
+    (v) => (typeof v === "string" ? v.trim() : v),
+    z.union([z.email(), z.literal("")]).nullish(),
+  )
   .transform((v) => v || null);
 
 const optionalPhone = z

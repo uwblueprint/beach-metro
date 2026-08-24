@@ -6,6 +6,7 @@ import {
   bundleCount,
   calculatedAmount,
   calculationStatus,
+  recomposedDisplayName,
   effectiveAmount,
   greedySplit,
   volunteerNeedsAttention,
@@ -169,5 +170,33 @@ describe("payout cell derivations", () => {
   it("bundleCount derives from the stored breakdown", () => {
     expect(bundleCount(greedySplit(130))).toBe(4);
     expect(bundleCount([])).toBe(0);
+  });
+});
+
+describe("recomposedDisplayName", () => {
+  const person = { first_name: "Ada", last_name: "Lovelace" };
+  // A church, a building, a household: no first/last to recompose from.
+  const church = { first_name: null, last_name: null };
+
+  it("carries a person's rename into the display name", () => {
+    expect(recomposedDisplayName(person, { lastName: "Byron" })).toBe("Ada Byron");
+    expect(recomposedDisplayName(person, { firstName: "Augusta" })).toBe("Augusta Lovelace");
+  });
+
+  // The guard that matters most: display_name is what prints on the label, and
+  // a stray first_name write must never clobber "St. Aidan's Church".
+  it("never touches a non-person's name", () => {
+    expect(recomposedDisplayName(church, { firstName: "X" })).toBeNull();
+    expect(recomposedDisplayName(church, { lastName: "Y" })).toBeNull();
+  });
+
+  it("lets an explicit display name win", () => {
+    expect(
+      recomposedDisplayName(person, { displayName: "The Lovelaces", lastName: "B" }),
+    ).toBeNull();
+  });
+
+  it("stays out of the way when neither half moved", () => {
+    expect(recomposedDisplayName(person, {})).toBeNull();
   });
 });

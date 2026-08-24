@@ -6,6 +6,7 @@ import { conflict, notFound } from "@/lib/api/errors";
 import type { captainsQuery, createCaptain, updateCaptain } from "@/lib/validation/people";
 import type { CaptainRow, CaptainTerritoryRow, PayCadence, PayType } from "@/types/db";
 
+import { recomposedDisplayName } from "./derive";
 import { createNoteRecord } from "./notes";
 import { recalculateOpenIssues } from "./recalc";
 import { coerceCaptainNumerics, db, throwDb, today } from "./shared";
@@ -71,8 +72,10 @@ export async function listCaptains(
   if (filters.status) all = all.filter((c) => c.status === filters.status);
   if (filters.q) {
     const q = filters.q.toLowerCase();
+    // displayName, not first + last: those are null for a non-person captain,
+    // and displayName is what the list actually shows.
     all = all.filter((c) =>
-      `${c.firstName} ${c.lastName} ${c.email ?? ""}`.toLowerCase().includes(q),
+      [c.displayName, c.email].filter(Boolean).join(" ").toLowerCase().includes(q),
     );
   }
   return all;
@@ -135,10 +138,12 @@ export async function updateCaptainRecord(
   id: string,
   input: z.infer<typeof updateCaptain>,
 ): Promise<CaptainSummary> {
-  await fetchCaptain(id);
+  const current = await fetchCaptain(id);
 
   const patch: Record<string, unknown> = {};
   if (input.displayName !== undefined) patch.display_name = input.displayName;
+  const renamed = recomposedDisplayName(current, input);
+  if (renamed !== null) patch.display_name = renamed;
   if (input.rtNumber !== undefined) patch.rt_number = input.rtNumber;
   if (input.firstName !== undefined) patch.first_name = input.firstName;
   if (input.lastName !== undefined) patch.last_name = input.lastName;

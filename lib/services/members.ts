@@ -56,7 +56,7 @@ export async function listMembers(filters: z.infer<typeof membersQuery>): Promis
   const volunteerRows: MemberRow[] = volunteers.map((v) => ({
     id: v.id,
     role: "volunteer",
-    name: `${v.firstName} ${v.lastName}`,
+    name: v.displayName,
     routeInfo:
       v.routesCarried.length === 0
         ? "No route"
@@ -76,14 +76,14 @@ export async function listMembers(filters: z.infer<typeof membersQuery>): Promis
     return {
       id: c.id,
       role: "captain",
-      name: `${c.firstName} ${c.lastName}`,
+      name: c.displayName,
       // Territories have no name or number in the schema, so describe the
       // territory by what it contains. See docs/open_items.md if the office
       // turns out to refer to territories by number.
       routeInfo: territory
         ? `${plural(territory.volunteerCount, "volunteer")}, ${plural(territory.commercialDropCount, "drop")}`
         : "No territory",
-      captainName: `${c.firstName} ${c.lastName}`,
+      captainName: c.displayName,
       startDate: c.startDate,
       status: c.status,
       // Captains have no end-date attention flag; only volunteers do (people §3a).

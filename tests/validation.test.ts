@@ -166,6 +166,15 @@ describe("optional contact details", () => {
     expect(() => createCaptain.parse({ ...captain, email: "not-an-address" })).toThrow();
   });
 
+  // z.email() does not trim, so a whitespace-only address used to surface as
+  // "Invalid email address" instead of simply "not on file".
+  it("treats a whitespace-only email as not on file, and trims a real one", () => {
+    expect(createVolunteer.parse({ ...volunteer, email: "   " }).email).toBeNull();
+    expect(createVolunteer.parse({ ...volunteer, email: " ada@example.com " }).email).toBe(
+      "ada@example.com",
+    );
+  });
+
   it("keeps real contact details intact and trims the phone", () => {
     const parsed = createVolunteer.parse({
       ...volunteer,

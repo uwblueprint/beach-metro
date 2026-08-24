@@ -18,6 +18,7 @@ import {
 } from "./addresses";
 import {
   greedySplit,
+  recomposedDisplayName,
   routeLabel,
   volunteerNeedsAttention,
   volunteerStatus,
@@ -182,8 +183,10 @@ export async function listVolunteers(
   }
   if (filters.q) {
     const q = filters.q.toLowerCase();
+    // displayName, not first + last: those are null for a church or a household,
+    // and displayName is what the list actually shows.
     all = all.filter((v) =>
-      `${v.firstName} ${v.lastName} ${v.email ?? ""}`.toLowerCase().includes(q),
+      [v.displayName, v.email].filter(Boolean).join(" ").toLowerCase().includes(q),
     );
   }
   return all;
@@ -245,11 +248,13 @@ export async function updateVolunteerRecord(
   id: string,
   input: z.infer<typeof updateVolunteer>,
 ): Promise<VolunteerDetail> {
-  await fetchVolunteer(id);
+  const current = await fetchVolunteer(id);
   if (input.captainTerritoryId) await assertTerritoryExists(input.captainTerritoryId);
 
   const patch: Record<string, unknown> = {};
   if (input.displayName !== undefined) patch.display_name = input.displayName;
+  const renamed = recomposedDisplayName(current, input);
+  if (renamed !== null) patch.display_name = renamed;
   if (input.firstName !== undefined) patch.first_name = input.firstName;
   if (input.lastName !== undefined) patch.last_name = input.lastName;
   if (input.email !== undefined) patch.email = input.email;

@@ -163,3 +163,28 @@ export function calculationStatus(
   if (p.override_amount !== null) return "overridden";
   return p.frozen_amount === null ? "calculated" : "frozen";
 }
+
+/**
+ * The display name a rename implies, or null when nothing should change.
+ *
+ * `display_name` is authoritative — it is what prints on a label and what search
+ * matches — so renaming a person via first/last has to carry it along, or the
+ * label keeps printing the old surname forever.
+ *
+ * Returns null in the three cases where recomposing would be wrong: the caller
+ * set `displayName` explicitly (they win), neither name half moved, or the
+ * stored record is not a person. That last guard matters most — a church has no
+ * first/last, and a stray write to one must never clobber "St. Aidan's Church".
+ */
+export function recomposedDisplayName(
+  current: { first_name: string | null; last_name: string | null },
+  input: { displayName?: string; firstName?: string | null; lastName?: string | null },
+): string | null {
+  if (input.displayName !== undefined) return null;
+  if (input.firstName === undefined && input.lastName === undefined) return null;
+  if (current.first_name === null || current.last_name === null) return null;
+
+  const first = input.firstName === undefined ? current.first_name : input.firstName;
+  const last = input.lastName === undefined ? current.last_name : input.lastName;
+  return [first, last].filter(Boolean).join(" ").trim() || null;
+}
