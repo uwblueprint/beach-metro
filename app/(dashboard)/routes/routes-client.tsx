@@ -5,15 +5,58 @@
 // assign) — the design engineers restyle it. Structural Tailwind only.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { AddressField } from "@/components/address-field";
+import { BundlePapersTable } from "@/components/bundle-papers-table";
+import { SidePanelField } from "@/components/side-panel-field";
+import { SidePanelRow } from "@/components/side-panel-row";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { PillGroup } from "@/components/ui/pill-group";
+import { SearchBar } from "@/components/ui/search-bar";
+import { api } from "@/lib/api/client";
+import { greedySplit } from "@/lib/services/derive";
 import { cn } from "@/lib/utils";
+import { ChevronDown, Filter, MoreHorizontal, Plus } from "lucide-react";
 
-import { RouteMap, type MapHome, type MapRoute } from "./route-map";
+import { FilterPillSlot, readCssDurationMsFrom } from "./filter-pills";
+import {
+  RouteMap,
+  type DeliveryTypeFilter,
+  type FilterPlacement,
+  type MapHome,
+  type MapRoute,
+  type VacancyFilter,
+} from "./route-map";
+import { RouteTag } from "./route-tag";
+
+const SIDE_OPTIONS = [
+  { value: "", label: "— none —" },
+  { value: "NORTH", label: "North" },
+  { value: "SOUTH", label: "South" },
+  { value: "EAST", label: "East" },
+  { value: "WEST", label: "West" },
+  { value: "BOTH", label: "Both" },
+] as const;
+
+/** Input-shell trigger — same class as testing InputsSection dropdowns. */
+const inputTriggerClassName =
+  "flex h-auto w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-hairline bg-bg px-3 py-2 text-left text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-bg-secondary disabled:text-disabled disabled:opacity-50";
+
+function routeLabel(r: RouteSummary): string {
+  const start = r.startLabel ?? "";
+  const end = r.endLabel ?? "";
+  if (start && end) return `${r.streetName} · ${start} → ${end}`;
+  return r.streetName;
+}
 
 /* ---------- API shapes (subset the page uses) ---------- */
 
@@ -30,11 +73,30 @@ interface RouteSummary {
   captain: { id: string; name: string } | null;
   start: { latitude: number; longitude: number } | null;
   end: { latitude: number; longitude: number } | null;
+  startLabel?: string | null;
+  endLabel?: string | null;
 }
 interface RouteDetail extends RouteSummary {
   notes: string | null;
+  bundles: Array<{ papers: number }>;
   startAddress: { formattedAddress: string | null };
   endAddress: { formattedAddress: string | null };
+}
+
+function papersRowsFromRoute(r: RouteDetail): number[] {
+  if (r.bundles.length > 0) return r.bundles.map((b) => b.papers);
+  const split = greedySplit(r.papers).map((b) => b.papers);
+  return split.length > 0 ? split : [0];
+}
+
+function toBundles(rows: number[]): Array<{ papers: number }> {
+  return rows.filter((p) => p > 0).map((papers) => ({ papers }));
+}
+
+function bundlesDiffer(rows: number[], original: Array<{ papers: number }>): boolean {
+  const next = toBundles(rows);
+  if (next.length !== original.length) return true;
+  return next.some((b, i) => b.papers !== original[i].papers);
 }
 interface VolunteerSummary {
   id: string;
@@ -63,23 +125,233 @@ async function sendJson<T>(url: string, method: string, body?: unknown): Promise
   return json.data as T;
 }
 
-type Vacancy = "all" | "vacant" | "assigned";
+function isTypingTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
 
-function stateBadge(r: RouteSummary): { label: string; tone: string } {
-  if (r.suspended) return { label: "Suspended", tone: "text-amber-700 dark:text-amber-400" };
-  if (r.needsAttention)
-    return { label: "Needs attention", tone: "text-amber-700 dark:text-amber-400" };
-  if (r.lifecycle === "vacant") return { label: "Vacant", tone: "text-red-700 dark:text-red-400" };
-  return { label: "Assigned", tone: "text-emerald-700 dark:text-emerald-400" };
+type Vacancy = VacancyFilter;
+
+const ASSIGNED_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "assigned", label: "Assigned" },
+  { value: "vacant", label: "Vacant" },
+] as const;
+
+const DELIVERY_TYPE_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "routes", label: "Routes" },
+  { value: "drops", label: "Drops" },
+] as const;
+
+function deliveryTypeLabel(value: DeliveryTypeFilter): string {
+  return DELIVERY_TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value;
+}
+
+function vacancyLabel(value: Vacancy): string {
+  return ASSIGNED_OPTIONS.find((o) => o.value === value)?.label ?? value;
+}
+
+/** Collapsible filter block in the Deliveries side panel (Figma filter subsection). */
+function DeliveriesFilterSection(props: {
+  search: string;
+  onSearchChange: (value: string) => void;
+  filterOpen: boolean;
+  onFilterToggle: () => void;
+  vacancy: Vacancy;
+  onVacancyChange: (value: Vacancy) => void;
+  deliveryType: DeliveryTypeFilter;
+  onDeliveryTypeChange: (value: DeliveryTypeFilter) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const filterInnerRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [filterClosing, setFilterClosing] = useState(false);
+  const [filterHeight, setFilterHeight] = useState(0);
+  const [trackedFilterOpen, setTrackedFilterOpen] = useState(props.filterOpen);
+
+  // Adjust open/close flags during render (React-approved) — avoid sync setState in effects.
+  if (props.filterOpen !== trackedFilterOpen) {
+    setTrackedFilterOpen(props.filterOpen);
+    if (props.filterOpen) {
+      setFilterClosing(false);
+    } else if (filterHeight > 0 || filterClosing) {
+      setFilterClosing(true);
+    }
+  }
+
+  const filterVisible = props.filterOpen || filterClosing;
+
+  useLayoutEffect(() => {
+    if (props.filterOpen) {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+      let nested = 0;
+      const outer = requestAnimationFrame(() => {
+        nested = requestAnimationFrame(() => {
+          setFilterHeight(filterInnerRef.current?.scrollHeight ?? 0);
+        });
+      });
+      return () => {
+        cancelAnimationFrame(outer);
+        cancelAnimationFrame(nested);
+      };
+    }
+
+    if (!filterClosing) return;
+
+    let nested = 0;
+    const outer = requestAnimationFrame(() => {
+      nested = requestAnimationFrame(() => {
+        setFilterHeight(0);
+      });
+    });
+    const el = containerRef.current;
+    const closeMs = el
+      ? Math.max(
+          readCssDurationMsFrom(el, "--panel-close-dur", 350),
+          readCssDurationMsFrom(el, "--resize-dur", 150),
+        )
+      : 150;
+    closeTimerRef.current = setTimeout(() => {
+      setFilterClosing(false);
+      closeTimerRef.current = null;
+    }, closeMs);
+
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(nested);
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    };
+  }, [props.filterOpen, filterClosing]);
+
+  useLayoutEffect(() => {
+    if (!filterVisible || !filterInnerRef.current) return;
+    let nested = 0;
+    const outer = requestAnimationFrame(() => {
+      nested = requestAnimationFrame(() => {
+        setFilterHeight(filterInnerRef.current?.scrollHeight ?? 0);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(nested);
+    };
+  }, [filterVisible, props.vacancy, props.deliveryType]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="shrink-0 border-b border-border px-3 py-4"
+      style={
+        {
+          "--resize-dur": "220ms",
+          "--panel-translate-y": "12px",
+        } as CSSProperties
+      }
+    >
+      <div className="flex flex-col">
+        <div className="flex items-center">
+          <SearchBar
+            value={props.search}
+            onChange={props.onSearchChange}
+            placeholder="Search Delivery"
+            className="min-w-0 flex-1"
+          />
+
+          <FilterPillSlot
+            open={props.deliveryType !== "all"}
+            label={deliveryTypeLabel(props.deliveryType)}
+            onClear={() => props.onDeliveryTypeChange("all")}
+          />
+          <FilterPillSlot
+            open={props.vacancy !== "all"}
+            label={vacancyLabel(props.vacancy)}
+            onClear={() => props.onVacancyChange("all")}
+          />
+
+          <Button
+            className="ml-2.5"
+            variant="toolbar"
+            size="toolbar"
+            shape="rounded"
+            aria-label="Toggle filters"
+            aria-expanded={props.filterOpen}
+            selected={props.filterOpen || filterClosing}
+            onClick={props.onFilterToggle}
+          >
+            <Filter />
+          </Button>
+        </div>
+
+        <div className="t-resize overflow-hidden" style={{ height: filterHeight }}>
+          {filterVisible && (
+            <div
+              ref={filterInnerRef}
+              className="t-panel-slide flex flex-col gap-4 px-2 pt-4"
+              data-open={props.filterOpen ? "true" : "false"}
+            >
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-secondary">Delivery Type</p>
+                <PillGroup
+                  exclusive
+                  options={[...DELIVERY_TYPE_OPTIONS]}
+                  value={props.deliveryType}
+                  onChange={(value) => {
+                    if (value != null) props.onDeliveryTypeChange(value as DeliveryTypeFilter);
+                  }}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-secondary">Assigned</p>
+                <PillGroup
+                  exclusive
+                  options={[...ASSIGNED_OPTIONS]}
+                  value={props.vacancy}
+                  onChange={(value) => {
+                    if (value != null) props.onVacancyChange(value as Vacancy);
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function RoutesClient() {
   const qc = useQueryClient();
   const [vacancy, setVacancy] = useState<Vacancy>("all");
   const [q, setQ] = useState("");
-  const [showHomes, setShowHomes] = useState(false);
+  const [showHomes] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [deliveryType, setDeliveryType] = useState<DeliveryTypeFilter>("routes");
+  // TEMP: Shift+F toggles filter UI between map overlay and side panel.
+  const [filterPlacement, setFilterPlacement] = useState<FilterPlacement>("map");
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "F" || !e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isTypingTarget(e.target)) return;
+      e.preventDefault();
+      setFilterPlacement((p) => (p === "map" ? "sidepanel" : "map"));
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const listUrl = useMemo(() => {
     const params = new URLSearchParams();
@@ -97,8 +369,6 @@ export function RoutesClient() {
     queryKey: ["volunteers", "for-map"],
     queryFn: () => getJson<VolunteerSummary[]>("/api/volunteers"),
   });
-  // Road-following paths, keyed by route id. Independent of filters/search so it
-  // loads once; the map draws straight lines until it resolves.
   const paths = useQuery({
     queryKey: ["route-paths"],
     queryFn: () =>
@@ -110,16 +380,26 @@ export function RoutesClient() {
     [paths.data],
   );
 
-  const mapRoutes: MapRoute[] = (routes.data ?? []).map((r) => ({
-    id: r.id,
-    streetName: r.streetName,
-    lifecycle: r.lifecycle,
-    suspended: r.suspended,
-    needsAttention: r.needsAttention,
-    start: r.start,
-    end: r.end,
-    path: pathById.get(r.id) ?? null,
-  }));
+  const mapRoutes: MapRoute[] = (routes.data ?? [])
+    // Drops aren't on this map yet — Type=Drops shows an empty set for now.
+    .filter(() => deliveryType !== "drops")
+    .map((r) => ({
+      id: r.id,
+      streetName: r.streetName,
+      lifecycle: r.lifecycle,
+      suspended: r.suspended,
+      needsAttention: r.needsAttention,
+      start: r.start,
+      end: r.end,
+      path: pathById.get(r.id) ?? null,
+      label: routeLabel(r),
+      volunteerName: r.assignedVolunteer
+        ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
+        : null,
+      bundleCount: greedySplit(Math.max(0, Math.floor(r.papers))).length,
+      papers: r.papers,
+    }));
+  const listRoutes = deliveryType === "drops" ? [] : (routes.data ?? []);
   const mapHomes: MapHome[] = showHomes
     ? (volunteers.data ?? []).map((v) => ({
         id: v.id,
@@ -127,11 +407,8 @@ export function RoutesClient() {
         home: v.home,
       }))
     : [];
-  const missingCoords = (routes.data ?? []).filter((r) => !r.start || !r.end).length;
 
   return (
-    // Shared page shell (same as Members/Finances) so the map + rail fill the
-    // viewport instead of sitting in a fixed-height box.
     <div className="page-container">
       <div className="page flex flex-col overflow-hidden">
         <div className="page-header-container">
@@ -142,62 +419,44 @@ export function RoutesClient() {
             </p>
           </div>
           <Button
-            size="sm"
+            variant="primary"
             onClick={() => {
               setSelectedId(null);
               setCreating(true);
             }}
           >
-            Add route
+            <Plus data-icon="inline-start" />
+            Add Route
           </Button>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-4 lg:grid-cols-[1fr_360px]">
-          {/* Map + a thin filter bar */}
-          <div className="flex min-h-0 flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              {(["all", "vacant", "assigned"] as const).map((v) => (
-                <Button
-                  key={v}
-                  size="sm"
-                  variant={vacancy === v ? "default" : "outline"}
-                  onClick={() => setVacancy(v)}
-                >
-                  {v === "all" ? "All" : v[0].toUpperCase() + v.slice(1)}
-                </Button>
-              ))}
-              <Input
-                className="h-8 w-48 text-sm"
-                placeholder="Search street…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
-              <label className="text-muted-foreground flex items-center gap-1 text-xs">
-                <input
-                  type="checkbox"
-                  checked={showHomes}
-                  onChange={(e) => setShowHomes(e.target.checked)}
-                />
-                Volunteer homes
-              </label>
-              {missingCoords > 0 && (
-                <span className="text-xs text-amber-700 dark:text-amber-400">
-                  {missingCoords} route(s) missing coordinates (not geocoded yet)
-                </span>
-              )}
-            </div>
-            <div className="min-h-0 flex-1">
-              <RouteMap
-                routes={mapRoutes}
-                homes={mapHomes}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-              />
-            </div>
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          {/* Map — fills available space, no rounding/padding */}
+          <div className="min-h-0 min-w-0 flex-1">
+            <RouteMap
+              routes={mapRoutes}
+              homes={mapHomes}
+              selectedId={selectedId}
+              onSelect={(id) => {
+                setCreating(false);
+                setSelectedId(id);
+              }}
+              boundsFitKey={`${vacancy}|${q.trim()}|${deliveryType}|${showHomes ? "homes" : "no-homes"}`}
+              boundsFitReady={!routes.isFetching && (!showHomes || !volunteers.isFetching)}
+              filterPlacement={filterPlacement}
+              search={q}
+              onSearchChange={setQ}
+              filterOpen={filterOpen}
+              onFilterToggle={() => setFilterOpen((o) => !o)}
+              vacancy={vacancy}
+              onVacancyChange={setVacancy}
+              deliveryType={deliveryType}
+              onDeliveryTypeChange={setDeliveryType}
+            />
           </div>
 
-          {/* Right rail: create form, detail, OR list */}
-          <div className="min-h-0 overflow-auto rounded-lg border">
+          {/* Right panel — border-left, no rounding, matches member side panel structure */}
+          <div className="flex h-full w-[400px] shrink-0 flex-col border-l border-border bg-bg">
             {creating ? (
               <CreateRoutePanel
                 onClose={() => setCreating(false)}
@@ -218,12 +477,40 @@ export function RoutesClient() {
                 }}
               />
             ) : (
-              <RouteList
-                routes={routes.data ?? []}
-                loading={routes.isLoading}
-                error={routes.error?.message}
-                onSelect={setSelectedId}
-              />
+              <>
+                <div className="page-header-container">
+                  <span className="text-md font-semibold text-primary">Deliveries</span>
+                </div>
+                {filterPlacement === "sidepanel" && (
+                  <DeliveriesFilterSection
+                    search={q}
+                    onSearchChange={setQ}
+                    filterOpen={filterOpen}
+                    onFilterToggle={() => setFilterOpen((o) => !o)}
+                    vacancy={vacancy}
+                    onVacancyChange={setVacancy}
+                    deliveryType={deliveryType}
+                    onDeliveryTypeChange={setDeliveryType}
+                  />
+                )}
+                <div className="flex-1 overflow-y-auto px-4 py-4">
+                  <RouteList
+                    routes={listRoutes}
+                    loading={routes.isLoading}
+                    error={routes.error?.message}
+                    selectedId={selectedId}
+                    onSelect={(id) => {
+                      setCreating(false);
+                      setSelectedId(id);
+                    }}
+                    onClearSelection={() => setSelectedId(null)}
+                    onRoutesChanged={() => {
+                      qc.invalidateQueries({ queryKey: ["routes"] });
+                      qc.invalidateQueries({ queryKey: ["route-paths"] });
+                    }}
+                  />
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -236,36 +523,240 @@ function RouteList(props: {
   routes: RouteSummary[];
   loading: boolean;
   error?: string;
+  selectedId: string | null;
   onSelect: (id: string) => void;
+  onClearSelection: () => void;
+  onRoutesChanged: () => void;
 }) {
-  if (props.loading) return <p className="text-muted-foreground p-4 text-sm">Loading routes…</p>;
-  if (props.error) return <p className="p-4 text-sm text-red-600">{props.error}</p>;
-  if (props.routes.length === 0)
-    return <p className="text-muted-foreground p-4 text-sm">No routes match.</p>;
+  if (props.loading) return <p className="text-md text-secondary">Loading routes…</p>;
+  if (props.error) return <p className="text-md text-destructive">{props.error}</p>;
+  if (props.routes.length === 0) return <p className="text-md text-secondary">No routes match.</p>;
 
   return (
-    <ul className="divide-y">
+    <div className="flex flex-col gap-2">
       {props.routes.map((r) => {
-        const badge = stateBadge(r);
+        const isVacant = r.lifecycle === "vacant";
+        const volunteerName = r.assignedVolunteer
+          ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
+          : "vacant";
+
         return (
-          <li key={r.id}>
-            <button
-              className="hover:bg-muted/50 flex w-full flex-col gap-0.5 px-4 py-2 text-left"
-              onClick={() => props.onSelect(r.id)}
-            >
-              <span className="text-sm font-medium">{r.streetName}</span>
-              <span className="text-muted-foreground text-xs">
-                {r.assignedVolunteer
-                  ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
-                  : "—"}
-                {r.captain ? ` · ${r.captain.name}` : ""}
-              </span>
-              <span className={cn("text-xs", badge.tone)}>{badge.label}</span>
-            </button>
-          </li>
+          // TODO: Harmonize SidePanelRow height with members (h-8 vs h-10 here).
+          <SidePanelRow
+            key={r.id}
+            className="h-10 px-2 py-2"
+            meta={
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-md text-secondary">{volunteerName}</span>
+                <RouteActionsMenu
+                  routeId={r.id}
+                  hasVolunteer={Boolean(r.assignedVolunteer)}
+                  onOpenDetails={() => props.onSelect(r.id)}
+                  onChanged={props.onRoutesChanged}
+                  onRetired={() => {
+                    if (props.selectedId === r.id) props.onClearSelection();
+                  }}
+                />
+              </div>
+            }
+            onClick={() => props.onSelect(r.id)}
+          >
+            <RouteTag label={routeLabel(r)} vacant={isVacant} />
+          </SidePanelRow>
         );
       })}
-    </ul>
+    </div>
+  );
+}
+
+/** Labeled DropdownMenu — Figma Input Group + list-group radio items. */
+function DropdownField(props: {
+  label: string;
+  value: string;
+  display: string;
+  options: { value: string; label: string }[];
+  onChange?: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const isDisabled = props.disabled || !props.onChange;
+
+  return (
+    <SidePanelField label={props.label}>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          disabled={isDisabled}
+          render={<button type="button" className={inputTriggerClassName} />}
+        >
+          <span className={cn("min-w-0 truncate", isDisabled && "text-secondary")}>
+            {props.display}
+          </span>
+          <ChevronDown className={cn("size-3 shrink-0", !isDisabled && "text-primary")} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="min-w-[var(--anchor-width)]">
+          <DropdownMenuRadioGroup value={props.value} onValueChange={props.onChange}>
+            {props.options.map((opt) => (
+              <DropdownMenuRadioItem key={opt.value || "__empty"} value={opt.value}>
+                {opt.label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </SidePanelField>
+  );
+}
+
+function RouteActionsMenu(props: {
+  routeId: string;
+  hasVolunteer: boolean;
+  onOpenDetails: () => void;
+  onChanged: () => void;
+  onRetired: () => void;
+  /** Hide when already viewing route detail (header menu). */
+  showRouteDetails?: boolean;
+}) {
+  const qc = useQueryClient();
+  const showRouteDetails = props.showRouteDetails ?? true;
+
+  const retireRoute = useMutation({
+    mutationFn: () => api.del(`/api/routes/${props.routeId}`),
+    onSuccess: () => {
+      props.onRetired();
+      props.onChanged();
+      void qc.invalidateQueries({ queryKey: ["route", props.routeId] });
+    },
+  });
+
+  const unassignRoute = useMutation({
+    mutationFn: () => api.post(`/api/routes/${props.routeId}/unassign`),
+    onSuccess: () => {
+      props.onChanged();
+      void qc.invalidateQueries({ queryKey: ["route", props.routeId] });
+    },
+  });
+
+  function stopRowClick(e?: React.MouseEvent) {
+    e?.stopPropagation();
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label="Route actions"
+        render={
+          <Button
+            variant="text"
+            size="icon-sm"
+            className="shrink-0 text-secondary"
+            onClick={stopRowClick}
+          />
+        }
+      >
+        <MoreHorizontal className="size-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {showRouteDetails ? (
+          <DropdownMenuItem
+            onClick={(e) => {
+              stopRowClick(e);
+              props.onOpenDetails();
+            }}
+          >
+            Route details
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuItem
+          disabled={!props.hasVolunteer || unassignRoute.isPending}
+          onClick={(e) => {
+            stopRowClick(e);
+            if (!window.confirm("Unassign the volunteer from this route?")) return;
+            unassignRoute.mutate();
+          }}
+        >
+          {unassignRoute.isPending ? "Unassigning…" : "Unassign"}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          variant="destructive"
+          disabled={retireRoute.isPending}
+          onClick={(e) => {
+            stopRowClick(e);
+            if (
+              !window.confirm(
+                "Retire this route? It will be removed from active views. Past delivery history is preserved.",
+              )
+            ) {
+              return;
+            }
+            retireRoute.mutate();
+          }}
+        >
+          {retireRoute.isPending ? "Retiring…" : "Retire route"}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** Labeled text input matching Figma Input Group. */
+function InputField(props: {
+  label: string;
+  value: string;
+  onChange?: (value: string) => void;
+  placeholder?: string;
+  type?: string;
+  labelSuffix?: string;
+}) {
+  return (
+    <SidePanelField label={props.label} labelSuffix={props.labelSuffix}>
+      <Input
+        value={props.value}
+        onChange={props.onChange ? (e) => props.onChange!(e.target.value) : undefined}
+        readOnly={!props.onChange}
+        placeholder={props.placeholder}
+        type={props.type}
+      />
+    </SidePanelField>
+  );
+}
+
+/** Point delivery (drop): start and end resolve to the same place. */
+function isDropRoute(r: RouteDetail): boolean {
+  const start = r.startAddress.formattedAddress?.trim();
+  const end = r.endAddress.formattedAddress?.trim();
+  if (start && end && start === end) return true;
+  if (
+    r.start &&
+    r.end &&
+    r.start.latitude === r.end.latitude &&
+    r.start.longitude === r.end.longitude
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function dropLabel(r: RouteDetail): string {
+  const addr =
+    r.startAddress.formattedAddress?.split(",")[0]?.trim() || r.startLabel || r.streetName;
+  return `${r.streetName} · ${addr}`;
+}
+
+function DetailBreadcrumb(props: { title: string; onBack: () => void; actions?: React.ReactNode }) {
+  return (
+    <div className="flex h-[64px] items-center justify-between gap-2 border-b border-border pl-6 pr-4">
+      <div className="flex min-w-0 items-center gap-2.5 text-md font-semibold">
+        <button
+          type="button"
+          className="shrink-0 text-secondary hover:text-primary"
+          onClick={props.onBack}
+        >
+          Deliveries
+        </button>
+        <span className="text-secondary">&gt;</span>
+        <span className="truncate text-primary">{props.title}</span>
+      </div>
+      {props.actions}
+    </div>
   );
 }
 
@@ -281,168 +772,190 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
 
   const [streetName, setStreetName] = useState<string | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
-  const [assignVolunteerId, setAssignVolunteerId] = useState("");
+  const [volunteerId, setVolunteerId] = useState<string | null>(null);
+  const [side, setSide] = useState<string | null>(null);
+  const [papersRows, setPapersRows] = useState<number[] | null>(null);
 
   const r = detail.data;
+  const baselineBundles = r ? (r.bundles.length > 0 ? r.bundles : greedySplit(r.papers)) : [];
   const dirtyStreet = streetName !== null && r && streetName !== r.streetName;
   const dirtyNotes = notes !== null && r && (notes || null) !== (r.notes || null);
-  const dirty = dirtyStreet || dirtyNotes;
+  const dirtyVolunteer =
+    volunteerId !== null && r && volunteerId !== (r.assignedVolunteer?.id ?? "");
+  const dirtySide = side !== null && r && (side || null) !== (r.side || null);
+  const dirtyBundles = papersRows !== null && r && bundlesDiffer(papersRows, baselineBundles);
+  const dirty = dirtyStreet || dirtyNotes || dirtyVolunteer || dirtySide || dirtyBundles;
 
   const save = useMutation({
     mutationFn: async () => {
       const body: Record<string, unknown> = {};
       if (dirtyStreet) body.streetName = streetName;
       if (dirtyNotes) body.note = notes ?? "";
-      return sendJson(`/api/routes/${props.routeId}`, "PATCH", body);
+      if (dirtySide) body.side = side || null;
+      if (dirtyBundles && papersRows) {
+        const bundles = toBundles(papersRows);
+        if (bundles.length === 0) {
+          throw new Error("Add at least one bundle with a paper count.");
+        }
+        body.bundles = bundles;
+      }
+      if (Object.keys(body).length > 0) {
+        await sendJson(`/api/routes/${props.routeId}`, "PATCH", body);
+      }
+      if (dirtyVolunteer && volunteerId !== null) {
+        const currentId = r?.assignedVolunteer?.id;
+        if (volunteerId && volunteerId !== currentId) {
+          const action = currentId ? "reassign" : "assign";
+          await sendJson(`/api/routes/${props.routeId}/${action}`, "POST", { volunteerId });
+        } else if (!volunteerId && currentId) {
+          await sendJson(`/api/routes/${props.routeId}/unassign`, "POST");
+        }
+      }
     },
     onSuccess: () => {
       setStreetName(null);
       setNotes(null);
+      setVolunteerId(null);
+      setSide(null);
+      setPapersRows(null);
       detail.refetch();
       props.onChanged();
     },
   });
 
-  const assign = useMutation({
-    mutationFn: (volunteerId: string) => {
-      const action = r?.lifecycle === "assigned" ? "reassign" : "assign";
-      return sendJson(`/api/routes/${props.routeId}/${action}`, "POST", { volunteerId });
-    },
-    onSuccess: () => {
-      setAssignVolunteerId("");
-      detail.refetch();
-      props.onChanged();
-    },
-  });
-  const unassign = useMutation({
-    mutationFn: () => sendJson(`/api/routes/${props.routeId}/unassign`, "POST"),
-    onSuccess: () => {
-      detail.refetch();
-      props.onChanged();
-    },
-  });
+  function discard() {
+    setStreetName(null);
+    setNotes(null);
+    setVolunteerId(null);
+    setSide(null);
+    setPapersRows(null);
+  }
 
-  if (detail.isLoading) return <p className="text-muted-foreground p-4 text-sm">Loading…</p>;
-  if (detail.error) return <p className="p-4 text-sm text-red-600">{detail.error.message}</p>;
+  if (detail.isLoading) return <p className="px-6 py-4 text-md text-secondary">Loading…</p>;
+  if (detail.error)
+    return <p className="px-6 py-4 text-md text-destructive">{detail.error.message}</p>;
   if (!r) return null;
 
-  const badge = stateBadge(r);
+  const currentVolunteerId = volunteerId ?? r.assignedVolunteer?.id ?? "";
+  const currentSide = side ?? r.side ?? "";
+  const currentPapersRows = papersRows ?? papersRowsFromRoute(r);
+  const asDrop = isDropRoute(r);
+
+  const volunteerOptions = [
+    { value: "", label: "— vacant —" },
+    ...(volunteers.data ?? []).map((v) => ({
+      value: v.id,
+      label: `${v.firstName} ${v.lastName}`,
+    })),
+  ];
+
+  const volunteerDisplay =
+    volunteerOptions.find((o) => o.value === currentVolunteerId)?.label ?? "— vacant —";
+  const sideDisplay = SIDE_OPTIONS.find((o) => o.value === currentSide)?.label ?? "— none —";
+  const captainDisplay = r.captain?.name ?? "— no captain —";
 
   return (
-    <div className="flex flex-col gap-3 p-4">
-      <div className="flex items-center justify-between">
-        <button className="text-muted-foreground text-xs underline" onClick={props.onClose}>
-          ← Back to list
-        </button>
-        <span className={cn("text-xs font-medium", badge.tone)}>{badge.label}</span>
-      </div>
-
-      <div>
-        <Label className="text-xs">Street name</Label>
-        <Input
-          className="h-8 text-sm"
-          value={streetName ?? r.streetName}
-          onChange={(e) => setStreetName(e.target.value)}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 text-sm">
-        <div>
-          <Label className="text-xs">Captain</Label>
-          <p className="text-muted-foreground">{r.captain?.name ?? "—"}</p>
-        </div>
-        <div>
-          <Label className="text-xs">Volunteer</Label>
-          <p className="text-muted-foreground">
-            {r.assignedVolunteer
-              ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
-              : "—"}
-          </p>
-        </div>
-        <div>
-          <Label className="text-xs">Start address</Label>
-          <p className="text-muted-foreground">{r.startAddress.formattedAddress ?? "—"}</p>
-        </div>
-        <div>
-          <Label className="text-xs">End address</Label>
-          <p className="text-muted-foreground">{r.endAddress.formattedAddress ?? "—"}</p>
-        </div>
-        <div>
-          <Label className="text-xs">House count</Label>
-          <p className="text-muted-foreground">{r.effectiveHouseCount}</p>
-        </div>
-        <div>
-          <Label className="text-xs">Papers</Label>
-          <p className="text-muted-foreground">{r.papers}</p>
-        </div>
-      </div>
-
-      <div>
-        <Label className="text-xs">Route notes</Label>
-        <textarea
-          className="border-input bg-bg min-h-16 w-full rounded-md border p-2 text-sm"
-          value={notes ?? r.notes ?? ""}
-          onChange={(e) => setNotes(e.target.value)}
-        />
-      </div>
-
-      {/* Assignment controls — the functional heart of the routes page. */}
-      <div className="rounded-md border p-2">
-        <Label className="text-xs">Assignment</Label>
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <select
-            className="border-input bg-bg h-8 rounded-md border px-2 text-sm"
-            value={assignVolunteerId}
-            onChange={(e) => setAssignVolunteerId(e.target.value)}
-          >
-            <option value="">— pick a volunteer —</option>
-            {(volunteers.data ?? []).map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.firstName} {v.lastName}
-              </option>
-            ))}
-          </select>
-          <Button
-            size="sm"
-            disabled={!assignVolunteerId || assign.isPending}
-            onClick={() => assign.mutate(assignVolunteerId)}
-          >
-            {r.lifecycle === "assigned" ? "Reassign" : "Assign"}
-          </Button>
-          {r.lifecycle === "assigned" && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={unassign.isPending}
-              onClick={() => unassign.mutate()}
-            >
-              Unassign
-            </Button>
-          )}
-        </div>
-        {(assign.error || unassign.error) && (
-          <p className="mt-1 text-xs text-red-600">{(assign.error ?? unassign.error)?.message}</p>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Button size="sm" disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
-          {save.isPending ? "Saving…" : "Save changes"}
-        </Button>
-        {dirty && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setStreetName(null);
-              setNotes(null);
+    <div className="flex h-full flex-col">
+      <DetailBreadcrumb
+        title={asDrop ? dropLabel(r) : routeLabel(r)}
+        onBack={props.onClose}
+        actions={
+          <RouteActionsMenu
+            routeId={props.routeId}
+            hasVolunteer={Boolean(r.assignedVolunteer)}
+            showRouteDetails={false}
+            onOpenDetails={() => {}}
+            onChanged={() => {
+              setVolunteerId(null);
+              detail.refetch();
+              props.onChanged();
             }}
-          >
-            Discard
-          </Button>
+            onRetired={props.onClose}
+          />
+        }
+      />
+
+      <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-4">
+        {!asDrop && (
+          <DropdownField
+            label="Volunteer"
+            value={currentVolunteerId}
+            display={volunteerDisplay}
+            options={volunteerOptions}
+            onChange={setVolunteerId}
+          />
         )}
-        {save.error && <span className="text-xs text-red-600">{save.error.message}</span>}
+
+        {/* Captain is derived via the volunteer — display only (route flow §4). */}
+        <DropdownField
+          label="Captain"
+          value={r.captain?.id ?? ""}
+          display={captainDisplay}
+          options={
+            r.captain
+              ? [{ value: r.captain.id, label: r.captain.name }]
+              : [{ value: "", label: "— no captain —" }]
+          }
+          disabled
+        />
+
+        <InputField label="Name" value={streetName ?? r.streetName} onChange={setStreetName} />
+
+        {asDrop ? (
+          // TODO(abeer): wire address editing — drop Address should use Places
+          // Autocomplete like create, then PATCH start/end together.
+          <InputField
+            label="Address"
+            value={r.startAddress.formattedAddress ?? ""}
+            placeholder="Address"
+          />
+        ) : (
+          <>
+            {/* TODO(abeer): Start/End Address editing needs Places Autocomplete
+                + PATCH startAddress/endAddress — currently read-only formatted strings. */}
+            <InputField
+              label="Start Address"
+              value={r.startAddress.formattedAddress ?? ""}
+              placeholder="Start address"
+            />
+            <InputField
+              label="End Address"
+              value={r.endAddress.formattedAddress ?? ""}
+              placeholder="End address"
+            />
+            <DropdownField
+              label="Side"
+              value={currentSide}
+              display={sideDisplay}
+              options={[...SIDE_OPTIONS]}
+              onChange={setSide}
+            />
+          </>
+        )}
+
+        <BundlePapersTable value={currentPapersRows} onChange={setPapersRows} />
+
+        <SidePanelField label={asDrop ? "Drop Notes" : "Route Notes"} labelSuffix="(optional)">
+          <textarea
+            className="w-full rounded-[8px] border border-hairline bg-bg px-3 py-2 text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40"
+            rows={4}
+            value={notes ?? r.notes ?? ""}
+            onChange={(e) => setNotes(e.target.value)}
+          />
+        </SidePanelField>
       </div>
+
+      {dirty && (
+        <div className="panel-header shrink-0 justify-end gap-2 border-t border-border">
+          <Button variant="default" onClick={discard}>
+            Discard Changes
+          </Button>
+          <Button variant="primary" disabled={save.isPending} onClick={() => save.mutate()}>
+            {save.isPending ? "Saving…" : "Save Changes"}
+          </Button>
+          {save.error && <span className="text-md text-destructive">{save.error.message}</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -462,17 +975,13 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
   const [streetName, setStreetName] = useState("");
   const [startLine, setStartLine] = useState("");
   const [endLine, setEndLine] = useState("");
-  // Set when a suggestion is picked; cleared when the text is edited again.
   const [startPlaceId, setStartPlaceId] = useState<string | null>(null);
   const [endPlaceId, setEndPlaceId] = useState<string | null>(null);
-  const [houseCount, setHouseCount] = useState("0");
-  const [papers, setPapers] = useState("0");
+  const [papersRows, setPapersRows] = useState<number[]>([0]);
   const [side, setSide] = useState("");
   const [volunteerId, setVolunteerId] = useState("");
   const [note, setNote] = useState("");
 
-  // A picked suggestion resolves exactly by placeId. Otherwise fall back to the
-  // typed text — Toronto is implied for every route Beach Metro covers.
   const address = (line: string, placeId: string | null) =>
     placeId
       ? { placeId }
@@ -483,14 +992,16 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
           regionCode: "CA" as const,
         };
 
+  const bundles = toBundles(papersRows);
+
   const create = useMutation({
     mutationFn: () =>
       sendJson<RouteDetail>("/api/routes", "POST", {
         streetName: streetName.trim(),
         startAddress: address(startLine, startPlaceId),
         endAddress: address(endLine, endPlaceId),
-        houseCount: Number(houseCount) || 0,
-        papers: Number(papers) || 0,
+        houseCount: 0,
+        bundles,
         ...(side ? { side } : {}),
         ...(volunteerId ? { assignedVolunteerId: volunteerId } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
@@ -498,121 +1009,101 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
     onSuccess: (route) => props.onCreated(route.id),
   });
 
-  const ready = streetName.trim() && startLine.trim() && endLine.trim();
+  const ready = streetName.trim() && startLine.trim() && endLine.trim() && bundles.length > 0;
+
+  const volunteerOptions = [
+    { value: "", label: "— leave vacant —" },
+    ...(volunteers.data ?? []).map((v) => ({
+      value: v.id,
+      label: `${v.firstName} ${v.lastName}`,
+    })),
+  ];
+  const volunteerDisplay =
+    volunteerOptions.find((o) => o.value === volunteerId)?.label ?? "— leave vacant —";
+  const sideDisplay = SIDE_OPTIONS.find((o) => o.value === side)?.label ?? "— none —";
 
   return (
-    <div className="flex flex-col gap-3 p-4">
-      <div className="flex items-center justify-between">
-        <button className="text-muted-foreground text-xs underline" onClick={props.onClose}>
-          ← Back to list
-        </button>
-        <span className="text-xs font-medium">New route</span>
-      </div>
-      <div>
-        <Label className="text-xs">Street name</Label>
-        <Input
-          className="h-8 text-sm"
-          placeholder="Queen St E"
-          value={streetName}
-          onChange={(e) => setStreetName(e.target.value)}
-        />
-      </div>
-      <AddressField
-        label="Start address"
-        placeholder="1900 Queen St E"
-        value={startLine}
-        onChange={(text) => {
-          setStartLine(text);
-          setStartPlaceId(null); // edited by hand — no longer an exact match
-        }}
-        onPick={(placeId, text) => {
-          setStartPlaceId(placeId);
-          setStartLine(text);
-        }}
-      />
-      <AddressField
-        label="End address"
-        placeholder="2100 Queen St E"
-        value={endLine}
-        onChange={(text) => {
-          setEndLine(text);
-          setEndPlaceId(null);
-        }}
-        onPick={(placeId, text) => {
-          setEndPlaceId(placeId);
-          setEndLine(text);
-        }}
-      />
+    <div className="flex h-full flex-col">
+      <DetailBreadcrumb title="New route" onBack={props.onClose} />
 
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <Label className="text-xs">House count</Label>
-          <Input
-            className="h-8 text-sm"
-            type="number"
-            min={0}
-            value={houseCount}
-            onChange={(e) => setHouseCount(e.target.value)}
-          />
-        </div>
-        <div>
-          <Label className="text-xs">Papers</Label>
-          <Input
-            className="h-8 text-sm"
-            type="number"
-            min={0}
-            value={papers}
-            onChange={(e) => setPapers(e.target.value)}
-          />
-        </div>
-      </div>
-      <div>
-        <Label className="text-xs">Side (optional)</Label>
-        <select
-          className="border-input bg-bg h-8 w-full rounded-md border px-2 text-sm"
-          value={side}
-          onChange={(e) => setSide(e.target.value)}
-        >
-          <option value="">— none —</option>
-          {["NORTH", "SOUTH", "EAST", "WEST", "BOTH"].map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <Label className="text-xs">Assign volunteer (optional)</Label>
-        <select
-          className="border-input bg-bg h-8 w-full rounded-md border px-2 text-sm"
+      <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-4">
+        <DropdownField
+          label="Volunteer"
           value={volunteerId}
-          onChange={(e) => setVolunteerId(e.target.value)}
-        >
-          <option value="">— leave vacant —</option>
-          {(volunteers.data ?? []).map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.firstName} {v.lastName}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <Label className="text-xs">Route notes (optional)</Label>
-        <textarea
-          className="border-input bg-bg min-h-16 w-full rounded-md border p-2 text-sm"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
+          display={volunteerDisplay}
+          options={volunteerOptions}
+          onChange={setVolunteerId}
         />
+
+        <InputField
+          label="Name"
+          value={streetName}
+          onChange={setStreetName}
+          placeholder="Queen St E"
+        />
+
+        <AddressField
+          label="Start Address"
+          placeholder="1900 Queen St E"
+          value={startLine}
+          onChange={(text) => {
+            setStartLine(text);
+            setStartPlaceId(null);
+          }}
+          onPick={(placeId, text) => {
+            setStartPlaceId(placeId);
+            setStartLine(text);
+          }}
+        />
+
+        <AddressField
+          label="End Address"
+          placeholder="2100 Queen St E"
+          value={endLine}
+          onChange={(text) => {
+            setEndLine(text);
+            setEndPlaceId(null);
+          }}
+          onPick={(placeId, text) => {
+            setEndPlaceId(placeId);
+            setEndLine(text);
+          }}
+        />
+
+        <DropdownField
+          label="Side"
+          value={side}
+          display={sideDisplay}
+          options={[...SIDE_OPTIONS]}
+          onChange={setSide}
+        />
+
+        <BundlePapersTable value={papersRows} onChange={setPapersRows} startEditingLast />
+
+        <SidePanelField label="Route Notes" labelSuffix="(optional)">
+          <textarea
+            className="w-full rounded-[8px] border border-hairline bg-bg px-3 py-2 text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40"
+            rows={4}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </SidePanelField>
+
+        {create.error && <p className="text-md text-destructive">{create.error.message}</p>}
       </div>
-      <div className="flex items-center gap-2">
-        <Button size="sm" disabled={!ready || create.isPending} onClick={() => create.mutate()}>
-          {create.isPending ? "Creating…" : "Create route"}
-        </Button>
-        <Button size="sm" variant="outline" onClick={props.onClose}>
+
+      <div className="panel-header shrink-0 justify-end gap-2 border-t border-border">
+        <Button variant="default" onClick={props.onClose}>
           Cancel
         </Button>
+        <Button
+          variant="primary"
+          disabled={!ready || create.isPending}
+          onClick={() => create.mutate()}
+        >
+          {create.isPending ? "Creating…" : "Create Route"}
+        </Button>
       </div>
-      {create.error && <p className="text-xs text-red-600">{create.error.message}</p>}
     </div>
   );
 }

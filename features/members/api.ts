@@ -261,9 +261,23 @@ export function useUpdateVolunteer(id: string) {
   return useMutation({
     mutationFn: (body: UpdateVolunteerBody) =>
       api.patch<VolunteerDetail>(`/api/volunteers/${id}`, body),
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
+      const prev = queryClient.getQueryData<VolunteerDetail>(memberKeys.volunteer(id));
+      const oldTerritoryId = prev?.territory?.id ?? null;
+      const newTerritoryId = data.territory?.id ?? null;
+
       queryClient.invalidateQueries({ queryKey: memberKeys.all });
       queryClient.invalidateQueries({ queryKey: memberKeys.volunteer(id) });
+
+      if (variables.captainTerritoryId !== undefined) {
+        queryClient.invalidateQueries({ queryKey: territoryDropKeys.all });
+        if (oldTerritoryId) {
+          queryClient.invalidateQueries({ queryKey: memberKeys.territory(oldTerritoryId) });
+        }
+        if (newTerritoryId && newTerritoryId !== oldTerritoryId) {
+          queryClient.invalidateQueries({ queryKey: memberKeys.territory(newTerritoryId) });
+        }
+      }
     },
   });
 }

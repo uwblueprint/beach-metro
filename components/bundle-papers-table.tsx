@@ -41,6 +41,10 @@ function BundlePapersTable({
     }
   }, [editingIndex]);
 
+  useEffect(() => {
+    if (value.length === 0) onChange([0]);
+  }, [value.length, onChange]);
+
   function startEdit(index: number) {
     setEditingIndex(index);
     setDraft(value[index] ? String(value[index]) : "");
@@ -64,14 +68,17 @@ function BundlePapersTable({
   }
 
   function removeRow(index: number) {
+    if (value.length <= 1) return;
     onChange(value.filter((_, i) => i !== index));
     if (editingIndex === index) setEditingIndex(null);
     else if (editingIndex != null && editingIndex > index) setEditingIndex(editingIndex - 1);
   }
 
+  const canRemoveRow = value.length > 1;
+
   return (
     <div className={cn("flex w-full flex-col gap-1", className)}>
-      <div className="flex h-10 items-center rounded-[8px] bg-bg-secondary p-2">
+      <div className="flex h-10 items-center rounded-[8px] bg-bg-secondary px-2 py-2">
         <span className="min-w-0 flex-1 text-md text-secondary">Bundle</span>
         <span className="min-w-0 flex-1 text-md text-secondary">Papers</span>
         <div className="flex w-6 shrink-0 items-center justify-end">
@@ -88,7 +95,7 @@ function BundlePapersTable({
       </div>
 
       {value.map((papers, index) => (
-        <div key={index} className="group/bundle flex h-10 items-center justify-between px-2 py-1">
+        <div key={index} className="group/bundle flex h-10 items-center px-2 py-1">
           <span className="min-w-0 flex-1 tabular-nums text-md text-secondary">{index + 1}</span>
           <div className="min-w-0 flex-1">
             {editingIndex === index ? (
@@ -110,7 +117,7 @@ function BundlePapersTable({
                     setEditingIndex(null);
                   }
                 }}
-                className={cn(inputFieldClassName, "h-8 rounded-[4px] px-2 py-1")}
+                className={cn(inputFieldClassName, "h-8 rounded-[4px] px-0 py-1")}
               />
             ) : (
               <button
@@ -131,16 +138,18 @@ function BundlePapersTable({
             )}
           </div>
           <div className="flex w-6 shrink-0 items-center justify-end">
-            <Button
-              type="button"
-              variant="text"
-              size="icon-sm"
-              aria-label={`Remove bundle ${index + 1}`}
-              className="opacity-0 transition-opacity group-hover/bundle:opacity-100 focus-visible:opacity-100"
-              onClick={() => removeRow(index)}
-            >
-              <Trash2 className="size-3" />
-            </Button>
+            {canRemoveRow ? (
+              <Button
+                type="button"
+                variant="text"
+                size="icon-sm"
+                aria-label={`Remove bundle ${index + 1}`}
+                className="opacity-0 transition-opacity group-hover/bundle:opacity-100 focus-visible:opacity-100"
+                onClick={() => removeRow(index)}
+              >
+                <Trash2 className="size-3" />
+              </Button>
+            ) : null}
           </div>
         </div>
       ))}

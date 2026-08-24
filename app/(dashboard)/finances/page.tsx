@@ -1066,10 +1066,15 @@ export default function FinancesPage() {
               </div>
 
               <DialogFooter className="mt-0 justify-end gap-2 border-t-0 p-0">
-                <Button type="button" variant="outline" onClick={closeCreateTableDialog}>
+                <Button type="button" variant="default" onClick={closeCreateTableDialog}>
                   Cancel
                 </Button>
-                <Button type="button" disabled={!newTableName.trim()} onClick={handleCreateTable}>
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled={!newTableName.trim()}
+                  onClick={handleCreateTable}
+                >
                   Create Table
                 </Button>
               </DialogFooter>
@@ -1100,7 +1105,7 @@ export default function FinancesPage() {
               </div>
 
               <DialogFooter className="mt-0 gap-2 border-t border-border px-6 py-4">
-                <Button type="button" variant="outline" onClick={closeConfirmDialog}>
+                <Button type="button" variant="default" onClick={closeConfirmDialog}>
                   Cancel
                 </Button>
                 <Button

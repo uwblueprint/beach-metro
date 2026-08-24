@@ -71,15 +71,14 @@ export function AddressField(props: {
   }
 
   return (
-    <div className={cn("relative", props.className)}>
+    <div className={cn("relative flex flex-col gap-2", props.className)}>
       {props.label ? (
-        <Label htmlFor={props.id} className="text-xs">
+        <Label htmlFor={props.id} className="text-md font-normal text-primary">
           {props.label}
         </Label>
       ) : null}
       <Input
         id={props.id}
-        className="h-8 text-sm"
         placeholder={props.placeholder}
         value={value}
         autoComplete="off"
@@ -103,7 +102,7 @@ export function AddressField(props: {
         }}
       />
       {open && visible.length > 0 ? (
-        <ul className="bg-bg absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border shadow-md">
+        <ul className="bg-bg absolute top-full z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border shadow-md">
           {visible.map((s, i) => (
             <li key={s.placeId}>
               <button

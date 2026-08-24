@@ -8,36 +8,37 @@ import { cn } from "@/lib/utils";
 
 interface SidePanelRowProps {
   children: ReactNode;
-  meta?: string;
+  meta?: ReactNode;
   onEdit?: () => void;
+  /** When set, the row is clickable (e.g. selectable deliveries). Uses a div when onEdit is also set. */
   onClick?: () => void;
   className?: string;
 }
 
 function SidePanelRow({ children, meta, onEdit, onClick, className }: SidePanelRowProps) {
-  return (
-    <div
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onClick={onClick}
-      onKeyDown={
-        onClick
-          ? (e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onClick();
-              }
-            }
-          : undefined
-      }
-      className={cn(
-        "group/row relative flex h-8 items-center gap-2 overflow-hidden rounded-[4px] px-2 py-1",
-        onClick && "cursor-pointer hover:bg-tag-hover/60",
-        className,
-      )}
-    >
+  // Left pad is 0 so row text sits on the panel’s 24px content inset.
+  // Tags with px-2 sit flush with that inset; avoid negative margin here — overflow-hidden clips it.
+  const classes = cn(
+    "group/row relative flex h-8 items-center gap-2 overflow-hidden rounded-[4px] py-1 pr-2",
+    onClick && "w-full cursor-pointer text-left outline-none",
+    // Full-row hover is for selectable lists (e.g. deliveries). Edit rows use the right-side gradient + pencil only.
+    onClick &&
+      !onEdit &&
+      "transition-colors hover:bg-tag-hover focus-visible:ring-3 focus-visible:ring-ring/50",
+    className,
+  );
+
+  const metaContent =
+    meta == null ? null : typeof meta === "string" ? (
+      <span className="shrink-0 text-md text-secondary">{meta}</span>
+    ) : (
+      meta
+    );
+
+  const content = (
+    <>
       <div className="min-w-0 flex-1 truncate text-md">{children}</div>
-      {meta && <span className="shrink-0 text-md text-secondary">{meta}</span>}
+      {metaContent}
       {onEdit && (
         <>
           <div
@@ -60,6 +61,35 @@ function SidePanelRow({ children, meta, onEdit, onClick, className }: SidePanelR
           </div>
         </>
       )}
+    </>
+  );
+
+  if (onClick && !onEdit) {
+    return (
+      <button type="button" className={classes} onClick={onClick}>
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+      className={classes}
+    >
+      {content}
     </div>
   );
 }

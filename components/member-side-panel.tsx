@@ -5,15 +5,18 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { AddressField } from "@/components/address-field";
+import { Attribute } from "@/components/attribute";
 import { Button } from "@/components/ui/button";
 import { NewTerritoryDropDialog, type DropSelection } from "@/components/new-territory-drop-dialog";
 import { NotesSection } from "@/components/notes-section";
 import { RouteDetailsDialog } from "@/components/route-details-dialog";
+import { SidePanelField } from "@/components/side-panel-field";
 import { SidePanelRow } from "@/components/side-panel-row";
 import { SidePanelSection } from "@/components/side-panel-section";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { ApiError } from "@/lib/api/client";
+import { cn } from "@/lib/utils";
 import {
   memberKeys,
   useCaptain,
@@ -26,7 +29,17 @@ import {
   useVolunteer,
   type MemberRole,
 } from "@/features/members/api";
-import { territoryDropKeys, useCaptainsList } from "@/features/territory-drops/api";
+import { territoryDropKeys, useTerritorySummaries } from "@/features/territory-drops/api";
+
+/** Active captains as territory options — includes empty territories (0 volunteers). */
+function captainTerritoryOptions(
+  territories: { id: string; captain: { name: string; retired: boolean } | null }[] | undefined,
+) {
+  return (territories ?? [])
+    .filter((t) => t.captain && !t.captain.retired)
+    .map((t) => ({ value: t.id, label: t.captain!.name }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
 
 function todayIso(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -92,34 +105,6 @@ const CADENCE_LABEL: Record<string, string> = {
   monthly: "Monthly",
 };
 
-function InfoField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-[4px] px-2 pb-2 pt-1">
-      <span className="text-md text-secondary">{label}</span>
-      <span className="text-md text-primary">{value}</span>
-    </div>
-  );
-}
-
-function EditableField({
-  label,
-  htmlFor,
-  children,
-}: {
-  label: string;
-  htmlFor: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1 rounded-[4px] px-2 pb-2 pt-1">
-      <label htmlFor={htmlFor} className="text-md text-secondary">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
 function RoleTag({ role }: { role: MemberRole }) {
   return (
     <span className="inline-flex items-center justify-center rounded-lg bg-tag-active px-2 py-1 text-md text-active">
@@ -132,6 +117,7 @@ function VolunteerContent({ id }: { id: string }) {
   const queryClient = useQueryClient();
   const { data: volunteer, isPending, isError, error } = useVolunteer(id);
   const updateVolunteer = useUpdateVolunteer(id);
+  const { data: territories } = useTerritorySummaries();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -140,17 +126,18 @@ function VolunteerContent({ id }: { id: string }) {
   const [address, setAddress] = useState("");
   const [addressPlaceId, setAddressPlaceId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState("");
+  const [captainTerritoryId, setCaptainTerritoryId] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
 
   if (isError) {
     return (
-      <p className="px-2 text-md text-secondary">
+      <p className="text-md text-secondary">
         {error instanceof Error ? error.message : "Could not load this volunteer."}
       </p>
     );
   }
   if (isPending || !volunteer) {
-    return <p className="px-2 text-md text-secondary">Loading…</p>;
+    return <p className="text-md text-secondary">Loading…</p>;
   }
 
   const totalBundles = volunteer.routesCarried.reduce((s, r) => s + r.bundleCount, 0);
@@ -173,6 +160,7 @@ function VolunteerContent({ id }: { id: string }) {
     setAddress(currentAddress);
     setAddressPlaceId(volunteer!.address.placeId);
     setStartDate(volunteer!.startDate);
+    setCaptainTerritoryId(volunteer!.territory?.id ?? "");
     setSaveError(null);
     setEditing(true);
   }
@@ -204,6 +192,7 @@ function VolunteerContent({ id }: { id: string }) {
       phone?: string;
       startDate?: string;
       address?: { addressLines: string[] } | { placeId: string };
+      captainTerritoryId?: string | null;
     } = {};
     if (trimmedEmail !== volunteer!.email) body.email = trimmedEmail;
     if (trimmedPhone !== volunteer!.phone) body.phone = trimmedPhone;
@@ -214,6 +203,11 @@ function VolunteerContent({ id }: { id: string }) {
         : { addressLines: [trimmedAddress] };
     } else if (addressPlaceId && addressPlaceId !== volunteer!.address.placeId) {
       body.address = { placeId: addressPlaceId };
+    }
+    const nextTerritoryId = captainTerritoryId || null;
+    const prevTerritoryId = volunteer!.territory?.id ?? null;
+    if (nextTerritoryId !== prevTerritoryId) {
+      body.captainTerritoryId = nextTerritoryId;
     }
 
     if (Object.keys(body).length === 0) {
@@ -233,10 +227,10 @@ function VolunteerContent({ id }: { id: string }) {
 
   return (
     <>
-      <div className="flex flex-col gap-1 px-1 pb-6 pt-1">
+      <div className={cn("flex flex-col pb-6 pt-1", editing ? "gap-6" : "gap-1")}>
         {editing ? (
           <>
-            <EditableField label="Email" htmlFor={`volunteer-email-${id}`}>
+            <SidePanelField label="Email" htmlFor={`volunteer-email-${id}`}>
               <Input
                 id={`volunteer-email-${id}`}
                 name="email"
@@ -246,8 +240,8 @@ function VolunteerContent({ id }: { id: string }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
-            </EditableField>
-            <EditableField label="Phone" htmlFor={`volunteer-phone-${id}`}>
+            </SidePanelField>
+            <SidePanelField label="Phone" htmlFor={`volunteer-phone-${id}`}>
               <Input
                 id={`volunteer-phone-${id}`}
                 name="phone"
@@ -256,8 +250,8 @@ function VolunteerContent({ id }: { id: string }) {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
               />
-            </EditableField>
-            <EditableField label="Address" htmlFor={`volunteer-address-${id}`}>
+            </SidePanelField>
+            <SidePanelField label="Address" htmlFor={`volunteer-address-${id}`}>
               <AddressField
                 id={`volunteer-address-${id}`}
                 label=""
@@ -272,8 +266,8 @@ function VolunteerContent({ id }: { id: string }) {
                   setAddress(text);
                 }}
               />
-            </EditableField>
-            <EditableField label="Start Date" htmlFor={`volunteer-start-${id}`}>
+            </SidePanelField>
+            <SidePanelField label="Start Date" htmlFor={`volunteer-start-${id}`}>
               <Input
                 id={`volunteer-start-${id}`}
                 name="startDate"
@@ -281,21 +275,32 @@ function VolunteerContent({ id }: { id: string }) {
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
               />
-            </EditableField>
+            </SidePanelField>
+            <SidePanelField label="Captain" htmlFor={`volunteer-captain-${id}`}>
+              <Select
+                id={`volunteer-captain-${id}`}
+                value={captainTerritoryId}
+                onChange={setCaptainTerritoryId}
+                options={[
+                  { value: "", label: "No captain" },
+                  ...captainTerritoryOptions(territories),
+                ]}
+              />
+            </SidePanelField>
           </>
         ) : (
           <>
-            <InfoField label="Email" value={volunteer.email} />
-            <InfoField label="Phone" value={volunteer.phone} />
-            <InfoField
+            <Attribute label="Email" value={volunteer.email} />
+            <Attribute label="Phone" value={volunteer.phone} />
+            <Attribute
               label="Address"
               value={volunteer.address.formattedAddress ?? "Not geocoded yet"}
             />
-            <InfoField label="Start Date" value={formatDate(volunteer.startDate)} />
+            <Attribute label="Start Date" value={formatDate(volunteer.startDate)} />
+            <Attribute label="Captain" value={volunteer.territory?.captainName ?? "No captain"} />
           </>
         )}
-        <InfoField label="Captain" value={volunteer.territory?.captainName ?? "No captain"} />
-        <InfoField
+        <Attribute
           label="Status"
           value={
             volunteer.status === "on-vacation"
@@ -308,16 +313,15 @@ function VolunteerContent({ id }: { id: string }) {
           }
         />
         {saveError ? (
-          <p className="px-2 text-md text-destructive" role="alert" aria-live="polite">
+          <p className="text-md text-destructive" role="alert" aria-live="polite">
             {saveError}
           </p>
         ) : null}
-        <div className="flex items-center justify-end gap-2 px-2 pt-1">
+        <div className="flex items-center justify-end gap-2 pt-1">
           {editing ? (
             <>
               <Button
-                variant="text"
-                size="sm"
+                variant="default"
                 onClick={cancelEditing}
                 disabled={updateVolunteer.isPending}
               >
@@ -325,7 +329,6 @@ function VolunteerContent({ id }: { id: string }) {
               </Button>
               <Button
                 variant="primary"
-                size="sm"
                 onClick={() => void saveInfo()}
                 disabled={updateVolunteer.isPending}
                 className="active:scale-[0.96]"
@@ -334,12 +337,7 @@ function VolunteerContent({ id }: { id: string }) {
               </Button>
             </>
           ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={startEditing}
-              className="active:scale-[0.96]"
-            >
+            <Button variant="outline" onClick={startEditing} className="active:scale-[0.96]">
               Edit info
             </Button>
           )}
@@ -365,12 +363,12 @@ function VolunteerContent({ id }: { id: string }) {
                 </span>
               </SidePanelRow>
             ))}
-            <div className="flex h-8 items-center justify-between px-2 py-1 text-md text-secondary">
-              <span>Totals</span>
-              <span>
-                {totalBundles} Bundles, {totalPapers} Papers
-              </span>
-            </div>
+            <SidePanelRow
+              className="text-secondary"
+              meta={`${totalBundles} Bundles, ${totalPapers} Papers`}
+            >
+              Totals
+            </SidePanelRow>
           </>
         )}
       </SidePanelSection>
@@ -409,13 +407,13 @@ function CaptainContent({ id }: { id: string }) {
 
   if (isError) {
     return (
-      <p className="px-2 text-md text-secondary">
+      <p className="text-md text-secondary">
         {error instanceof Error ? error.message : "Could not load this captain."}
       </p>
     );
   }
   if (isPending || !captain) {
-    return <p className="px-2 text-md text-secondary">Loading…</p>;
+    return <p className="text-md text-secondary">Loading…</p>;
   }
 
   const captainName = `${captain.firstName} ${captain.lastName}`;
@@ -518,10 +516,10 @@ function CaptainContent({ id }: { id: string }) {
 
   return (
     <>
-      <div className="flex flex-col gap-1 px-1 pb-6 pt-1">
+      <div className={cn("flex flex-col pb-6 pt-1", editing ? "gap-6" : "gap-1")}>
         {editing ? (
           <>
-            <EditableField label="Email" htmlFor={`captain-email-${id}`}>
+            <SidePanelField label="Email" htmlFor={`captain-email-${id}`}>
               <Input
                 id={`captain-email-${id}`}
                 name="email"
@@ -531,8 +529,8 @@ function CaptainContent({ id }: { id: string }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
-            </EditableField>
-            <EditableField label="Phone" htmlFor={`captain-phone-${id}`}>
+            </SidePanelField>
+            <SidePanelField label="Phone" htmlFor={`captain-phone-${id}`}>
               <Input
                 id={`captain-phone-${id}`}
                 name="phone"
@@ -541,8 +539,8 @@ function CaptainContent({ id }: { id: string }) {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
               />
-            </EditableField>
-            <EditableField label="Rate" htmlFor={`captain-rate-${id}`}>
+            </SidePanelField>
+            <SidePanelField label="Rate" htmlFor={`captain-rate-${id}`}>
               <div className="flex gap-2">
                 <Input
                   id={`captain-rate-${id}`}
@@ -567,8 +565,8 @@ function CaptainContent({ id }: { id: string }) {
                   ]}
                 />
               </div>
-            </EditableField>
-            <EditableField label="Cadence" htmlFor={`captain-cadence-${id}`}>
+            </SidePanelField>
+            <SidePanelField label="Cadence" htmlFor={`captain-cadence-${id}`}>
               <Select
                 id={`captain-cadence-${id}`}
                 value={payCadence}
@@ -578,8 +576,8 @@ function CaptainContent({ id }: { id: string }) {
                   { value: "monthly", label: "Monthly" },
                 ]}
               />
-            </EditableField>
-            <EditableField label="Start Date" htmlFor={`captain-start-${id}`}>
+            </SidePanelField>
+            <SidePanelField label="Start Date" htmlFor={`captain-start-${id}`}>
               <Input
                 id={`captain-start-${id}`}
                 name="startDate"
@@ -587,48 +585,42 @@ function CaptainContent({ id }: { id: string }) {
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
               />
-            </EditableField>
+            </SidePanelField>
           </>
         ) : (
           <>
-            <InfoField label="Email" value={captain.email} />
-            <InfoField label="Phone" value={captain.phone} />
-            <InfoField
+            <Attribute label="Email" value={captain.email} />
+            <Attribute label="Phone" value={captain.phone} />
+            <Attribute
               label="Rate"
               value={`$${captain.payRate.toFixed(2)} ${PAY_TYPE_LABEL[captain.payType] ?? captain.payType}`}
             />
-            <InfoField
+            <Attribute
               label="Cadence"
               value={CADENCE_LABEL[captain.payCadence] ?? captain.payCadence}
             />
-            <InfoField label="Start Date" value={formatDate(captain.startDate)} />
+            <Attribute label="Start Date" value={formatDate(captain.startDate)} />
           </>
         )}
-        <InfoField
+        <Attribute
           label="Status"
           value={
             captain.status === "retired" ? `Retired ${formatDate(captain.retiredAt)}` : "Active"
           }
         />
         {saveError ? (
-          <p className="px-2 text-md text-destructive" role="alert" aria-live="polite">
+          <p className="text-md text-destructive" role="alert" aria-live="polite">
             {saveError}
           </p>
         ) : null}
-        <div className="flex items-center justify-end gap-2 px-2 pt-1">
+        <div className="flex items-center justify-end gap-2 pt-1">
           {editing ? (
             <>
-              <Button
-                variant="text"
-                size="sm"
-                onClick={cancelEditing}
-                disabled={updateCaptain.isPending}
-              >
+              <Button variant="default" onClick={cancelEditing} disabled={updateCaptain.isPending}>
                 Cancel
               </Button>
               <Button
                 variant="primary"
-                size="sm"
                 onClick={() => void saveInfo()}
                 disabled={updateCaptain.isPending}
                 className="active:scale-[0.96]"
@@ -637,12 +629,7 @@ function CaptainContent({ id }: { id: string }) {
               </Button>
             </>
           ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={startEditing}
-              className="active:scale-[0.96]"
-            >
+            <Button variant="outline" onClick={startEditing} className="active:scale-[0.96]">
               Edit info
             </Button>
           )}
@@ -755,7 +742,7 @@ function CreateMemberContent({
 }) {
   const createVolunteer = useCreateVolunteer();
   const createCaptain = useCreateCaptain();
-  const { data: captains } = useCaptainsList();
+  const { data: territories } = useTerritorySummaries();
 
   const [role, setRole] = useState<MemberRole>("volunteer");
   const [firstName, setFirstName] = useState("");
@@ -862,9 +849,9 @@ function CreateMemberContent({
         e.preventDefault();
         void handleCreate();
       }}
-      className="flex flex-col gap-1 px-1 pb-2 pt-1"
+      className="flex flex-col gap-6 pb-2 pt-1"
     >
-      <EditableField label="Role" htmlFor="cm-role">
+      <SidePanelField label="Role" htmlFor="cm-role">
         <Select
           id="cm-role"
           value={role}
@@ -874,8 +861,8 @@ function CreateMemberContent({
             { value: "captain", label: "Captain" },
           ]}
         />
-      </EditableField>
-      <EditableField label="First Name" htmlFor="cm-first">
+      </SidePanelField>
+      <SidePanelField label="First Name" htmlFor="cm-first">
         <Input
           id="cm-first"
           value={firstName}
@@ -883,8 +870,8 @@ function CreateMemberContent({
           placeholder="First name"
           autoComplete="given-name"
         />
-      </EditableField>
-      <EditableField label="Last Name" htmlFor="cm-last">
+      </SidePanelField>
+      <SidePanelField label="Last Name" htmlFor="cm-last">
         <Input
           id="cm-last"
           value={lastName}
@@ -892,8 +879,8 @@ function CreateMemberContent({
           placeholder="Last name"
           autoComplete="family-name"
         />
-      </EditableField>
-      <EditableField label="Start Date" htmlFor="cm-start">
+      </SidePanelField>
+      <SidePanelField label="Start Date" htmlFor="cm-start">
         <Input
           id="cm-start"
           type="date"
@@ -901,8 +888,8 @@ function CreateMemberContent({
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
         />
-      </EditableField>
-      <EditableField label="Email" htmlFor="cm-email">
+      </SidePanelField>
+      <SidePanelField label="Email" htmlFor="cm-email">
         <Input
           id="cm-email"
           type="email"
@@ -912,8 +899,8 @@ function CreateMemberContent({
           autoComplete="email"
           spellCheck={false}
         />
-      </EditableField>
-      <EditableField label="Phone" htmlFor="cm-phone">
+      </SidePanelField>
+      <SidePanelField label="Phone" htmlFor="cm-phone">
         <Input
           id="cm-phone"
           type="tel"
@@ -922,11 +909,11 @@ function CreateMemberContent({
           placeholder="Phone number"
           autoComplete="tel"
         />
-      </EditableField>
+      </SidePanelField>
 
       {role === "volunteer" ? (
         <>
-          <EditableField label="Address" htmlFor="cm-address">
+          <SidePanelField label="Address" htmlFor="cm-address">
             <AddressField
               id="cm-address"
               label=""
@@ -941,27 +928,22 @@ function CreateMemberContent({
                 setAddress(text);
               }}
             />
-          </EditableField>
-          <EditableField label="Captain (optional)" htmlFor="cm-captain">
+          </SidePanelField>
+          <SidePanelField label="Captain (optional)" htmlFor="cm-captain">
             <Select
               id="cm-captain"
               value={captainTerritoryId}
               onChange={setCaptainTerritoryId}
               options={[
                 { value: "", label: "No captain" },
-                ...(captains ?? [])
-                  .filter((c) => c.territory)
-                  .map((c) => ({
-                    value: c.territory!.id,
-                    label: `${c.firstName} ${c.lastName}`,
-                  })),
+                ...captainTerritoryOptions(territories),
               ]}
             />
-          </EditableField>
+          </SidePanelField>
         </>
       ) : (
         <>
-          <EditableField label="Pay Type" htmlFor="cm-pay-type">
+          <SidePanelField label="Pay Type" htmlFor="cm-pay-type">
             <Select
               id="cm-pay-type"
               value={payType}
@@ -969,8 +951,8 @@ function CreateMemberContent({
               options={PAY_TYPES.map((opt) => ({ value: opt.value, label: opt.label }))}
               placeholder="Select pay type"
             />
-          </EditableField>
-          <EditableField label="Pay Rate" htmlFor="cm-pay-rate">
+          </SidePanelField>
+          <SidePanelField label="Pay Rate" htmlFor="cm-pay-rate">
             <Input
               id="cm-pay-rate"
               type="number"
@@ -982,8 +964,8 @@ function CreateMemberContent({
               placeholder="0.00"
               className="tabular-nums"
             />
-          </EditableField>
-          <EditableField label="Cadence" htmlFor="cm-cadence">
+          </SidePanelField>
+          <SidePanelField label="Cadence" htmlFor="cm-cadence">
             <Select
               id="cm-cadence"
               value={payCadence}
@@ -991,12 +973,12 @@ function CreateMemberContent({
               options={CADENCES.map((opt) => ({ value: opt.value, label: opt.label }))}
               placeholder="Select cadence"
             />
-          </EditableField>
+          </SidePanelField>
         </>
       )}
 
       {createError ? (
-        <p className="px-2 text-md text-destructive" role="alert" aria-live="polite">
+        <p className="text-md text-destructive" role="alert" aria-live="polite">
           {createError}
         </p>
       ) : null}
@@ -1092,7 +1074,7 @@ function MemberSidePanel({ member, creating, onClose, onCreated }: MemberSidePan
             <X />
           </Button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           {displayedCreating ? (
             <CreateMemberContent onCreated={onCreated} onBusyChange={setCreateBusy} />
           ) : displayed?.role === "volunteer" ? (
@@ -1104,7 +1086,7 @@ function MemberSidePanel({ member, creating, onClose, onCreated }: MemberSidePan
 
         {displayedCreating && (
           <div className="panel-header shrink-0 justify-end gap-2 border-t border-border">
-            <Button variant="text" onClick={onClose} disabled={createBusy}>
+            <Button variant="default" onClick={onClose} disabled={createBusy}>
               Cancel
             </Button>
             <Button

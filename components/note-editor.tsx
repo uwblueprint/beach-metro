@@ -32,7 +32,7 @@ function NoteEditor({ initialText = "", onSave, onDelete, onCancel }: NoteEditor
   }
 
   return (
-    <div className="flex flex-col gap-1.5 px-1 py-1">
+    <div className="flex flex-col gap-1.5 py-1">
       <Textarea
         ref={textareaRef}
         autoFocus

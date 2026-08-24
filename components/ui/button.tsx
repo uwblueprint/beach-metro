@@ -1,20 +1,27 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
 
+import {
+  toolbarIconButtonClass,
+  toolbarIconButtonSelectedClass,
+} from "@/components/ui/toolbar-control";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[4px] border border-transparent bg-clip-padding text-md font-normal whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 cursor-pointer items-center justify-center border border-transparent bg-clip-padding text-md font-normal whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "bg-active text-bg hover:bg-active-hover disabled:bg-active/50",
+        default:
+          "bg-secondary-fill text-primary hover:bg-secondary-fill-hover disabled:bg-secondary-fill disabled:text-disabled disabled:opacity-50",
         primary: "bg-active text-bg hover:bg-active-hover disabled:bg-active/50",
         outline:
           "border-hairline text-primary hover:border-transparent hover:bg-secondary-fill-hover disabled:text-disabled",
         danger: "bg-destructive text-bg hover:bg-destructive-hover disabled:bg-destructive/50",
         text: "text-primary hover:bg-secondary-fill-hover disabled:text-disabled",
         link: "text-active underline-offset-4 hover:underline",
+        /** Circular icon for toolbars (map chrome, filter toggles). Pair with size=toolbar shape=rounded. */
+        toolbar: toolbarIconButtonClass,
       },
       size: {
         default: "h-8 gap-2 px-3 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
@@ -25,25 +32,45 @@ const buttonVariants = cva(
         "icon-xs": "size-5 p-1 [&_svg:not([class*='size-'])]:size-2.5",
         "icon-sm": "size-6 p-1.5 [&_svg:not([class*='size-'])]:size-3",
         "icon-lg": "size-9 p-2.5",
+        /** Matches SearchBar height (36px). Use with variant=toolbar shape=rounded. */
+        toolbar: "size-9 shrink-0 p-0 [&_svg:not([class*='size-'])]:size-4",
+      },
+      shape: {
+        default: "rounded-[4px]",
+        rounded: "rounded-full",
       },
     },
     defaultVariants: {
       variant: "default",
       size: "default",
+      shape: "default",
     },
   },
 );
+
+type ButtonProps = ButtonPrimitive.Props &
+  VariantProps<typeof buttonVariants> & {
+    /** Pressed / toggled state for variant=toolbar (sets aria-pressed). */
+    selected?: boolean;
+  };
 
 function Button({
   className,
   variant = "default",
   size = "default",
+  shape = "default",
+  selected,
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ButtonProps) {
   return (
     <ButtonPrimitive
       data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
+      aria-pressed={selected ?? undefined}
+      className={cn(
+        buttonVariants({ variant, size, shape }),
+        variant === "toolbar" && selected && toolbarIconButtonSelectedClass,
+        className,
+      )}
       {...props}
     />
   );

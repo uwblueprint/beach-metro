@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Plus, Square, Trash2 } from "lucide-react";
+import { ChevronDown, Filter, Plus, Square, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -539,6 +539,34 @@ function SearchBarSection({ searchValue, setSearchValue }: SearchBarSectionProps
         <h2 className="text-lg font-medium">Disabled</h2>
         <div className="max-w-md">
           <SearchBar value="" onChange={() => {}} placeholder="Disabled search" disabled />
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">With toolbar icon buttons</h2>
+        <p className="text-secondary text-md">
+          SearchBar uses a focus ring when typing. Toolbar buttons use fill hover; the focus ring
+          appears only when <code className="text-primary">selected</code>.
+        </p>
+        <div className="flex max-w-xl items-center gap-2.5">
+          <Button variant="toolbar" size="toolbar" shape="rounded" aria-label="Toggle filters">
+            <Filter />
+          </Button>
+          <SearchBar
+            value={searchValue}
+            onChange={setSearchValue}
+            placeholder="Search by name"
+            className="min-w-0 flex-1"
+          />
+          <Button
+            variant="toolbar"
+            size="toolbar"
+            shape="rounded"
+            aria-label="Toggle filters"
+            selected
+          >
+            <Filter />
+          </Button>
         </div>
       </section>
     </div>
