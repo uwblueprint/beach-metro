@@ -6,7 +6,7 @@
 // grayscale style is a neutral placeholder that matches the mockups' tone.
 
 import { APIProvider, Map, useMap } from "@vis.gl/react-google-maps";
-import { Filter, Maximize2, Minimize2, Minus, Plus } from "lucide-react";
+import { Filter, LocateFixed, Maximize2, Minimize2, Minus, Plus } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -297,9 +297,13 @@ function FitBounds(props: {
   homes: MapHome[];
   fitKey: string;
   ready: boolean;
+  /** Fired once, the first time a fit actually happens — the Recenter button's target. */
+  onInitialFit?: (bounds: google.maps.LatLngBounds) => void;
 }) {
   const map = useMap();
   const pendingKeyRef = useRef<string | null>(props.fitKey);
+  const hasFiredInitialRef = useRef(false);
+  const { onInitialFit } = props;
 
   useEffect(() => {
     pendingKeyRef.current = props.fitKey;
@@ -331,12 +335,25 @@ function FitBounds(props: {
 
     map.fitBounds(bounds, 56);
     pendingKeyRef.current = null;
-  }, [map, props.fitKey, props.ready, props.routes, props.homes]);
+    if (!hasFiredInitialRef.current) {
+      hasFiredInitialRef.current = true;
+      onInitialFit?.(bounds);
+    }
+  }, [map, props.fitKey, props.ready, props.routes, props.homes, onInitialFit]);
 
   return null;
 }
 
 const BEACHES_CENTER = { lat: 43.6725, lng: -79.2915 };
+
+// Roughly Halton–Durham, Lake Ontario–north York Region: keeps panning/zooming
+// within the GTA since routes and volunteers are only ever in this area.
+const GTA_BOUNDS: google.maps.LatLngBoundsLiteral = {
+  north: 44.35,
+  south: 43.1,
+  east: -78.7,
+  west: -80.2,
+};
 
 const ASSIGNED_OPTIONS = [
   { value: "all", label: "All" },
@@ -362,7 +379,7 @@ export type CaptainFilterOption = { value: string; label: string };
 
 export type FilterPlacement = "map" | "sidepanel";
 
-/** Custom map controls overlay: filter, search, zoom ±, fullscreen. */
+/** Custom map controls overlay: filter, search, zoom ±, recenter, fullscreen. */
 function MapControls(props: {
   search: string;
   onSearchChange: (value: string) => void;
@@ -372,6 +389,7 @@ function MapControls(props: {
   onVacancyChange: (value: VacancyFilter) => void;
   deliveryType: DeliveryTypeFilter;
   onDeliveryTypeChange: (value: DeliveryTypeFilter) => void;
+  defaultBoundsRef: React.RefObject<google.maps.LatLngBounds | null>;
   captainId: string;
   onCaptainChange: (value: string) => void;
   captainOptions: CaptainFilterOption[];
@@ -504,6 +522,17 @@ function MapControls(props: {
     map.setZoom((map.getZoom() ?? 14) - 1);
   }, [map]);
 
+  const handleRecenter = useCallback(() => {
+    if (!map) return;
+    const bounds = props.defaultBoundsRef.current;
+    if (bounds) {
+      map.fitBounds(bounds, 56);
+    } else {
+      map.setCenter(BEACHES_CENTER);
+      map.setZoom(14);
+    }
+  }, [map, props.defaultBoundsRef]);
+
   const handleFullscreen = useCallback(() => {
     const el = containerRef.current?.closest("[data-map-container]") as HTMLElement | null;
     if (!el) return;
@@ -568,6 +597,15 @@ function MapControls(props: {
             onClick={handleZoomIn}
           >
             <Plus />
+          </Button>
+          <Button
+            variant="toolbar"
+            size="toolbar"
+            shape="rounded"
+            aria-label="Recenter map"
+            onClick={handleRecenter}
+          >
+            <LocateFixed />
           </Button>
           <Button
             variant="toolbar"
@@ -665,8 +703,10 @@ function MapControls(props: {
   );
 }
 
-/** Map controls pinned top-right: zoom ± and fullscreen. */
-function MapZoomControls() {
+/** Map controls pinned top-right: zoom ±, recenter, and fullscreen. */
+function MapZoomControls(props: {
+  defaultBoundsRef: React.RefObject<google.maps.LatLngBounds | null>;
+}) {
   const map = useMap("routes-map");
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -688,6 +728,17 @@ function MapZoomControls() {
     if (!map) return;
     map.setZoom((map.getZoom() ?? 14) - 1);
   }, [map]);
+
+  const handleRecenter = useCallback(() => {
+    if (!map) return;
+    const bounds = props.defaultBoundsRef.current;
+    if (bounds) {
+      map.fitBounds(bounds, 56);
+    } else {
+      map.setCenter(BEACHES_CENTER);
+      map.setZoom(14);
+    }
+  }, [map, props.defaultBoundsRef]);
 
   const handleFullscreen = useCallback(() => {
     const el = containerRef.current?.closest("[data-map-container]") as HTMLElement | null;
@@ -722,6 +773,15 @@ function MapZoomControls() {
           onClick={handleZoomIn}
         >
           <Plus />
+        </Button>
+        <Button
+          variant="toolbar"
+          size="toolbar"
+          shape="rounded"
+          aria-label="Recenter map"
+          onClick={handleRecenter}
+        >
+          <LocateFixed />
         </Button>
         <Button
           variant="toolbar"
@@ -768,6 +828,10 @@ export function RouteMap(props: {
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [hoverPosition, setHoverPosition] = useState<google.maps.LatLngLiteral | null>(null);
+  const defaultBoundsRef = useRef<google.maps.LatLngBounds | null>(null);
+  const handleInitialFit = useCallback((bounds: google.maps.LatLngBounds) => {
+    defaultBoundsRef.current = bounds;
+  }, []);
 
   const handleRouteHover = useCallback((id: string, position: google.maps.LatLngLiteral) => {
     setHoveredId(id);
@@ -797,6 +861,7 @@ export function RouteMap(props: {
           id="routes-map"
           defaultCenter={BEACHES_CENTER}
           defaultZoom={14}
+          restriction={{ latLngBounds: GTA_BOUNDS, strictBounds: false }}
           gestureHandling="greedy"
           disableDefaultUI={true}
           zoomControl={false}
@@ -828,6 +893,7 @@ export function RouteMap(props: {
             homes={props.homes}
             fitKey={props.boundsFitKey}
             ready={props.boundsFitReady}
+            onInitialFit={handleInitialFit}
           />
         </Map>
         {props.filterPlacement === "map" ? (
@@ -840,12 +906,13 @@ export function RouteMap(props: {
             onVacancyChange={props.onVacancyChange}
             deliveryType={props.deliveryType}
             onDeliveryTypeChange={props.onDeliveryTypeChange}
+            defaultBoundsRef={defaultBoundsRef}
             captainId={props.captainId}
             onCaptainChange={props.onCaptainChange}
             captainOptions={props.captainOptions}
           />
         ) : (
-          <MapZoomControls />
+          <MapZoomControls defaultBoundsRef={defaultBoundsRef} />
         )}
       </APIProvider>
     </div>
