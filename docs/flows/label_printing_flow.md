@@ -114,19 +114,22 @@ untouched and the manager can just hit export again.
 
 Every dimension is lifted from `MasterLabelsMELINDA.docx` and lives in
 `lib/pdf/label-geometry.ts`, with the original twip values in comments so the two
-can be diffed if the template ever changes.
+can be diffed if the template ever changes. The template itself is documented in
+[`../reference/label_template_docx.md`](../reference/label_template_docx.md) —
+full geometry tables, the merge-field list, and how to re-extract it. Those
+constants were re-derived from the docx and verified on 2026-08-24.
 
 One thing is **not** from the docx: a hairline cut guide around each label.
 Labels stay flush rather than gaining a gutter, so neighbours stroke the same
 coordinate and one scissor pass down a shared line separates both. A part-full
 final sheet only draws guides around the labels that exist.
 
-**These guides are provisional and may be wrong.** They were added on the
-assumption the office cuts plain paper by hand. Melinda's written printing steps
-say otherwise — she loads actual label stock, two sheets at a time — so on
-pre-die-cut stock the guides would print visible rules across each label for no
-benefit. See §7 "Label stock"; make them conditional or drop them once the SKU
-is confirmed.
+**`2026-08-24` The guides stay.** They were added on the assumption the office
+cuts plain paper by hand, and that assumption turned out to be wrong — Melinda
+loads real die-cut label stock, two sheets at a time. The guides were reviewed on
+that basis and **kept anyway**: they cost nothing on stock that is already
+scored, and they keep the export usable on plain paper. Only the *dimensions*
+were reconciled against the docx. Not an oversight — a decision.
 
 | | |
 | --- | --- |
@@ -232,20 +235,32 @@ Commercial/Residential item below).
   record for both kinds, a name field for commercial drops, and a way to tell
   a residential bulk-drop address apart from a volunteer's home, before either
   can be built.
-- **`[OPEN]` Territory on the label.** The PRD says a label shows the territory.
-  The Word template has no territory field, so ours does not either. Dropped
-  intentionally, or an omission?
-- **`[OPEN]` Label stock — SKU still needed, and our cut guides are now
-  suspect.** Melinda's written printing steps (2026-08-23, see
-  `docs/reference/route_labels_spreadsheet.md` §4) say to "remove regular paper
-  from printer and place 2 sheets of labels in printer", about 10 sheets for a
-  ~220-label run. So it **is** real peel-and-stick label stock, not plain paper
-  cut by hand — which resolves half this item and undermines the other half:
-  the hairline cut guides added in #30 assume scissors. On pre-die-cut stock
-  they would print visible rules across each label for no reason. Get the SKU
-  (~22 labels/sheet at 2.8125 × 1.5" matches our 21-per-sheet geometry closely
-  enough that the template is probably right), confirm whether they ever print
-  onto plain paper as a fallback, and make the guides conditional or drop them.
+- **~~`[OPEN]`~~ Territory on the label — RESOLVED 2026-08-24.** The earlier
+  reading that "the Word template has no territory field" was wrong. Its *first*
+  merge field is `Route` — column A, the RT number — printed as `RT«Route»` in
+  the reversed black chip, the most prominent element on the label. The PRD and
+  the template agree; the chip is the territory. We already render it, currently
+  with the stub `"XX"` ([`lib/pdf/label-sheet.ts:41`](../../lib/pdf/label-sheet.ts:41)),
+  so this is now just a matter of feeding it the real RT.
+- **`[OPEN]` Label stock — SKU still needed.** Melinda's written printing steps
+  (2026-08-23, see `docs/reference/route_labels_spreadsheet.md` §4) say to
+  "remove regular paper from printer and place 2 sheets of labels in printer",
+  about 10 sheets for a ~220-label run. The office confirmed on 2026-08-24:
+  **real die-cut label stock, never plain paper.** The cut guides stay regardless
+  (§6).
+
+  The SKU is still outstanding, and it matters more than it looks: 2.8125 × 1.5"
+  is the *cell pitch*, not the label face. Cells butt with no gutter, so the
+  physical label is smaller and sits inside its cell — by how much, only the
+  product number can tell us. See `docs/reference/label_template_docx.md` §4.
+- **Nice-to-have: bundle-size filters on the selection list.** The office's own
+  practice is to label only remainder bundles and hand over whole 50s and 25s
+  unlabelled as a count (`route_labels_spreadsheet.md` §3), but they *sometimes*
+  want the whole ones labelled too — so selection stays manual. Two things would
+  make it quicker, neither urgent:
+  1. A filter to show/hide whole 50s and 25s.
+  2. A one-click "select every non-50/25 bundle", which reproduces their default
+     in a single action. Derivable from `greedySplit`; no schema change.
 
 ---
 

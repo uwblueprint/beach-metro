@@ -5,6 +5,15 @@ runs distribution from. This is the system we are replacing, so where it and our
 schema disagree, **it is the source of truth about how the office works** and we
 are the thing that is wrong.
 
+**Re-read 2026-08-24** against a newer, tidied copy (`RouteLabelsFile.xlsx`) the
+office sent over. Same sixteen sheets, same structure; row counts drift by a few
+(LABELS 468 → 462, QUITS 434 → 442) and the merge range moved `$E$221` → `$E$222`.
+Every finding below was re-verified against it and still holds unless a
+`2026-08-24` note says otherwise. Two changes worth knowing up front: **the newer
+copy is not password-protected** (a plain OOXML zip — ignore the `msoffcrypto`
+dance below), and `Payments2023 ` **has a trailing space in its sheet name**,
+which will silently break any importer that looks the sheet up by name.
+
 **The file is not in this repo and must not be.** It holds 322 volunteer names,
 310 home addresses, 157 phone numbers, 384 email addresses and seven years of
 captain payment history for real people, and `uwblueprint/beach-metro` is a
@@ -99,8 +108,19 @@ Bundles 13 · Papers 610 · Drops 36 · per drop 1.50 · Total 54 · Gas 15 · P
 quantity × rate and has nowhere to put the $15. Any captain with a car allowance
 is currently underpaid by our figure.
 
-Needs a client answer on semantics before building: per issue, per month, or a
-flat annual? Does it survive a substitute covering that issue?
+**`2026-08-24` Decided: we are not modelling it.** The allowance is unchanged
+across all seven Payments sheets — two at `50`, one at `15` — and in 2026 it sits
+on the three *driven* routes only (31-71 `$50`, 81 `$50`, 91 `$15`), never on a
+carrier territory. The arithmetic is additive and checks out on both: 204 drops ×
+`$1.25` + `$50` = `$305`, and 36 × `$1.50` + `$15` = `$69`.
+
+The office says they now run without it, so `calculatedAmount` stays quantity ×
+rate. **This is a deliberate decision against what the file shows**, recorded
+here so it stays one: if those three routes look `$115` an issue light, this is
+why. There is precedent for folding it into the rate instead — `Payments2023`
+carries the note *"Bob H. cut his gas to .50cents per bundle 7.23.2023 as per
+email"* — so a rate adjustment is the escape hatch if it turns out to still be
+owed.
 
 ### 2.4 Pay basis has a fourth value
 
@@ -144,6 +164,12 @@ It directly undermines automated house counts: Toronto Open Data (#23) counts
 every address on a segment and cannot know that three of them are opted out, so
 it will overcount wherever a skip exists.
 
+**`2026-08-24` Decided: no skip-list entity.** Skipped addresses go in the notes
+field alongside everything else, and the overcount is accepted — 17 skips spread
+across the whole city is roughly one house per territory, which is not material
+to how the office plans a route. Revisit only if the count starts being used for
+something that needs to be exact, like paper ordering.
+
 ### 2.7 Substitutes are real but almost never used
 
 `AWAY BUNDLES` / `AWAY PAPERS` exist on every Payments sheet. Populated rows,
@@ -152,6 +178,15 @@ it will overcount wherever a skip exists.
 Not an argument to remove the feature — the client explicitly asked for it in the
 July 2026 review and it is a locked decision. It is an argument against
 investing further in substitute UX until someone asks.
+
+**`2026-08-24` Correction — those two columns are not the whole story.** The
+literal string `away` is written *into the per-issue payment cells* of the
+captain ledger, and it appears **6 times in `Payments2026` alone** across three
+captains. It means "this captain earned nothing this issue"; the `PAY` batch
+total simply skips it. So being away is ordinary, not once-in-seven-years — it
+is just recorded in the calendar rather than in `AWAY BUNDLES` / `AWAY PAPERS`.
+Semantically this is our payout **freeze** (detached from the live calculation,
+not marked paid), which is already built — see `lib/services/payouts.ts`.
 
 ### 2.8 Fields we dropped that they still use
 
@@ -193,6 +228,14 @@ is worth doing is a decision, not a technical question (§6, item 13).
   captain per RT (`01`, `02`, …). `SKIP HOUSES` keys by RT. Three independent
   sheets agree it identifies a captain's area, not a street segment. See
   `label_printing_flow.md` §7.
+
+  **`2026-08-24` We are modelling RT on the captain anyway** (§7). The numbering
+  has gaps — 05, 11, 13, 16, 19, 21, 27–29 are all absent — because captains
+  absorb each other's territories and the absorbed number retires. Note the
+  file does *not* fully agree: Payments keeps a separate row per RT with its own
+  bundle/drop counts and rate, and twelve captains cover 22 carrier RTs between
+  them (Wally Hucker alone holds eight). That exception is a known, accepted
+  divergence, not an oversight.
 - **`Bundle N of M` is correct.** Over 150 values follow the pattern exactly on
   carrier rows, confirming what we already print.
 - **Bundle composition is counted in 50s and 25s.** The drop sheets have literal
@@ -215,17 +258,43 @@ is worth doing is a decision, not a technical question (§6, item 13).
   (17 labelled, 7 not, across two territories). That is `bundle_labels` in
   spreadsheet form, and it independently confirms the "the unit is the bundle,
   not the route" decision in `label_printing_flow.md` §2.
+- **`2026-08-24` Which bundles get labelled, and why the merge range stops
+  halfway.** LABELS is *two passes* through the territories — rows 2–222
+  (RT 01…66) and again rows 223–463 (RT 01…66, less 02 and 18). They are not
+  duplicates: only 43 of 333 unique name+address pairs appear in both. The
+  merge range covers the first pass only, and that is **deliberate**:
+
+  | | rows 2–222 (print) | rows 223–463 (never print) |
+  | --- | --- | --- |
+  | Papers per row | median 32, max 63 | median 50, **max 50** |
+  | Exactly 50 or 25 | 8% | 90% (rest are one `0` spacer per RT) |
+  | Phone / email / start date | 60 / 148 / 141 | 31 / 45 / 54 |
+
+  `Sheet1` gives the rule outright. Its header reads *"In addition to the
+  labeled bundles take 4 x 50s and 3 25s unlabeled"*, and every `Unlabeled` row
+  on it is **exactly 25 or 50 papers**, while every `Labeled` row is a
+  non-standard quantity (15, 27, 30, 35, 36, 39, 40, 41, 42, 44, 45, 52, 66) —
+  no exceptions. Cross-checked: LABELS rows 223+ for RT 03 hold 4×50 and 4×25,
+  against Sheet1's "4 x 50s and 3 25s".
+
+  > A bundle earns a printed label when it is a **remainder** quantity. Whole
+  > 50s and 25s are interchangeable, so they travel unlabelled and are handed
+  > over as a count.
+
+  This answers §6 item 8 — the bottom 241 rows are not being quietly missed.
+  It does **not** change what we build: our Labels page already selects
+  bundles manually per `(deliveryId, bundleIndex)`, and the office sometimes
+  *does* want whole 50s labelled. Recorded as nice-to-have filters in
+  `label_printing_flow.md` §7.
 - **The Word merge only reads five columns and about half the rows.** The
   workbook's one defined name is `RouteLabels → LABELS!$A$1:$E$221`. So:
   - Only **A–E** (Route, Papers, Name, Address, Bundles) reach the label. Phone,
     email, start date, the category keyword and Lucky Volunteer are working
     columns that sit alongside and never print — including the category, which
     means **Type has never appeared on a printed label**.
-  - Only rows **2–221** are in range, out of 468 populated rows. Both halves
-    contain the same mix of territories and categories, so it is not a clean
-    "carriers print, drops don't" split. Either the bottom 247 rows genuinely
-    don't need labels, or the range is stale and some are quietly missed. Worth
-    asking (§6, item 8).
+  - Only rows **2–221** are in range, out of 468 populated rows (2–222 of 462 in
+    the 2026-08-24 copy). **Answered:** the out-of-range rows are the whole
+    50s and 25s that go out unlabelled — see the labelling rule above.
 - **Annual captain cost, for the reporting dashboard.** `Payments2026` has 24
   captain rows summing to **$915.80 per issue**. At ~22 issues a year that is
   roughly **$20,000/year** in captain payments — a useful sanity check for
@@ -390,4 +459,42 @@ first.
 - Whether `Bundle N of M` is the right thing to print — confirmed by 150+ rows.
 - Whether territory drops have a date — they do, but it's an added/removed
   date, not a delivery date.
-- What the RT number counts — a territory, not a route.
+
+---
+
+## 7. Decisions taken 2026-08-24
+
+Answers from the office plus team calls, against the numbered items above.
+Everything here is settled; re-open it only with a reason.
+
+| # | Question | Decision |
+| --- | --- | --- |
+| 1, 11 | Recipients who aren't one person | **`display_name` required; `first_name` / `last_name` become nullable** and are filled only for individuals, so surname sort and structured search survive. One Name box or two fields in the UI depending on what's being added. Handles all 462 rows without mangling any. |
+| 2, 12 | Phone / email required | **Optional for everyone.** Blocking on a phone would block four in five of their roster. Not "optional on import only" — optional, full stop. |
+| 3 | Car / gas allowance | **Not modelled.** See §2.3 — taken against what the file shows, deliberately. |
+| 4 | `N/A` pay basis | **Rate `0`.** No fourth enum value; `pay_type` stays `bundle \| paper \| drop`. RT 18 is "No Captain" at rate 0, which this covers. |
+| 6, 7 | Schools / churches / libraries / hospitals | **Stay "Commercial".** The finer keywords are descriptive, not operational. |
+| 7 (gap) | Handling instructions | **The notes field**, not a new column. Only 5 rows carry one. |
+| 9 (gap) | "Take 4 loose 50s and 3 loose 25s" | **Notes for now**, with a filter as a nice-to-have — see §3 and `label_printing_flow.md` §7. |
+| 10 (gap) | Territory RT number | **Build it. RT hangs off the captain**, not the territory. Wally Hucker holding eight RTs is a known oddity we are choosing to ignore. |
+| 11 (gap) | Reason someone left | **Not needed.** The bare `retired_at` date is enough; `Deceased` will not be modelled separately. |
+| 12 (gap) | Retiring a route with reason + date | **Soft delete as-is** is fine. |
+| 13 (gap) | When a drop was added / stopped | **Do not record.** |
+| 16 (gap) | Reprint a past issue's labels | **Add it.** Currently the open issue only. |
+| 5 | `SKIP HOUSES` | **Not modelled.** Skipped addresses go in the notes field like anything else. The knock-on — automated house counts overcounting a segment by the number of opted-out houses — is accepted: being one or two out on a route is not material to how the office works. |
+| — | Label stock | **Confirmed real die-cut stock.** The cut guides are kept anyway (cheap on scored stock, useful on plain paper); only their dimensions were reconciled against the template. See `label_template_docx.md` §4. |
+| — | Payout freeze | **Already complete** — `frozen_amount` + `frozen_at`, independent of `paid`, with issue lock as a bulk freeze. Nothing left on the backend. |
+
+### Still genuinely open
+
+1. **The label stock SKU.** The one thing needed to guarantee our grid lines up
+   with the die cuts — the cell is a *pitch*, not the label face.
+2. **Lucky Volunteer** (gap 14) — 39 rows still populated in the newer copy.
+   Dropped as post-MVP; nobody has confirmed they're fine losing it.
+3. **The publication calendar** (gap 15) — 23 issue dates for 2026 are already
+   known; we still make them create issues one at a time.
+4. **Importing `QUITS`** — 442 rows, no header row at all, columns drifting.
+   Real manual work; nobody has decided whether it's worth it.
+5. **Captains and routes marked discontinued or away** (`No Captain`,
+   `NO PAY`, `DISCONTINUED 8.22.2023 AS PER SUSAN`). Their sheet keeps these
+   visible with a note; ours would hide them or show them as active.
