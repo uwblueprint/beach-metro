@@ -13,12 +13,13 @@ import type { BundleRef, LabelSheet } from "@/features/labels/api";
 import { cn } from "@/lib/utils";
 
 /**
- * `[OPEN]` Carrier / Commercial / Residential. Nothing in the schema backs this
- * yet: `Address.type` is only residential|commercial and route endpoints are
- * always stored residential by a locked decision, so it cannot be reused. The
- * pills render but deliberately do not filter — see
- * `docs/flows/label_printing_flow.md` §7. Wire them up once the client confirms
- * what Type means, and delete this comment.
+ * Confirmed by design (Kristen, Slack, 2026-08-23; see design_decisions.md):
+ * Carrier = a normal volunteer route, Commercial = a bulk drop at a business,
+ * Residential = a bulk drop at an apartment/condo. Every row this page can
+ * show today is Carrier — commercial/residential drops have no per-issue
+ * delivery record yet (label_printing_flow.md §7) — so Commercial and
+ * Residential correctly filter to nothing until that's built, not because
+ * the filter is broken.
  */
 type TypeFilter = "Carrier" | "Commercial" | "Residential" | "all";
 
@@ -58,6 +59,7 @@ interface Route {
   name: string;
   papers: number;
   bundles: Bundle[];
+  type: "Carrier" | "Commercial" | "Residential";
 }
 
 interface Captain {
@@ -83,6 +85,11 @@ function toCaptains(sheet: LabelSheet | undefined): Captain[] {
         papers: bundle.papers,
         labelled: bundle.labelled,
       })),
+      // The server type is a literal "carrier" today (see LabelRoute in
+      // lib/services/labels.ts) — capitalized here to match the pill labels
+      // and the Type column's display casing. Widen this mapping once
+      // commercial/residential drops get their own delivery records.
+      type: "Carrier",
     })),
   }));
 }
@@ -204,17 +211,20 @@ export default function LabelsPage() {
   const totalBundles = sheet?.bundleCount ?? 0;
 
   const searchQuery = search.trim().toLowerCase();
-  // typeFilter is deliberately absent here: the pills do not filter yet.
-  const revealResults = searchQuery.length > 0;
+  const revealResults = searchQuery.length > 0 || typeFilter !== "all";
 
   const visibleCaptains = useMemo(() => {
     return captains
       .map((captain) => ({
         ...captain,
-        routes: captain.routes.filter((route) => routeMatchesSearch(route, searchQuery)),
+        routes: captain.routes.filter(
+          (route) =>
+            (typeFilter === "all" || route.type === typeFilter) &&
+            routeMatchesSearch(route, searchQuery),
+        ),
       }))
       .filter((captain) => captain.routes.length > 0);
-  }, [captains, searchQuery]);
+  }, [captains, searchQuery, typeFilter]);
 
   const selectedCount = selectedBundleIds.size;
   // Sheet still loading/failed counts as busy too, so Export can't run
@@ -411,10 +421,8 @@ export default function LabelsPage() {
                                   <span className={cn("truncate text-md text-primary", COUNT_COL)}>
                                     {formatBundleCount(route)}
                                   </span>
-                                  {/* `[OPEN]` no Type in the schema yet; see the note at the
-                                      top of this file. */}
                                   <span className={cn("truncate text-md text-secondary", TYPE_COL)}>
-                                    —
+                                    {route.type}
                                   </span>
                                   <span
                                     className={cn("truncate text-md text-secondary", LABELLED_COL)}

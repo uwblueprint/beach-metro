@@ -274,6 +274,28 @@ export async function setVolunteerVacation(
 }
 
 /** Soft retire; detaches carried routes, which become Vacant (people flow §4f). */
+/**
+ * Undo a retirement. Clears `retired_at` and nothing else.
+ *
+ * Deliberately does NOT re-attach the routes retirement detached: those routes
+ * are vacant now and may already have been reassigned to someone else, so
+ * silently pulling them back would overwrite a real assignment. Whoever
+ * reactivates picks the routes up again by hand.
+ *
+ * `end_date` is left alone too. If it has already passed the volunteer comes
+ * back flagged "needs attention", which is the correct prompt to set a new one
+ * rather than something to paper over here.
+ */
+export async function reactivateVolunteer(id: string): Promise<VolunteerDetail> {
+  const v = await fetchVolunteer(id);
+  if (!v.retired_at) throw conflict("Volunteer is not retired.");
+
+  const { error } = await db().from("volunteers").update({ retired_at: null }).eq("id", id);
+  if (error) throwDb(error);
+
+  return getVolunteer(id);
+}
+
 export async function retireVolunteer(id: string): Promise<VolunteerDetail> {
   const v = await fetchVolunteer(id);
   if (v.retired_at) throw conflict("Volunteer is already retired.");

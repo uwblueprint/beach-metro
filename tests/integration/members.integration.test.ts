@@ -525,3 +525,63 @@ afterAll(async () => {
     await client.from("volunteers").delete().in("id", strayVolunteerIds);
   }
 });
+
+// Retirement is reachable from the members table, so undoing one has to work.
+// Reactivation clears the flag only: routes and territories detached on retire
+// may already belong to someone else, so they are NOT pulled back.
+describe.skipIf(!RUN)("reactivation", () => {
+  it("brings a retired captain back, and refuses if they are not retired", async () => {
+    const captain = await S().captains.createCaptainRecord({
+      firstName: TEST_FIRST_NAME,
+      lastName: unique("React"),
+      email: `${unique("it-react")}@example.com`,
+      phone: "416-555-0430",
+      payType: "bundle",
+      payRate: 1,
+      payCadence: "biweekly",
+      startDate: "2026-01-01",
+      endDate: null,
+      note: null,
+    });
+    created.captainIds.push(captain.id);
+    if (captain.territory) created.territoryIds.push(captain.territory.id);
+
+    // Not retired yet, so there is nothing to undo.
+    await expectServiceError(S().captains.reactivateCaptain(captain.id), 409);
+
+    await S().captains.retireCaptain(captain.id);
+    expect((await S().captains.getCaptain(captain.id)).status).toBe("retired");
+
+    const back = await S().captains.reactivateCaptain(captain.id);
+    expect(back.status).toBe("active");
+    expect(back.retiredAt).toBeNull();
+    // The territory stays detached — retirement gave it up and someone else may
+    // hold it now.
+    expect(back.territory).toBeNull();
+  });
+
+  it("brings a retired volunteer back without reclaiming their routes", async () => {
+    const volunteer = await S().volunteers.createVolunteerRecord({
+      firstName: TEST_FIRST_NAME,
+      lastName: unique("ReactVol"),
+      email: `${unique("it-reactvol")}@example.com`,
+      phone: "416-555-0431",
+      address: { addressLines: ["1 Reactivate Way"] },
+      startDate: "2026-01-01",
+      endDate: null,
+      captainTerritoryId: null,
+      note: null,
+    });
+    created.volunteerIds.push(volunteer.id);
+
+    await expectServiceError(S().volunteers.reactivateVolunteer(volunteer.id), 409);
+
+    await S().volunteers.retireVolunteer(volunteer.id);
+    expect((await S().volunteers.getVolunteer(volunteer.id)).status).toBe("retired");
+
+    const back = await S().volunteers.reactivateVolunteer(volunteer.id);
+    expect(back.status).toBe("active");
+    expect(back.retiredAt).toBeNull();
+    expect(back.routesCarried).toHaveLength(0);
+  });
+});
