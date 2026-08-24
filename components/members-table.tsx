@@ -129,9 +129,16 @@ function RowActions({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Actions for ${member.name}`}
-        render={<Button variant="text" size="icon-sm" onClick={(e) => e.stopPropagation()} />}
+        render={
+          <Button
+            variant="text"
+            size="icon-sm"
+            className="text-secondary"
+            onClick={(e) => e.stopPropagation()}
+          />
+        }
       >
-        <MoreHorizontal />
+        <MoreHorizontal className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={() => onOpenDetails?.(member.id)}>

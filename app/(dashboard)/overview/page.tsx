@@ -529,7 +529,7 @@ export default function OverviewPage() {
           <DialogFooter>
             <Button
               type="button"
-              variant="outline"
+              variant="default"
               size="sm"
               onClick={() => setPapersDialogOpen(false)}
             >

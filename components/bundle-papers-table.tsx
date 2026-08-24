@@ -78,7 +78,7 @@ function BundlePapersTable({
 
   return (
     <div className={cn("flex w-full flex-col gap-1", className)}>
-      <div className="flex h-10 items-center rounded-[8px] bg-bg-secondary py-2 pr-2">
+      <div className="flex h-10 items-center rounded-[8px] bg-bg-secondary px-2 py-2">
         <span className="min-w-0 flex-1 text-md text-secondary">Bundle</span>
         <span className="min-w-0 flex-1 text-md text-secondary">Papers</span>
         <div className="flex w-6 shrink-0 items-center justify-end">
@@ -95,7 +95,7 @@ function BundlePapersTable({
       </div>
 
       {value.map((papers, index) => (
-        <div key={index} className="group/bundle flex h-10 items-center justify-between py-1 pr-2">
+        <div key={index} className="group/bundle flex h-10 items-center px-2 py-1">
           <span className="min-w-0 flex-1 tabular-nums text-md text-secondary">{index + 1}</span>
           <div className="min-w-0 flex-1">
             {editingIndex === index ? (
@@ -117,7 +117,7 @@ function BundlePapersTable({
                     setEditingIndex(null);
                   }
                 }}
-                className={cn(inputFieldClassName, "h-8 rounded-[4px] px-2 py-1")}
+                className={cn(inputFieldClassName, "h-8 rounded-[4px] px-0 py-1")}
               />
             ) : (
               <button

@@ -12,7 +12,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-active text-bg hover:bg-active-hover disabled:bg-active/50",
+        default:
+          "bg-secondary-fill text-primary hover:bg-secondary-fill-hover disabled:bg-secondary-fill disabled:text-disabled disabled:opacity-50",
         primary: "bg-active text-bg hover:bg-active-hover disabled:bg-active/50",
         outline:
           "border-hairline text-primary hover:border-transparent hover:bg-secondary-fill-hover disabled:text-disabled",

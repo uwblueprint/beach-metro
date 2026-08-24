@@ -339,13 +339,13 @@ function CellActionsMenu({
             <div className="flex justify-end gap-2">
               <Button
                 type="button"
-                variant="outline"
+                variant="default"
                 size="sm"
                 onClick={() => setMenuView("actions")}
               >
                 Cancel
               </Button>
-              <Button type="button" size="sm" onClick={handleSaveComment}>
+              <Button type="button" variant="primary" size="sm" onClick={handleSaveComment}>
                 Save
               </Button>
             </div>

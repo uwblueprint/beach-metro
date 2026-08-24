@@ -5,9 +5,7 @@
 // assign) — the design engineers restyle it. Structural Tailwind only.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Filter, Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-
 import { AddressField } from "@/components/address-field";
 import { BundlePapersTable } from "@/components/bundle-papers-table";
 import { SidePanelField } from "@/components/side-panel-field";
@@ -16,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -24,8 +23,10 @@ import { Input } from "@/components/ui/input";
 import { Pill } from "@/components/ui/pill";
 import { PillGroup } from "@/components/ui/pill-group";
 import { SearchBar } from "@/components/ui/search-bar";
+import { api } from "@/lib/api/client";
 import { greedySplit } from "@/lib/services/derive";
 import { cn } from "@/lib/utils";
+import { ChevronDown, Filter, MoreHorizontal, Plus, X } from "lucide-react";
 
 import {
   RouteMap,
@@ -155,6 +156,103 @@ function vacancyLabel(value: Vacancy): string {
   return ASSIGNED_OPTIONS.find((o) => o.value === value)?.label ?? value;
 }
 
+function ActiveFilterPill({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <Pill
+      selected
+      onClick={onClear}
+      className="group/filter-pill relative w-max shrink-0 overflow-hidden hover:bg-tag-active active:scale-[0.96]"
+    >
+      <span className="relative z-0">{label}</span>
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 right-0 z-[1] w-[80%] bg-gradient-to-l from-tag-active from-50% to-transparent opacity-0 transition-opacity duration-200 ease-[cubic-bezier(0.2,0,0,1)] group-hover/filter-pill:opacity-100"
+      />
+      <X
+        aria-hidden="true"
+        className="pointer-events-none absolute top-1/2 right-2 z-[2] size-3 origin-center -translate-y-1/2 scale-[0.25] text-active opacity-0 blur-[4px] transition-[opacity,transform,filter] duration-200 ease-[cubic-bezier(0.2,0,0,1)] group-hover/filter-pill:scale-100 group-hover/filter-pill:opacity-100 group-hover/filter-pill:blur-none"
+      />
+    </Pill>
+  );
+}
+
+/** Width-tweened slot so the search bar can flex as pills enter and leave. */
+function FilterPillSlot({
+  open,
+  label,
+  onClear,
+}: {
+  open: boolean;
+  label: string;
+  onClear: () => void;
+}) {
+  const innerRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [mounted, setMounted] = useState(open);
+  const [width, setWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    if (open) {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+      setMounted(true);
+      return;
+    }
+
+    setWidth(0);
+    if (!innerRef.current) {
+      setMounted(false);
+      return;
+    }
+    const ms = readCssDurationMsFrom(innerRef.current, "--resize-dur", 300);
+    closeTimerRef.current = setTimeout(() => {
+      setMounted(false);
+      closeTimerRef.current = null;
+    }, ms);
+
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open || !mounted) return;
+    const node = innerRef.current;
+    if (!node) return;
+    let nested = 0;
+    const outer = requestAnimationFrame(() => {
+      nested = requestAnimationFrame(() => {
+        setWidth(node.scrollWidth);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(nested);
+    };
+  }, [open, mounted, label]);
+
+  if (!mounted) return null;
+
+  return (
+    <div className="t-resize shrink-0 overflow-hidden" style={{ width }}>
+      <div
+        ref={innerRef}
+        className={cn(
+          "flex w-max shrink-0 pl-2.5 whitespace-nowrap transition-opacity duration-[var(--resize-dur)] ease-[var(--resize-ease)]",
+          open ? "opacity-100" : "opacity-0",
+        )}
+      >
+        <ActiveFilterPill label={label} onClear={onClear} />
+      </div>
+    </div>
+  );
+}
+
 function readCssDurationMsFrom(el: Element, variable: string, fallback: number): number {
   const raw = getComputedStyle(el).getPropertyValue(variable).trim();
   if (!raw) return fallback;
@@ -178,12 +276,9 @@ function DeliveriesFilterSection(props: {
   const filterInnerRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [filterClosing, setFilterClosing] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [filterHeight, setFilterHeight] = useState(0);
 
   const filterVisible = props.filterOpen || filterClosing;
-  const showActivePills =
-    props.filterOpen && (props.deliveryType !== "all" || props.vacancy !== "all");
 
   useLayoutEffect(() => {
     if (props.filterOpen) {
@@ -192,10 +287,8 @@ function DeliveriesFilterSection(props: {
         closeTimerRef.current = null;
       }
       setFilterClosing(false);
-      setDropdownOpen(false);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          setDropdownOpen(true);
           setFilterHeight(filterInnerRef.current?.scrollHeight ?? 0);
         });
       });
@@ -204,13 +297,16 @@ function DeliveriesFilterSection(props: {
 
     if (!filterClosing && filterHeight === 0) return;
 
-    setDropdownOpen(false);
-    setFilterHeight(0);
     setFilterClosing(true);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setFilterHeight(0);
+      });
+    });
     const el = containerRef.current;
     const closeMs = el
       ? Math.max(
-          readCssDurationMsFrom(el, "--dropdown-close-dur", 100),
+          readCssDurationMsFrom(el, "--panel-close-dur", 350),
           readCssDurationMsFrom(el, "--resize-dur", 150),
         )
       : 150;
@@ -229,9 +325,9 @@ function DeliveriesFilterSection(props: {
   }, [props.filterOpen]);
 
   useLayoutEffect(() => {
-    if (!dropdownOpen || !filterInnerRef.current) return;
+    if (!filterVisible || !filterInnerRef.current) return;
     setFilterHeight(filterInnerRef.current.scrollHeight);
-  }, [dropdownOpen, props.vacancy, props.deliveryType]);
+  }, [filterVisible, props.vacancy, props.deliveryType]);
 
   return (
     <div
@@ -239,14 +335,13 @@ function DeliveriesFilterSection(props: {
       className="shrink-0 border-b border-border px-3 py-4"
       style={
         {
-          "--resize-dur": "150ms",
-          "--dropdown-open-dur": "150ms",
-          "--dropdown-close-dur": "100ms",
+          "--resize-dur": "220ms",
+          "--panel-translate-y": "12px",
         } as CSSProperties
       }
     >
       <div className="flex flex-col">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center">
           <SearchBar
             value={props.search}
             onChange={props.onSearchChange}
@@ -254,16 +349,19 @@ function DeliveriesFilterSection(props: {
             className="min-w-0 flex-1"
           />
 
-          {showActivePills && (
-            <div className="flex shrink-0 items-center gap-2">
-              {props.deliveryType !== "all" && (
-                <Pill selected>{deliveryTypeLabel(props.deliveryType)}</Pill>
-              )}
-              {props.vacancy !== "all" && <Pill selected>{vacancyLabel(props.vacancy)}</Pill>}
-            </div>
-          )}
+          <FilterPillSlot
+            open={props.deliveryType !== "all"}
+            label={deliveryTypeLabel(props.deliveryType)}
+            onClear={() => props.onDeliveryTypeChange("all")}
+          />
+          <FilterPillSlot
+            open={props.vacancy !== "all"}
+            label={vacancyLabel(props.vacancy)}
+            onClear={() => props.onVacancyChange("all")}
+          />
 
           <Button
+            className="ml-2.5"
             variant="toolbar"
             size="toolbar"
             shape="rounded"
@@ -280,12 +378,8 @@ function DeliveriesFilterSection(props: {
           {filterVisible && (
             <div
               ref={filterInnerRef}
-              className={cn(
-                "t-dropdown flex flex-col gap-4 pt-4 px-2",
-                dropdownOpen && "is-open",
-                filterClosing && "is-closing",
-              )}
-              data-origin="top-left"
+              className="t-panel-slide flex flex-col gap-4 px-2 pt-4"
+              data-open={props.filterOpen ? "true" : "false"}
             >
               <div className="flex flex-col gap-2">
                 <p className="text-sm text-secondary">Delivery Type</p>
@@ -478,14 +572,20 @@ export function RoutesClient() {
                     onDeliveryTypeChange={setDeliveryType}
                   />
                 )}
-                <div className="flex-1 overflow-y-auto px-3 py-4">
+                <div className="flex-1 overflow-y-auto px-4 py-4">
                   <RouteList
                     routes={listRoutes}
                     loading={routes.isLoading}
                     error={routes.error?.message}
+                    selectedId={selectedId}
                     onSelect={(id) => {
                       setCreating(false);
                       setSelectedId(id);
+                    }}
+                    onClearSelection={() => setSelectedId(null)}
+                    onRoutesChanged={() => {
+                      qc.invalidateQueries({ queryKey: ["routes"] });
+                      qc.invalidateQueries({ queryKey: ["route-paths"] });
                     }}
                   />
                 </div>
@@ -502,7 +602,10 @@ function RouteList(props: {
   routes: RouteSummary[];
   loading: boolean;
   error?: string;
+  selectedId: string | null;
   onSelect: (id: string) => void;
+  onClearSelection: () => void;
+  onRoutesChanged: () => void;
 }) {
   if (props.loading) return <p className="text-md text-secondary">Loading routes…</p>;
   if (props.error) return <p className="text-md text-destructive">{props.error}</p>;
@@ -512,7 +615,7 @@ function RouteList(props: {
     <div className="flex flex-col gap-2">
       {props.routes.map((r) => {
         const isVacant = r.lifecycle === "vacant";
-        const meta = r.assignedVolunteer
+        const volunteerName = r.assignedVolunteer
           ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
           : "vacant";
 
@@ -521,7 +624,20 @@ function RouteList(props: {
           <SidePanelRow
             key={r.id}
             className="h-10 px-2 py-2"
-            meta={meta}
+            meta={
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-md text-secondary">{volunteerName}</span>
+                <RouteActionsMenu
+                  routeId={r.id}
+                  hasVolunteer={Boolean(r.assignedVolunteer)}
+                  onOpenDetails={() => props.onSelect(r.id)}
+                  onChanged={props.onRoutesChanged}
+                  onRetired={() => {
+                    if (props.selectedId === r.id) props.onClearSelection();
+                  }}
+                />
+              </div>
+            }
             onClick={() => props.onSelect(r.id)}
           >
             <RouteTag label={routeLabel(r)} vacant={isVacant} />
@@ -569,6 +685,97 @@ function DropdownField(props: {
   );
 }
 
+function RouteActionsMenu(props: {
+  routeId: string;
+  hasVolunteer: boolean;
+  onOpenDetails: () => void;
+  onChanged: () => void;
+  onRetired: () => void;
+  /** Hide when already viewing route detail (header menu). */
+  showRouteDetails?: boolean;
+}) {
+  const qc = useQueryClient();
+  const showRouteDetails = props.showRouteDetails ?? true;
+
+  const retireRoute = useMutation({
+    mutationFn: () => api.del(`/api/routes/${props.routeId}`),
+    onSuccess: () => {
+      props.onRetired();
+      props.onChanged();
+      void qc.invalidateQueries({ queryKey: ["route", props.routeId] });
+    },
+  });
+
+  const unassignRoute = useMutation({
+    mutationFn: () => api.post(`/api/routes/${props.routeId}/unassign`),
+    onSuccess: () => {
+      props.onChanged();
+      void qc.invalidateQueries({ queryKey: ["route", props.routeId] });
+    },
+  });
+
+  function stopRowClick(e?: React.MouseEvent) {
+    e?.stopPropagation();
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label="Route actions"
+        render={
+          <Button
+            variant="text"
+            size="icon-sm"
+            className="shrink-0 text-secondary"
+            onClick={stopRowClick}
+          />
+        }
+      >
+        <MoreHorizontal className="size-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {showRouteDetails ? (
+          <DropdownMenuItem
+            onClick={(e) => {
+              stopRowClick(e);
+              props.onOpenDetails();
+            }}
+          >
+            Route details
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuItem
+          disabled={!props.hasVolunteer || unassignRoute.isPending}
+          onClick={(e) => {
+            stopRowClick(e);
+            if (!window.confirm("Unassign the volunteer from this route?")) return;
+            unassignRoute.mutate();
+          }}
+        >
+          {unassignRoute.isPending ? "Unassigning…" : "Unassign"}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          variant="destructive"
+          disabled={retireRoute.isPending}
+          onClick={(e) => {
+            stopRowClick(e);
+            if (
+              !window.confirm(
+                "Retire this route? It will be removed from active views. Past delivery history is preserved.",
+              )
+            ) {
+              return;
+            }
+            retireRoute.mutate();
+          }}
+        >
+          {retireRoute.isPending ? "Retiring…" : "Retire route"}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /** Labeled text input matching Figma Input Group. */
 function InputField(props: {
   label: string;
@@ -613,9 +820,9 @@ function dropLabel(r: RouteDetail): string {
   return `${r.streetName} · ${addr}`;
 }
 
-function DetailBreadcrumb(props: { title: string; onBack: () => void }) {
+function DetailBreadcrumb(props: { title: string; onBack: () => void; actions?: React.ReactNode }) {
   return (
-    <div className="flex h-[64px] items-center border-b border-border pl-6 pr-4">
+    <div className="flex h-[64px] items-center justify-between gap-2 border-b border-border pl-6 pr-4">
       <div className="flex min-w-0 items-center gap-2.5 text-md font-semibold">
         <button
           type="button"
@@ -627,6 +834,7 @@ function DetailBreadcrumb(props: { title: string; onBack: () => void }) {
         <span className="text-secondary">&gt;</span>
         <span className="truncate text-primary">{props.title}</span>
       </div>
+      {props.actions}
     </div>
   );
 }
@@ -727,7 +935,24 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
 
   return (
     <div className="flex h-full flex-col">
-      <DetailBreadcrumb title={asDrop ? dropLabel(r) : routeLabel(r)} onBack={props.onClose} />
+      <DetailBreadcrumb
+        title={asDrop ? dropLabel(r) : routeLabel(r)}
+        onBack={props.onClose}
+        actions={
+          <RouteActionsMenu
+            routeId={props.routeId}
+            hasVolunteer={Boolean(r.assignedVolunteer)}
+            showRouteDetails={false}
+            onOpenDetails={() => {}}
+            onChanged={() => {
+              setVolunteerId(null);
+              detail.refetch();
+              props.onChanged();
+            }}
+            onRetired={props.onClose}
+          />
+        }
+      />
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-4">
         {!asDrop && (
@@ -801,7 +1026,7 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
 
       {dirty && (
         <div className="panel-header shrink-0 justify-end gap-2 border-t border-border">
-          <Button variant="outline" onClick={discard}>
+          <Button variant="default" onClick={discard}>
             Discard Changes
           </Button>
           <Button variant="primary" disabled={save.isPending} onClick={() => save.mutate()}>
@@ -947,7 +1172,7 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
       </div>
 
       <div className="panel-header shrink-0 justify-end gap-2 border-t border-border">
-        <Button variant="outline" onClick={props.onClose}>
+        <Button variant="default" onClick={props.onClose}>
           Cancel
         </Button>
         <Button

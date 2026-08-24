@@ -291,7 +291,7 @@ function VolunteerContent({ id }: { id: string }) {
           {editing ? (
             <>
               <Button
-                variant="outline"
+                variant="default"
                 onClick={cancelEditing}
                 disabled={updateVolunteer.isPending}
               >
@@ -328,17 +328,17 @@ function VolunteerContent({ id }: { id: string }) {
                 onClick={() => openEdit(route.id)}
                 onEdit={() => openEdit(route.id)}
               >
-                <span className="-ml-2 inline-flex items-center rounded-lg bg-secondary-fill px-2 py-1 text-md text-primary">
+                <span className="inline-flex items-center rounded-lg bg-secondary-fill px-2 py-1 text-md text-primary">
                   {route.label}
                 </span>
               </SidePanelRow>
             ))}
-            <div className="flex h-8 items-center justify-between py-1 text-md text-secondary">
-              <span>Totals</span>
-              <span>
-                {totalBundles} Bundles, {totalPapers} Papers
-              </span>
-            </div>
+            <SidePanelRow
+              className="text-secondary"
+              meta={`${totalBundles} Bundles, ${totalPapers} Papers`}
+            >
+              Totals
+            </SidePanelRow>
           </>
         )}
       </SidePanelSection>
@@ -586,7 +586,7 @@ function CaptainContent({ id }: { id: string }) {
         <div className="flex items-center justify-end gap-2 pt-1">
           {editing ? (
             <>
-              <Button variant="outline" onClick={cancelEditing} disabled={updateCaptain.isPending}>
+              <Button variant="default" onClick={cancelEditing} disabled={updateCaptain.isPending}>
                 Cancel
               </Button>
               <Button
@@ -1061,7 +1061,7 @@ function MemberSidePanel({ member, creating, onClose, onCreated }: MemberSidePan
 
         {displayedCreating && (
           <div className="panel-header shrink-0 justify-end gap-2 border-t border-border">
-            <Button variant="outline" onClick={onClose} disabled={createBusy}>
+            <Button variant="default" onClick={onClose} disabled={createBusy}>
               Cancel
             </Button>
             <Button
