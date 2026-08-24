@@ -55,7 +55,7 @@ function CheckboxIcon({ checked = false, className }: { checked?: boolean; class
       data-checked={checked || undefined}
       className={cn(
         checkboxSurfaceClassName,
-        checked ? "border-secondary text-secondary" : "border-border text-transparent",
+        checked ? "border-active bg-tag-active text-active" : "border-border text-transparent",
         className,
       )}
       aria-hidden
@@ -76,11 +76,11 @@ function Checkbox({ className, indeterminate, ...props }: CheckboxPrimitive.Root
       indeterminate={indeterminate}
       className={cn(
         checkboxSurfaceClassName,
-        "border-border text-secondary",
+        "border-border text-active",
         "focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        "data-checked:border-secondary",
-        "data-indeterminate:border-secondary",
+        "data-checked:border-active data-checked:bg-tag-active",
+        "data-indeterminate:border-active data-indeterminate:bg-tag-active",
         "aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20",
         className,
       )}

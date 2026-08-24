@@ -123,13 +123,19 @@ export async function getYearDetail(id: string): Promise<YearDetail> {
     >[]
   ).map(coerceCaptainNumerics);
 
-  const columnCaptainIds = [...new Set(payouts.map((p) => p.captain_id))];
-
   const nameOf = (cid: string | null): string | null => {
     if (!cid) return null;
     const c = captains.find((x) => x.id === cid);
     return c ? `${c.first_name} ${c.last_name}` : "Unknown captain";
   };
+
+  // Payouts come back unordered. First-seen Set order would reshuffle columns
+  // on refetch and make an edit look like it landed under a different captain.
+  const columnCaptainIds = [...new Set(payouts.map((p) => p.captain_id))].sort((a, b) => {
+    const nameA = nameOf(a) ?? a;
+    const nameB = nameOf(b) ?? b;
+    return nameA.localeCompare(nameB) || a.localeCompare(b);
+  });
 
   return {
     id: year.id,
@@ -146,7 +152,12 @@ export async function getYearDetail(id: string): Promise<YearDetail> {
       };
     }),
     issues: issues.map((i) => {
-      const cells = payouts.filter((p) => p.issue_id === i.id);
+      const cellsByCaptain = new Map(
+        payouts.filter((p) => p.issue_id === i.id).map((p) => [p.captain_id, p]),
+      );
+      const cells = columnCaptainIds
+        .map((cid) => cellsByCaptain.get(cid))
+        .filter((p): p is CaptainPayoutRow => p != null);
       return {
         id: i.id,
         name: i.name,
