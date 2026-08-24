@@ -30,6 +30,7 @@ export type CreateRouteBody = {
   startAddress: { addressLines: string[] } | { placeId: string };
   endAddress: { addressLines: string[] } | { placeId: string };
   streetName: string;
+  side?: string | null;
   assignedVolunteerId?: string | null;
   houseCount?: number;
   bundles: Array<{ papers: number }>;
@@ -40,6 +41,7 @@ export type UpdateRouteBody = {
   startAddress?: { addressLines: string[] } | { placeId: string };
   endAddress?: { addressLines: string[] } | { placeId: string };
   streetName?: string;
+  side?: string | null;
   bundles?: Array<{ papers: number }>;
   note?: string | null;
 };

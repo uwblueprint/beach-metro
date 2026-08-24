@@ -148,6 +148,45 @@ export async function updateCaptainRecord(
   return getCaptain(id);
 }
 
+/** Reactivation: clears retirement (people flow Retired → Active). The territory
+ * is not re-attached; the manager reassigns it manually after reactivation. */
+export async function reactivateCaptain(id: string): Promise<CaptainSummary> {
+  const c = await fetchCaptain(id);
+  if (!c.retired_at) throw conflict("Captain is not retired.");
+  const { error } = await db().from("captains").update({ retired_at: null }).eq("id", id);
+  if (error) throwDb(error);
+  return getCaptain(id);
+}
+
+/** Hard-delete a captain and their 1:1 territory. Deleting the territory sets
+ * `captain_territory_id` to NULL on all volunteers (ON DELETE SET NULL). */
+export async function deleteCaptain(id: string): Promise<void> {
+  await fetchCaptain(id);
+
+  const client = db();
+
+  // Find the territory owned by this captain so we can remove it after unlinking.
+  const { data: territoryData, error: territoryFetchError } = await client
+    .from("captain_territories")
+    .select("id")
+    .eq("assigned_captain_id", id)
+    .maybeSingle();
+  if (territoryFetchError) throwDb(territoryFetchError);
+
+  const { error } = await client.from("captains").delete().eq("id", id);
+  if (error) throwDb(error);
+
+  // captain_territories.assigned_captain_id is SET NULL on captain delete,
+  // so the territory is now orphaned — clean it up.
+  if (territoryData) {
+    const { error: delTerritoryError } = await client
+      .from("captain_territories")
+      .delete()
+      .eq("id", (territoryData as { id: string }).id);
+    if (delTerritoryError) throwDb(delTerritoryError);
+  }
+}
+
 /** Soft retire; the territory becomes captain-less and awaits reassignment (§4k). */
 export async function retireCaptain(id: string): Promise<CaptainSummary> {
   const c = await fetchCaptain(id);

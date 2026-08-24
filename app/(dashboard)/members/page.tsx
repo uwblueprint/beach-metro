@@ -53,7 +53,9 @@ export default function MembersPage() {
     if (!member) return;
     setCreating(false);
     setSelected((current) =>
-      current?.id === memberId ? null : { id: member.id, role: member.role, name: member.name },
+      current?.id === memberId
+        ? null
+        : { id: member.id, role: member.role, name: member.name, status: member.status },
     );
   }
 
@@ -114,6 +116,9 @@ export default function MembersPage() {
                   members={rows}
                   selectedId={selected?.id ?? null}
                   onRowClick={handleRowClick}
+                  onDeleted={(id) => {
+                    if (selected?.id === id) setSelected(null);
+                  }}
                 />
               )}
             </div>

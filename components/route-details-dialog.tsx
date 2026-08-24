@@ -18,8 +18,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { ApiError } from "@/lib/api/client";
-import { greedySplit } from "@/lib/services/derive";
+import { greedySplit, routeLabel } from "@/lib/services/derive";
 import type { RouteDetail } from "@/lib/services/routes";
 import { useCreateRoute, useRouteDetail, useUpdateRoute } from "@/features/routes/api";
 
@@ -32,6 +33,15 @@ export interface RouteDetailsDialogProps {
   onSuccess?: () => void;
 }
 
+const DIRECTION_OPTIONS = [
+  { value: "", label: "— none —" },
+  { value: "NORTH", label: "North" },
+  { value: "SOUTH", label: "South" },
+  { value: "EAST", label: "East" },
+  { value: "WEST", label: "West" },
+  { value: "BOTH", label: "Both" },
+];
+
 type FormState = {
   streetName: string;
   startAddress: string;
@@ -42,6 +52,7 @@ type FormState = {
   initialEndLabel: string;
   papersRows: number[];
   note: string;
+  side: string;
   startEditingLast: boolean;
 };
 
@@ -56,6 +67,7 @@ function blankForm(): FormState {
     initialEndLabel: "",
     papersRows: [0],
     note: "",
+    side: "",
     startEditingLast: true,
   };
 }
@@ -68,7 +80,7 @@ function formFromDetail(detail: RouteDetail): FormState {
       ? detail.bundles.map((b) => b.papers)
       : greedySplit(detail.papers).map((b) => b.papers);
   return {
-    streetName: detail.streetName,
+    streetName: routeLabel(detail.streetName, startLabel || null, endLabel || null),
     startAddress: startLabel,
     endAddress: endLabel,
     startPlaceId: detail.startAddress.placeId,
@@ -77,6 +89,7 @@ function formFromDetail(detail: RouteDetail): FormState {
     initialEndLabel: endLabel,
     papersRows: rows.length > 0 ? rows : [0],
     note: detail.notes ?? "",
+    side: detail.side ?? "",
     startEditingLast: false,
   };
 }
@@ -105,6 +118,7 @@ function RouteDetailsFields({
   const [endPlaceId, setEndPlaceId] = useState(initial.endPlaceId);
   const [papersRows, setPapersRows] = useState(initial.papersRows);
   const [note, setNote] = useState(initial.note);
+  const [side, setSide] = useState(initial.side);
   const [error, setError] = useState<string | null>(null);
 
   const busy = createRoute.isPending || updateRoute.isPending;
@@ -139,6 +153,7 @@ function RouteDetailsFields({
           streetName: name,
           bundles,
           note: note.trim() || null,
+          side: side || null,
         };
         if (start !== initial.initialStartLabel || startPlaceId !== initial.startPlaceId) {
           body.startAddress = resolveAddress(start, startPlaceId);
@@ -156,6 +171,7 @@ function RouteDetailsFields({
           houseCount: 0,
           bundles,
           note: note.trim() || null,
+          ...(side ? { side } : {}),
         });
       }
       onSuccess?.();
@@ -174,17 +190,6 @@ function RouteDetailsFields({
         </DialogDescription>
       </DialogHeader>
       <DialogBody>
-        <DialogField>
-          <Label htmlFor="route-semantic-name" className="text-md font-normal text-primary">
-            Semantic Name
-          </Label>
-          <Input
-            id="route-semantic-name"
-            value={streetName}
-            onChange={(e) => setStreetName(e.target.value)}
-            placeholder="Queen St E · Woodbine → Coxwell"
-          />
-        </DialogField>
         <DialogField>
           <AddressField
             id="route-start"
@@ -215,6 +220,28 @@ function RouteDetailsFields({
               setEndPlaceId(placeId);
               setEndAddress(text);
             }}
+          />
+        </DialogField>
+        <DialogField>
+          <Label htmlFor="route-semantic-name" className="text-md font-normal text-primary">
+            Semantic Name
+          </Label>
+          <Input
+            id="route-semantic-name"
+            value={streetName}
+            onChange={(e) => setStreetName(e.target.value)}
+            placeholder="Queen St E · Woodbine → Coxwell"
+          />
+        </DialogField>
+        <DialogField>
+          <Label htmlFor="route-direction" className="text-md font-normal text-primary">
+            Direction
+          </Label>
+          <Select
+            id="route-direction"
+            value={side}
+            onChange={setSide}
+            options={DIRECTION_OPTIONS}
           />
         </DialogField>
         <DialogField>

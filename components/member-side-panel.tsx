@@ -28,6 +28,7 @@ import {
   useUpdateVolunteer,
   useVolunteer,
   type MemberRole,
+  type MemberStatus,
 } from "@/features/members/api";
 import { territoryDropKeys, useTerritorySummaries } from "@/features/territory-drops/api";
 
@@ -50,11 +51,12 @@ function todayIso(): string {
   }).format(new Date());
 }
 
-/** The row the user clicked. Name comes along so the header renders immediately. */
+/** The row the user clicked. Name and status come along so the header renders immediately. */
 export interface MemberSelection {
   id: string;
   role: MemberRole;
   name: string;
+  status: MemberStatus;
 }
 
 interface MemberSidePanelProps {
@@ -105,9 +107,20 @@ const CADENCE_LABEL: Record<string, string> = {
   monthly: "Monthly",
 };
 
-function RoleTag({ role }: { role: MemberRole }) {
+const ROLE_TAG_STATUS_CLASSES: Record<MemberStatus, string> = {
+  active: "bg-tag text-primary",
+  "on-vacation": "bg-tag-warning text-warning",
+  retired: "bg-tag-destructive text-destructive",
+};
+
+function RoleTag({ role, status }: { role: MemberRole; status: MemberStatus }) {
   return (
-    <span className="inline-flex items-center justify-center rounded-lg bg-tag-active px-2 py-1 text-md text-active">
+    <span
+      className={cn(
+        "inline-flex items-center justify-center rounded-lg px-2 py-1 text-md",
+        ROLE_TAG_STATUS_CLASSES[status],
+      )}
+    >
       {role === "captain" ? "Captain" : "Volunteer"}
     </span>
   );
@@ -819,6 +832,7 @@ function CreateMemberContent({
           id: created.id,
           role: "volunteer",
           name: `${created.firstName} ${created.lastName}`,
+          status: "active",
         });
       } else {
         const created = await createCaptain.mutateAsync({
@@ -835,6 +849,7 @@ function CreateMemberContent({
           id: created.id,
           role: "captain",
           name: `${created.firstName} ${created.lastName}`,
+          status: "active",
         });
       }
     } catch (err) {
@@ -1061,7 +1076,7 @@ function MemberSidePanel({ member, creating, onClose, onCreated }: MemberSidePan
           ) : (
             <div className="flex min-w-0 items-center gap-2">
               <span className="truncate text-md font-semibold text-primary">{displayed?.name}</span>
-              {displayed && <RoleTag role={displayed.role} />}
+              {displayed && <RoleTag role={displayed.role} status={displayed.status} />}
             </div>
           )}
           <Button

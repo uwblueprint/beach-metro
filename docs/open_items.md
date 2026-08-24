@@ -51,10 +51,10 @@ Remove entries as they're resolved (and record the decision in
 - **House-count auto-calculation.** Manual entry for MVP (locked); Toronto
   Open Data + PostGIS ingestion is post-MVP. `house_count_override` exists in
   the schema but only becomes meaningful then.
-- **Volunteer/captain reactivation.** The people-flow state machine allows
-  Retired → Active ("clear retirement") but the API spec never defined an
-  endpoint, so none is implemented. Decide whether reactivation ships and add
-  `POST /{id}/reactivate` (or PATCH of `retiredAt`) when it does.
+- ~~**Volunteer/captain reactivation.**~~ **Resolved.** `POST /api/volunteers/{id}/reactivate` and
+  `POST /api/captains/{id}/reactivate` are implemented. Routes/territory are not re-attached
+  automatically; the manager assigns them after reactivation. The members table row menu shows
+  "Un-retire member" for retired members in place of the disabled "Retire member" item.
 - **Auth roles.** Both admins have identical permissions (locked for MVP);
   the `AdminRole` concept remains SUBJECT TO CHANGE if role gating ever lands.
 
@@ -104,11 +104,7 @@ Remove entries as they're resolved (and record the decision in
   uses — sweeping that deleted rows the other suite was still using). **This is the
   concrete argument for a separate CI database** before adding
   `SUPABASE_DB_URL` / `SUPABASE_SECRET_KEY` as Actions secrets.
-- **No reactivation, but retirement is now reachable from the UI.** The members table
-  can retire someone; the people flow allows Retired → Active but no endpoint exists
-  (see above). The row action confirms first and disables itself for someone already
-  retired, but an accidental retirement currently needs a database edit to undo.
-  Worth closing before this ships to the office.
+- ~~**No reactivation, but retirement is now reachable from the UI.**~~ **Resolved** alongside the item above.
 - **Add Member is still a no-op.** The button has no form and no design. What it
   needs is written up in the PR description: volunteers need address validation
   through `POST /api/addresses/validate`; captains need pay type, rate and cadence,
