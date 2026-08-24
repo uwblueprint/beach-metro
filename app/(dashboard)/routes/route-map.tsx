@@ -21,7 +21,8 @@ import { PillGroup } from "@/components/ui/pill-group";
 import { SearchBar } from "@/components/ui/search-bar";
 import { cn } from "@/lib/utils";
 
-import { RouteHoverCard, routeMidpoint } from "./route-hover-card";
+import { FilterPillSlot, readCssDurationMsFrom } from "./filter-pills";
+import { closestPointOnRoute, RouteHoverCard } from "./route-hover-card";
 
 export interface MapRoute {
   id: string;
@@ -106,28 +107,48 @@ function RouteOverlay(props: {
   selected: boolean;
   hovered: boolean;
   onSelect: () => void;
-  onRouteEnter: (id: string) => void;
+  onRouteHover: (id: string, position: google.maps.LatLngLiteral) => void;
   onRouteLeave: () => void;
 }) {
   const map = useMap();
-  const { route, selected, hovered, onSelect, onRouteEnter, onRouteLeave } = props;
-  const handleHover = useCallback(() => onRouteEnter(route.id), [onRouteEnter, route.id]);
-  const handleUnhover = useCallback(() => onRouteLeave(), [onRouteLeave]);
+  const { route, selected, hovered, onSelect, onRouteHover, onRouteLeave } = props;
+  const lineRef = useRef<google.maps.Polyline | null>(null);
+  const markersRef = useRef<google.maps.Marker[]>([]);
 
+  const routeRef = useRef(route);
+  routeRef.current = route;
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  const onRouteHoverRef = useRef(onRouteHover);
+  onRouteHoverRef.current = onRouteHover;
+  const onRouteLeaveRef = useRef(onRouteLeave);
+  onRouteLeaveRef.current = onRouteLeave;
+
+  const pathKey =
+    route.path && route.path.length >= 2
+      ? route.path.map((p) => `${p.lat},${p.lng}`).join(";")
+      : "";
+
+  // Create / tear down geometry when the plotted path changes — not on hover restyles
+  // or parent re-renders (new route object / callback identities).
   useEffect(() => {
     if (!map || !route.start || !route.end) return;
-    const color = routeColor(route, selected, hovered);
     const from = { lat: route.start.latitude, lng: route.start.longitude };
     const to = { lat: route.end.latitude, lng: route.end.longitude };
-    const dashed = route.suspended; // suspended reads as a dashed / "paused" line
-    // Trace the real street path when we have it; otherwise a straight segment.
+    const dashed = route.suspended;
     const linePath = route.path && route.path.length >= 2 ? route.path : [from, to];
+    const color = routeColor(routeRef.current, false, false);
+
+    const emitHoverAt = (cursor: google.maps.LatLngLiteral) => {
+      const r = routeRef.current;
+      onRouteHoverRef.current(r.id, closestPointOnRoute(r, cursor) ?? cursor);
+    };
 
     const line = new google.maps.Polyline({
       map,
       path: linePath,
       strokeColor: color,
-      strokeWeight: selected ? 6 : 4,
+      strokeWeight: 4,
       strokeOpacity: dashed ? 0 : 0.95,
       ...(dashed && {
         icons: [
@@ -143,11 +164,17 @@ function RouteOverlay(props: {
           },
         ],
       }),
-      zIndex: selected ? 20 : 2,
+      zIndex: 2,
     });
-    line.addListener("click", onSelect);
-    line.addListener("mouseover", handleHover);
-    line.addListener("mouseout", handleUnhover);
+    line.addListener("click", () => onSelectRef.current());
+    const onLineMove = (e: google.maps.MapMouseEvent) => {
+      if (!e.latLng) return;
+      emitHoverAt({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+    };
+    line.addListener("mouseover", onLineMove);
+    line.addListener("mousemove", onLineMove);
+    line.addListener("mouseout", () => onRouteLeaveRef.current());
+    lineRef.current = line;
 
     const endpoint = (position: google.maps.LatLngLiteral) =>
       new google.maps.Marker({
@@ -156,30 +183,80 @@ function RouteOverlay(props: {
         clickable: true,
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
-          scale: selected ? 5 : 3.5,
+          scale: 3.5,
           fillColor: color,
           fillOpacity: 1,
           strokeColor: "#ffffff",
           strokeWeight: 1.5,
         },
-        zIndex: selected ? 21 : 3,
+        zIndex: 3,
       });
     const markers = [endpoint(from), endpoint(to)];
-    markers.forEach((m) => {
-      m.addListener("click", onSelect);
-      m.addListener("mouseover", handleHover);
-      m.addListener("mouseout", handleUnhover);
+    markers.forEach((m, i) => {
+      const at = i === 0 ? from : to;
+      m.addListener("click", () => onSelectRef.current());
+      m.addListener("mouseover", () => emitHoverAt(at));
+      m.addListener("mouseout", () => onRouteLeaveRef.current());
     });
+    markersRef.current = markers;
 
     return () => {
       google.maps.event.clearInstanceListeners(line);
       line.setMap(null);
+      lineRef.current = null;
       markers.forEach((m) => {
         google.maps.event.clearInstanceListeners(m);
         m.setMap(null);
       });
+      markersRef.current = [];
     };
-  }, [map, route, selected, hovered, onSelect, handleHover, handleUnhover]);
+    // Intentionally keyed on geometry, not the route object / hover callbacks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    map,
+    route.id,
+    route.start?.latitude,
+    route.start?.longitude,
+    route.end?.latitude,
+    route.end?.longitude,
+    route.suspended,
+    pathKey,
+  ]);
+
+  // Restyle in place so hover/selection doesn't remount and flicker mouseout.
+  useEffect(() => {
+    const color = routeColor(route, selected, hovered);
+    const weight = selected ? 6 : 4;
+    const zLine = selected ? 20 : 2;
+    const zMark = selected ? 21 : 3;
+    const scale = selected ? 5 : 3.5;
+    const line = lineRef.current;
+    if (line) {
+      line.setOptions({ strokeColor: color, strokeWeight: weight, zIndex: zLine });
+      const icons = line.get("icons") as google.maps.IconSequence[] | undefined;
+      if (icons?.[0]?.icon) {
+        line.set("icons", [
+          {
+            ...icons[0],
+            icon: { ...icons[0].icon, strokeColor: color },
+          },
+        ]);
+      }
+    }
+    for (const m of markersRef.current) {
+      m.setOptions({
+        zIndex: zMark,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale,
+          fillColor: color,
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 1.5,
+        },
+      });
+    }
+  }, [route, selected, hovered]);
 
   return null;
 }
@@ -208,11 +285,28 @@ function HomeMarker({ home }: { home: MapHome }) {
   return null;
 }
 
-/** Fits the viewport to whatever is currently plotted. */
-function FitBounds({ routes, homes }: { routes: MapRoute[]; homes: MapHome[] }) {
+/**
+ * Fits the viewport when `fitKey` changes (initial load + filter changes).
+ * Waits until `ready` so we fit post-fetch data, not a loading empty set.
+ * Does not re-fit on unrelated parent re-renders (e.g. selecting a route).
+ */
+function FitBounds(props: {
+  routes: MapRoute[];
+  homes: MapHome[];
+  fitKey: string;
+  ready: boolean;
+}) {
   const map = useMap();
+  const pendingKeyRef = useRef<string | null>(props.fitKey);
+
   useEffect(() => {
-    if (!map) return;
+    pendingKeyRef.current = props.fitKey;
+  }, [props.fitKey]);
+
+  useEffect(() => {
+    if (!map || !props.ready) return;
+    if (pendingKeyRef.current !== props.fitKey) return;
+
     const bounds = new google.maps.LatLngBounds();
     let any = false;
     const add = (p: { latitude: number; longitude: number } | null) => {
@@ -221,13 +315,22 @@ function FitBounds({ routes, homes }: { routes: MapRoute[]; homes: MapHome[] }) 
         any = true;
       }
     };
-    for (const r of routes) {
+    for (const r of props.routes) {
       add(r.start);
       add(r.end);
     }
-    for (const h of homes) add(h.home);
-    if (any) map.fitBounds(bounds, 56);
-  }, [map, routes, homes]);
+    for (const h of props.homes) add(h.home);
+
+    // Settled empty (e.g. Type=Drops): leave camera; clear pending.
+    if (!any) {
+      pendingKeyRef.current = null;
+      return;
+    }
+
+    map.fitBounds(bounds, 56);
+    pendingKeyRef.current = null;
+  }, [map, props.fitKey, props.ready, props.routes, props.homes]);
+
   return null;
 }
 
@@ -239,18 +342,18 @@ const ASSIGNED_OPTIONS = [
   { value: "vacant", label: "Vacant" },
 ] as const;
 
-const TYPE_OPTIONS = [
+const DELIVERY_TYPE_OPTIONS = [
   { value: "all", label: "All" },
   { value: "routes", label: "Routes" },
   { value: "drops", label: "Drops" },
 ] as const;
 
-function readCssDurationMsFrom(el: Element, variable: string, fallback: number): number {
-  const raw = getComputedStyle(el).getPropertyValue(variable).trim();
-  if (!raw) return fallback;
-  if (raw.endsWith("ms")) return parseFloat(raw);
-  if (raw.endsWith("s")) return parseFloat(raw) * 1000;
-  return parseFloat(raw) || fallback;
+function deliveryTypeLabel(value: DeliveryTypeFilter): string {
+  return DELIVERY_TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value;
+}
+
+function vacancyLabel(value: VacancyFilter): string {
+  return ASSIGNED_OPTIONS.find((o) => o.value === value)?.label ?? value;
 }
 
 export type FilterPlacement = "map" | "sidepanel";
@@ -269,13 +372,17 @@ function MapControls(props: {
   const map = useMap("routes-map");
   const containerRef = useRef<HTMLDivElement>(null);
   const filterInnerRef = useRef<HTMLDivElement>(null);
+  const pillsInnerRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [filterClosing, setFilterClosing] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [filterHeight, setFilterHeight] = useState(0);
+  const [pillsHeight, setPillsHeight] = useState(0);
 
   const filterVisible = props.filterOpen || filterClosing;
+  const hasActivePills = props.deliveryType !== "all" || props.vacancy !== "all";
+  // Applied pills only when the menu is collapsed — appear as the panel closes (shared morph).
+  const showPillsRow = hasActivePills && !props.filterOpen;
 
   useEffect(() => {
     function onFsChange() {
@@ -292,10 +399,8 @@ function MapControls(props: {
         closeTimerRef.current = null;
       }
       setFilterClosing(false);
-      setDropdownOpen(false);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          setDropdownOpen(true);
           setFilterHeight(filterInnerRef.current?.scrollHeight ?? 0);
         });
       });
@@ -304,13 +409,16 @@ function MapControls(props: {
 
     if (!filterClosing && filterHeight === 0) return;
 
-    setDropdownOpen(false);
-    setFilterHeight(0);
     setFilterClosing(true);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setFilterHeight(0);
+      });
+    });
     const el = containerRef.current;
     const closeMs = el
       ? Math.max(
-          readCssDurationMsFrom(el, "--dropdown-close-dur", 100),
+          readCssDurationMsFrom(el, "--panel-close-dur", 350),
           readCssDurationMsFrom(el, "--resize-dur", 150),
         )
       : 150;
@@ -329,9 +437,22 @@ function MapControls(props: {
   }, [props.filterOpen]);
 
   useLayoutEffect(() => {
-    if (!dropdownOpen || !filterInnerRef.current) return;
+    if (!filterVisible || !filterInnerRef.current) return;
     setFilterHeight(filterInnerRef.current.scrollHeight);
-  }, [dropdownOpen, props.vacancy, props.deliveryType]);
+  }, [filterVisible, props.vacancy, props.deliveryType]);
+
+  // Height-tween the applied-pills row only while the filter menu is collapsed.
+  useLayoutEffect(() => {
+    if (!showPillsRow) {
+      setPillsHeight(0);
+      return;
+    }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setPillsHeight(pillsInnerRef.current?.scrollHeight ?? 0);
+      });
+    });
+  }, [showPillsRow, props.vacancy, props.deliveryType]);
 
   const handleZoomIn = useCallback(() => {
     if (!map) return;
@@ -359,9 +480,8 @@ function MapControls(props: {
       className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col pt-4 pb-6"
       style={
         {
-          "--resize-dur": "150ms",
-          "--dropdown-open-dur": "150ms",
-          "--dropdown-close-dur": "100ms",
+          "--resize-dur": "220ms",
+          "--panel-translate-y": "12px",
         } as CSSProperties
       }
     >
@@ -370,97 +490,120 @@ function MapControls(props: {
         <div className="map-ui-blur-fill absolute inset-0" />
       </div>
 
-      <div className="pointer-events-auto relative z-10 flex items-center gap-2 px-4">
-        <Button
-          variant="toolbar"
-          size="toolbar"
-          shape="rounded"
-          aria-label="Toggle filters"
-          aria-expanded={props.filterOpen}
-          selected={props.filterOpen || filterClosing}
-          onClick={props.onFilterToggle}
-        >
-          <Filter />
-        </Button>
-
-        <SearchBar
-          value={props.search}
-          onChange={props.onSearchChange}
-          placeholder="Search Address, Route, or Volunteer"
-          className="min-w-0 flex-1 bg-bg"
-        />
-
-        <Button
-          variant="toolbar"
-          size="toolbar"
-          shape="rounded"
-          aria-label="Zoom out"
-          onClick={handleZoomOut}
-        >
-          <Minus />
-        </Button>
-        <Button
-          variant="toolbar"
-          size="toolbar"
-          shape="rounded"
-          aria-label="Zoom in"
-          onClick={handleZoomIn}
-        >
-          <Plus />
-        </Button>
-        <Button
-          variant="toolbar"
-          size="toolbar"
-          shape="rounded"
-          aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-          onClick={handleFullscreen}
-        >
-          <span className="t-icon-swap size-4" data-state={isFullscreen ? "b" : "a"}>
-            <span className="t-icon" data-icon="a">
-              <Maximize2 />
-            </span>
-            <span className="t-icon" data-icon="b">
-              <Minimize2 />
-            </span>
-          </span>
-        </Button>
-      </div>
-
-      <div className="t-resize relative z-10 overflow-hidden px-4" style={{ height: filterHeight }}>
-        {filterVisible && (
-          <div
-            ref={filterInnerRef}
-            className={cn(
-              "t-dropdown pointer-events-auto flex flex-col gap-5 pt-5",
-              dropdownOpen && "is-open",
-              filterClosing && "is-closing",
-            )}
-            data-origin="top-left"
+      <div className="pointer-events-auto relative z-10 flex flex-col px-4">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="toolbar"
+            size="toolbar"
+            shape="rounded"
+            aria-label="Toggle filters"
+            aria-expanded={props.filterOpen}
+            selected={props.filterOpen || filterClosing}
+            onClick={props.onFilterToggle}
           >
-            <div className="flex flex-col gap-2">
-              <p className="text-sm text-secondary">Assigned</p>
-              <PillGroup
-                exclusive
-                options={[...ASSIGNED_OPTIONS]}
-                value={props.vacancy}
-                onChange={(value) => {
-                  if (value != null) props.onVacancyChange(value as VacancyFilter);
-                }}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <p className="text-sm text-secondary">Type</p>
-              <PillGroup
-                exclusive
-                options={[...TYPE_OPTIONS]}
-                value={props.deliveryType}
-                onChange={(value) => {
-                  if (value != null) props.onDeliveryTypeChange(value as DeliveryTypeFilter);
-                }}
-              />
-            </div>
+            <Filter />
+          </Button>
+
+          <SearchBar
+            value={props.search}
+            onChange={props.onSearchChange}
+            placeholder="Search Address, Route, or Volunteer"
+            className="min-w-0 flex-1 bg-bg"
+          />
+
+          <Button
+            variant="toolbar"
+            size="toolbar"
+            shape="rounded"
+            aria-label="Zoom out"
+            onClick={handleZoomOut}
+          >
+            <Minus />
+          </Button>
+          <Button
+            variant="toolbar"
+            size="toolbar"
+            shape="rounded"
+            aria-label="Zoom in"
+            onClick={handleZoomIn}
+          >
+            <Plus />
+          </Button>
+          <Button
+            variant="toolbar"
+            size="toolbar"
+            shape="rounded"
+            aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            onClick={handleFullscreen}
+          >
+            <span className="t-icon-swap size-4" data-state={isFullscreen ? "b" : "a"}>
+              <span className="t-icon" data-icon="a">
+                <Maximize2 />
+              </span>
+              <span className="t-icon" data-icon="b">
+                <Minimize2 />
+              </span>
+            </span>
+          </Button>
+        </div>
+
+        <div className="t-resize overflow-hidden" style={{ height: pillsHeight }}>
+          <div
+            ref={pillsInnerRef}
+            className={cn(
+              // Cancel FilterPillSlot's leading pl-2.5 so the first pill aligns with the filter button.
+              "-ml-2.5 flex items-center pt-2.5 will-change-[transform,opacity] transition-[transform,opacity] duration-[var(--resize-dur)] ease-[var(--resize-ease)]",
+              // Rise into the applied line as the panel collapses (same selection, new home).
+              showPillsRow
+                ? "translate-y-0 opacity-100"
+                : "translate-y-[var(--panel-translate-y)] opacity-0",
+            )}
+          >
+            <FilterPillSlot
+              open={showPillsRow && props.deliveryType !== "all"}
+              label={deliveryTypeLabel(props.deliveryType)}
+              onClear={() => props.onDeliveryTypeChange("all")}
+            />
+            <FilterPillSlot
+              open={showPillsRow && props.vacancy !== "all"}
+              label={vacancyLabel(props.vacancy)}
+              onClear={() => props.onVacancyChange("all")}
+            />
           </div>
-        )}
+        </div>
+
+        <div className="t-resize overflow-hidden" style={{ height: filterHeight }}>
+          {filterVisible && (
+            <div
+              ref={filterInnerRef}
+              className="t-panel-slide flex flex-col gap-4 pt-4"
+              data-open={props.filterOpen ? "true" : "false"}
+            >
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-secondary">Delivery Type</p>
+                <PillGroup
+                  exclusive
+                  options={[...DELIVERY_TYPE_OPTIONS]}
+                  value={props.deliveryType}
+                  onChange={(value) => {
+                    if (value != null) props.onDeliveryTypeChange(value as DeliveryTypeFilter);
+                  }}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-secondary">Assigned</p>
+                <PillGroup
+                  exclusive
+                  options={[...ASSIGNED_OPTIONS]}
+                  value={props.vacancy}
+                  onChange={(value) => {
+                    if (value != null) props.onVacancyChange(value as VacancyFilter);
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -550,6 +693,10 @@ export function RouteMap(props: {
   homes: MapHome[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** Changes when filters that should re-fit the map change (vacancy, search, type, homes). */
+  boundsFitKey: string;
+  /** False while filter-driven fetches are in flight — FitBounds waits for this. */
+  boundsFitReady: boolean;
   filterPlacement: FilterPlacement;
   search: string;
   onSearchChange: (value: string) => void;
@@ -561,47 +708,19 @@ export function RouteMap(props: {
   onDeliveryTypeChange: (value: DeliveryTypeFilter) => void;
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const cardHoverRef = useRef(false);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [hoverPosition, setHoverPosition] = useState<google.maps.LatLngLiteral | null>(null);
 
-  const cancelHide = useCallback(() => {
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = null;
+  const handleRouteHover = useCallback((id: string, position: google.maps.LatLngLiteral) => {
+    setHoveredId(id);
+    setHoverPosition(position);
   }, []);
 
-  const scheduleHide = useCallback(() => {
-    cancelHide();
-    hideTimerRef.current = setTimeout(() => {
-      if (!cardHoverRef.current) setHoveredId(null);
-    }, 150);
-  }, [cancelHide]);
-
-  const handleRouteEnter = useCallback(
-    (id: string) => {
-      cancelHide();
-      setHoveredId(id);
-    },
-    [cancelHide],
-  );
-
   const handleRouteLeave = useCallback(() => {
-    scheduleHide();
-  }, [scheduleHide]);
-
-  const handleCardEnter = useCallback(() => {
-    cardHoverRef.current = true;
-    cancelHide();
-  }, [cancelHide]);
-
-  const handleCardLeave = useCallback(() => {
-    cardHoverRef.current = false;
-    scheduleHide();
-  }, [scheduleHide]);
+    setHoveredId(null);
+    setHoverPosition(null);
+  }, []);
 
   const hoveredRoute = hoveredId ? (props.routes.find((r) => r.id === hoveredId) ?? null) : null;
-  const hoverPosition = hoveredRoute ? routeMidpoint(hoveredRoute) : null;
-
-  useEffect(() => () => cancelHide(), [cancelHide]);
 
   const browserKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY;
   if (!browserKey) {
@@ -633,7 +752,7 @@ export function RouteMap(props: {
               selected={r.id === props.selectedId}
               hovered={r.id === hoveredId}
               onSelect={() => props.onSelect(r.id)}
-              onRouteEnter={handleRouteEnter}
+              onRouteHover={handleRouteHover}
               onRouteLeave={handleRouteLeave}
             />
           ))}
@@ -641,16 +760,16 @@ export function RouteMap(props: {
             open={!!hoveredRoute && !!hoverPosition}
             route={hoveredRoute}
             position={hoverPosition}
-            onSelect={() => {
-              if (hoveredRoute) props.onSelect(hoveredRoute.id);
-            }}
-            onPointerEnter={handleCardEnter}
-            onPointerLeave={handleCardLeave}
           />
           {props.homes.map((h) => (
             <HomeMarker key={h.id} home={h} />
           ))}
-          <FitBounds routes={props.routes} homes={props.homes} />
+          <FitBounds
+            routes={props.routes}
+            homes={props.homes}
+            fitKey={props.boundsFitKey}
+            ready={props.boundsFitReady}
+          />
         </Map>
         {props.filterPlacement === "map" ? (
           <MapControls

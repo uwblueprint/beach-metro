@@ -29,7 +29,17 @@ import {
   useVolunteer,
   type MemberRole,
 } from "@/features/members/api";
-import { territoryDropKeys, useCaptainsList } from "@/features/territory-drops/api";
+import { territoryDropKeys, useTerritorySummaries } from "@/features/territory-drops/api";
+
+/** Active captains as territory options — includes empty territories (0 volunteers). */
+function captainTerritoryOptions(
+  territories: { id: string; captain: { name: string; retired: boolean } | null }[] | undefined,
+) {
+  return (territories ?? [])
+    .filter((t) => t.captain && !t.captain.retired)
+    .map((t) => ({ value: t.id, label: t.captain!.name }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
 
 function todayIso(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -107,6 +117,7 @@ function VolunteerContent({ id }: { id: string }) {
   const queryClient = useQueryClient();
   const { data: volunteer, isPending, isError, error } = useVolunteer(id);
   const updateVolunteer = useUpdateVolunteer(id);
+  const { data: territories } = useTerritorySummaries();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -115,6 +126,7 @@ function VolunteerContent({ id }: { id: string }) {
   const [address, setAddress] = useState("");
   const [addressPlaceId, setAddressPlaceId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState("");
+  const [captainTerritoryId, setCaptainTerritoryId] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
 
   if (isError) {
@@ -148,6 +160,7 @@ function VolunteerContent({ id }: { id: string }) {
     setAddress(currentAddress);
     setAddressPlaceId(volunteer!.address.placeId);
     setStartDate(volunteer!.startDate);
+    setCaptainTerritoryId(volunteer!.territory?.id ?? "");
     setSaveError(null);
     setEditing(true);
   }
@@ -179,6 +192,7 @@ function VolunteerContent({ id }: { id: string }) {
       phone?: string;
       startDate?: string;
       address?: { addressLines: string[] } | { placeId: string };
+      captainTerritoryId?: string | null;
     } = {};
     if (trimmedEmail !== volunteer!.email) body.email = trimmedEmail;
     if (trimmedPhone !== volunteer!.phone) body.phone = trimmedPhone;
@@ -189,6 +203,11 @@ function VolunteerContent({ id }: { id: string }) {
         : { addressLines: [trimmedAddress] };
     } else if (addressPlaceId && addressPlaceId !== volunteer!.address.placeId) {
       body.address = { placeId: addressPlaceId };
+    }
+    const nextTerritoryId = captainTerritoryId || null;
+    const prevTerritoryId = volunteer!.territory?.id ?? null;
+    if (nextTerritoryId !== prevTerritoryId) {
+      body.captainTerritoryId = nextTerritoryId;
     }
 
     if (Object.keys(body).length === 0) {
@@ -257,6 +276,17 @@ function VolunteerContent({ id }: { id: string }) {
                 onChange={(e) => setStartDate(e.target.value)}
               />
             </SidePanelField>
+            <SidePanelField label="Captain" htmlFor={`volunteer-captain-${id}`}>
+              <Select
+                id={`volunteer-captain-${id}`}
+                value={captainTerritoryId}
+                onChange={setCaptainTerritoryId}
+                options={[
+                  { value: "", label: "No captain" },
+                  ...captainTerritoryOptions(territories),
+                ]}
+              />
+            </SidePanelField>
           </>
         ) : (
           <>
@@ -267,9 +297,9 @@ function VolunteerContent({ id }: { id: string }) {
               value={volunteer.address.formattedAddress ?? "Not geocoded yet"}
             />
             <Attribute label="Start Date" value={formatDate(volunteer.startDate)} />
+            <Attribute label="Captain" value={volunteer.territory?.captainName ?? "No captain"} />
           </>
         )}
-        <Attribute label="Captain" value={volunteer.territory?.captainName ?? "No captain"} />
         <Attribute
           label="Status"
           value={
@@ -712,7 +742,7 @@ function CreateMemberContent({
 }) {
   const createVolunteer = useCreateVolunteer();
   const createCaptain = useCreateCaptain();
-  const { data: captains } = useCaptainsList();
+  const { data: territories } = useTerritorySummaries();
 
   const [role, setRole] = useState<MemberRole>("volunteer");
   const [firstName, setFirstName] = useState("");
@@ -906,12 +936,7 @@ function CreateMemberContent({
               onChange={setCaptainTerritoryId}
               options={[
                 { value: "", label: "No captain" },
-                ...(captains ?? [])
-                  .filter((c) => c.territory)
-                  .map((c) => ({
-                    value: c.territory!.id,
-                    label: `${c.firstName} ${c.lastName}`,
-                  })),
+                ...captainTerritoryOptions(territories),
               ]}
             />
           </SidePanelField>
