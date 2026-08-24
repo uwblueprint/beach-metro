@@ -164,6 +164,20 @@ investing further in substitute UX until someone asks.
   never a carrier row. This is the `VolunteerInstruction` placeholder we
   deferred, and it is a per-drop field, not a per-volunteer one.
 
+### 2.9 Their history archive is not cleanly structured
+
+`QUITS` holds 431 rows going back years, but the columns drifted: column 8
+mixes `Y` flags with phone numbers, column 9 holds phones, dates, emails and
+street descriptions, column 11 holds street descriptions and dates. Only 117
+rows carry a parseable date, spanning 2016–2019.
+
+Column 12 records a reason, and one of the values is **`Deceased`** — which is
+not the same event as quitting and probably should not be reported the same
+way. Our model has a bare `retired_at` date and no reason at all.
+
+Importing this is real manual work rather than a mapping exercise. Whether it
+is worth doing is a decision, not a technical question (§6, item 13).
+
 ---
 
 ## 3. Things the spreadsheet settles
@@ -196,6 +210,30 @@ investing further in substitute UX until someone asks.
   aggregate — a deliberate decision, but they really do disburse in batches.
 - **Scale.** ~358 commercial drop locations across the driven routes
   (`Routes31-71` ~109, `Route81` ~209, `Route91` ~40). Our seed has two.
+- **Our per-bundle model is exactly right.** `Sheet1` is one captain's pickup
+  worksheet and it has a literal **`Labeled` / `Unlabeled` column per bundle**
+  (17 labelled, 7 not, across two territories). That is `bundle_labels` in
+  spreadsheet form, and it independently confirms the "the unit is the bundle,
+  not the route" decision in `label_printing_flow.md` §2.
+- **The Word merge only reads five columns and about half the rows.** The
+  workbook's one defined name is `RouteLabels → LABELS!$A$1:$E$221`. So:
+  - Only **A–E** (Route, Papers, Name, Address, Bundles) reach the label. Phone,
+    email, start date, the category keyword and Lucky Volunteer are working
+    columns that sit alongside and never print — including the category, which
+    means **Type has never appeared on a printed label**.
+  - Only rows **2–221** are in range, out of 468 populated rows. Both halves
+    contain the same mix of territories and categories, so it is not a clean
+    "carriers print, drops don't" split. Either the bottom 247 rows genuinely
+    don't need labels, or the range is stale and some are quietly missed. Worth
+    asking (§6, item 8).
+- **Annual captain cost, for the reporting dashboard.** `Payments2026` has 24
+  captain rows summing to **$915.80 per issue**. At ~22 issues a year that is
+  roughly **$20,000/year** in captain payments — a useful sanity check for
+  whatever the overview's cost figures end up showing.
+- **Per-paper pay confirmed.** `Route24` does the arithmetic in the open:
+  1,200 papers × $0.18 = $216. It also carries
+  `DISCONTINUED 8.22.2023 AS PER SUSAN`, showing they retire a whole route with
+  a reason and a date — we soft-delete with neither.
 
 ---
 
@@ -228,12 +266,128 @@ Worth noting against our implementation:
 
 ---
 
-## 5. Suggested priority
+---
 
-1. **The name model (§2.1)** — blocks any data import, and the fix is invasive.
-2. **Optional contact details (§2.2)** — same blocker, much smaller fix.
-3. **Car allowance (§2.3)** — real money, currently wrong.
-4. **Skip houses (§2.6)** — decide before automated house counts ship (#23).
-5. **Label stock SKU (§4)** — cheap to confirm, and our cut guides may be wrong.
-6. **Finer type taxonomy (§3)** — confirm whether SCHOOL/CHURCH/LIBRARY/HOSPITAL
-   collapse into Commercial or need their own values.
+## 5. Things the office does today that our software cannot
+
+The gap list. Everything here is something they demonstrably do in the
+spreadsheet and we have no way to represent. Ordered roughly by how much it
+hurts.
+
+| # | They can | We cannot | Where it shows |
+| --- | --- | --- | --- |
+| 1 | Record a recipient who is not one person — a church, a building, a household, two people sharing | `first_name` + `last_name`, both required | §2.1 — 156 of 468 rows |
+| 2 | Keep someone on the roster with no phone or email | Both required to create anyone | §2.2 — 81% have no phone |
+| 3 | Pay a captain a car/gas allowance on top of their rate | Payout is quantity × rate, full stop | §2.3 — `Route91`: +$15 |
+| 4 | Mark a captain as having no pay basis at all (`N/A`) | `pay_type` must be bundle, paper or drop | §2.4 |
+| 5 | List specific houses to skip inside a territory | Nowhere to put it | §2.6 — `SKIP HOUSES` |
+| 6 | Distinguish a school, church, library and hospital | Only "commercial" | §3 — 30 such rows |
+| 7 | Attach a handling instruction to a drop ("Tie Loosely", "Open and leave in lobby") | No such field | §2.8 |
+| 8 | Deliver to a commercial or residential **bulk drop** as a tracked per-issue thing | Only volunteer routes get deliveries | `label_printing_flow.md` §7 |
+| 9 | Tell a captain "and take 4 loose 50s and 3 loose 25s" alongside the labelled bundles | We list every bundle individually, with no loose summary | §3 — `Sheet1` |
+| 10 | Refer to a territory by number (RT 01, RT 02…) | Territories have no name or number | §3 |
+| 11 | Record why someone left — quit, or **deceased** | `retired_at` is a bare date | `QUITS` col 12 |
+| 12 | Retire a whole route with a reason and date ("DISCONTINUED 8.22.2023 AS PER SUSAN") | Routes soft-delete with no reason | `Route24` |
+| 13 | Record when a drop was added or stopped | Drops are addresses, undated | §3 — `New/Stop` |
+| 14 | Track a "Lucky Volunteer" award | Field dropped as post-MVP | §2.8 — 38 rows |
+| 15 | Know the whole year's issue dates in advance | Issues are created one at a time | §3 — the calendar |
+| 16 | Reprint labels for a past issue | Current open issue only | `label_printing_flow.md` §3 |
+| 17 | Pay captains in batches covering several issues | Cadence is informational; no disbursement concept | §3 |
+
+Not everything here should be built. Items 14 and 17 were deliberately scoped
+out, and 16 was a conscious deferral. The list exists so those stay *decisions*
+rather than things nobody noticed.
+
+---
+
+## 6. Action items
+
+Plain-language list of what to ask and what to decide. Nothing here is a coding
+task yet — each one needs an answer from the office or a call from the team
+first.
+
+### Ask Melinda / the office
+
+1. **"When someone isn't a single person — a church, an apartment building, a
+   couple who share a route — how do you want their name to appear?"**
+   A third of their list is like this. Right now our system would force
+   "Councillor Kandavel" into a first name and a last name. We need to know
+   whether they think of these as people at all, or as places.
+
+2. **"Is it OK if we don't have a phone number or email for someone?"**
+   Four out of five people on their list have no phone on file. Our system
+   currently refuses to add anyone without one. We should confirm they want to
+   keep it that way rather than us blocking them.
+
+3. **"Some captains get $50 or $15 for gas — how does that work?"**
+   Is it every issue, every month, or once a year? Does someone covering for
+   them get it instead? Our payment calculation has no place for it today, so
+   those captains are being shown less than they're actually owed.
+
+4. **"One captain's pay type is marked N/A — what does that mean?"**
+   Do they take no payment at all, or is it just unrecorded? We can already
+   handle "paid at a rate of zero", but "no arrangement" is a different thing.
+
+5. **"You have a list of houses to skip. How should those work?"**
+   Are they permanent, or do they come and go? This matters because we're
+   about to start counting houses on a street automatically, and the automatic
+   count has no way of knowing three houses on that street are opted out.
+
+6. **"What kind of label sheets do you buy?"**
+   The brand and product number. We need it to guarantee our printout lines up
+   with the holes in their stock — and to decide whether to remove the cut
+   lines we added, which are only useful if they're cutting plain paper.
+
+7. **"Are schools, churches, libraries and hospitals just 'commercial' to you,
+   or are they different?"**
+   They're separate labels in the spreadsheet. If the distinction matters
+   operationally we should keep it; if it's just descriptive, one category is
+   simpler.
+
+8. **"Roughly half your label list is below the print cut-off. Is that on
+   purpose?"**
+   The printout only covers the first ~220 rows and there are 468. Either the
+   rest genuinely don't need labels, or some are quietly being missed every
+   issue. Worth checking before we copy the behaviour.
+
+9. **"Do you ever need to reprint labels for a past issue?"**
+   We only support the current one. Cheap to add if they say yes, wasted effort
+   if not.
+
+10. **"When you hand a captain their bundles, how do you tell them about the
+    unlabelled ones?"**
+    Their sheet says "take 4 x 50s and 3 x 25s unlabelled" as a single line.
+    Our screen lists every bundle separately, which may be more detail than is
+    useful at the counter.
+
+### Decide as a team
+
+11. **How to store a recipient who isn't a person.** Depends on answer 1, and
+    it's the single biggest change on this list — it touches how everyone is
+    stored, searched and displayed. Worth agreeing before anyone starts.
+
+12. **Whether contact details are required for new people but optional for
+    imported ones.** That's a reasonable compromise and it's a small change,
+    but it should be a deliberate choice rather than a side effect.
+
+13. **Whether to import their history at all.** There are 434 people in their
+    "quit" archive going back years, with reasons recorded inconsistently
+    across half a dozen columns. Bringing that in is real work; leaving it
+    behind loses their institutional memory. Someone should decide which.
+
+14. **Whether the year's publication calendar should be entered up front.**
+    They already know all ~22 issue dates for 2026. Our system makes them
+    create issues one at a time. Entering the year in one go would save
+    repeated work, but it's a new feature.
+
+15. **What to do about the two captains and one route that are marked
+    discontinued or away.** Their spreadsheet keeps them visible with a note.
+    Ours would either hide them or leave them looking active.
+
+### Already answered, no action needed
+
+- What Carrier / Commercial / Residential mean — Kristen, 2026-08-23.
+- Whether `Bundle N of M` is the right thing to print — confirmed by 150+ rows.
+- Whether territory drops have a date — they do, but it's an added/removed
+  date, not a delivery date.
+- What the RT number counts — a territory, not a route.
