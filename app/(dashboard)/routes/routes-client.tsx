@@ -172,6 +172,17 @@ function DeliveriesFilterSection(props: {
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [filterClosing, setFilterClosing] = useState(false);
   const [filterHeight, setFilterHeight] = useState(0);
+  const [trackedFilterOpen, setTrackedFilterOpen] = useState(props.filterOpen);
+
+  // Adjust open/close flags during render (React-approved) — avoid sync setState in effects.
+  if (props.filterOpen !== trackedFilterOpen) {
+    setTrackedFilterOpen(props.filterOpen);
+    if (props.filterOpen) {
+      setFilterClosing(false);
+    } else if (filterHeight > 0 || filterClosing) {
+      setFilterClosing(true);
+    }
+  }
 
   const filterVisible = props.filterOpen || filterClosing;
 
@@ -181,20 +192,23 @@ function DeliveriesFilterSection(props: {
         clearTimeout(closeTimerRef.current);
         closeTimerRef.current = null;
       }
-      setFilterClosing(false);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
+      let nested = 0;
+      const outer = requestAnimationFrame(() => {
+        nested = requestAnimationFrame(() => {
           setFilterHeight(filterInnerRef.current?.scrollHeight ?? 0);
         });
       });
-      return;
+      return () => {
+        cancelAnimationFrame(outer);
+        cancelAnimationFrame(nested);
+      };
     }
 
-    if (!filterClosing && filterHeight === 0) return;
+    if (!filterClosing) return;
 
-    setFilterClosing(true);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    let nested = 0;
+    const outer = requestAnimationFrame(() => {
+      nested = requestAnimationFrame(() => {
         setFilterHeight(0);
       });
     });
@@ -211,17 +225,27 @@ function DeliveriesFilterSection(props: {
     }, closeMs);
 
     return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(nested);
       if (closeTimerRef.current) {
         clearTimeout(closeTimerRef.current);
         closeTimerRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.filterOpen]);
+  }, [props.filterOpen, filterClosing]);
 
   useLayoutEffect(() => {
     if (!filterVisible || !filterInnerRef.current) return;
-    setFilterHeight(filterInnerRef.current.scrollHeight);
+    let nested = 0;
+    const outer = requestAnimationFrame(() => {
+      nested = requestAnimationFrame(() => {
+        setFilterHeight(filterInnerRef.current?.scrollHeight ?? 0);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(nested);
+    };
   }, [filterVisible, props.vacancy, props.deliveryType]);
 
   return (
@@ -310,7 +334,7 @@ export function RoutesClient() {
   const qc = useQueryClient();
   const [vacancy, setVacancy] = useState<Vacancy>("all");
   const [q, setQ] = useState("");
-  const [showHomes, setShowHomes] = useState(false);
+  const [showHomes] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);

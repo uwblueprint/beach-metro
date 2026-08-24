@@ -116,13 +116,15 @@ function RouteOverlay(props: {
   const markersRef = useRef<google.maps.Marker[]>([]);
 
   const routeRef = useRef(route);
-  routeRef.current = route;
   const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
   const onRouteHoverRef = useRef(onRouteHover);
-  onRouteHoverRef.current = onRouteHover;
   const onRouteLeaveRef = useRef(onRouteLeave);
-  onRouteLeaveRef.current = onRouteLeave;
+  useLayoutEffect(() => {
+    routeRef.current = route;
+    onSelectRef.current = onSelect;
+    onRouteHoverRef.current = onRouteHover;
+    onRouteLeaveRef.current = onRouteLeave;
+  });
 
   const pathKey =
     route.path && route.path.length >= 2
@@ -378,11 +380,26 @@ function MapControls(props: {
   const [filterClosing, setFilterClosing] = useState(false);
   const [filterHeight, setFilterHeight] = useState(0);
   const [pillsHeight, setPillsHeight] = useState(0);
+  const [trackedFilterOpen, setTrackedFilterOpen] = useState(props.filterOpen);
+
+  // Adjust open/close flags during render (React-approved) — avoid sync setState in effects.
+  if (props.filterOpen !== trackedFilterOpen) {
+    setTrackedFilterOpen(props.filterOpen);
+    if (props.filterOpen) {
+      setFilterClosing(false);
+    } else if (filterHeight > 0 || filterClosing) {
+      setFilterClosing(true);
+    }
+  }
 
   const filterVisible = props.filterOpen || filterClosing;
   const hasActivePills = props.deliveryType !== "all" || props.vacancy !== "all";
   // Applied pills only when the menu is collapsed — appear as the panel closes (shared morph).
   const showPillsRow = hasActivePills && !props.filterOpen;
+
+  if (!showPillsRow && pillsHeight !== 0) {
+    setPillsHeight(0);
+  }
 
   useEffect(() => {
     function onFsChange() {
@@ -398,20 +415,23 @@ function MapControls(props: {
         clearTimeout(closeTimerRef.current);
         closeTimerRef.current = null;
       }
-      setFilterClosing(false);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
+      let nested = 0;
+      const outer = requestAnimationFrame(() => {
+        nested = requestAnimationFrame(() => {
           setFilterHeight(filterInnerRef.current?.scrollHeight ?? 0);
         });
       });
-      return;
+      return () => {
+        cancelAnimationFrame(outer);
+        cancelAnimationFrame(nested);
+      };
     }
 
-    if (!filterClosing && filterHeight === 0) return;
+    if (!filterClosing) return;
 
-    setFilterClosing(true);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    let nested = 0;
+    const outer = requestAnimationFrame(() => {
+      nested = requestAnimationFrame(() => {
         setFilterHeight(0);
       });
     });
@@ -428,30 +448,42 @@ function MapControls(props: {
     }, closeMs);
 
     return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(nested);
       if (closeTimerRef.current) {
         clearTimeout(closeTimerRef.current);
         closeTimerRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.filterOpen]);
+  }, [props.filterOpen, filterClosing]);
 
   useLayoutEffect(() => {
     if (!filterVisible || !filterInnerRef.current) return;
-    setFilterHeight(filterInnerRef.current.scrollHeight);
+    let nested = 0;
+    const outer = requestAnimationFrame(() => {
+      nested = requestAnimationFrame(() => {
+        setFilterHeight(filterInnerRef.current?.scrollHeight ?? 0);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(nested);
+    };
   }, [filterVisible, props.vacancy, props.deliveryType]);
 
   // Height-tween the applied-pills row only while the filter menu is collapsed.
   useLayoutEffect(() => {
-    if (!showPillsRow) {
-      setPillsHeight(0);
-      return;
-    }
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    if (!showPillsRow) return;
+    let nested = 0;
+    const outer = requestAnimationFrame(() => {
+      nested = requestAnimationFrame(() => {
         setPillsHeight(pillsInnerRef.current?.scrollHeight ?? 0);
       });
     });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(nested);
+    };
   }, [showPillsRow, props.vacancy, props.deliveryType]);
 
   const handleZoomIn = useCallback(() => {

@@ -82,7 +82,10 @@ function MapHtmlOverlay(props: { position: LatLng; children: React.ReactNode }) 
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const overlayRef = useRef<google.maps.OverlayView | null>(null);
   const positionRef = useRef(props.position);
-  positionRef.current = props.position;
+
+  useLayoutEffect(() => {
+    positionRef.current = props.position;
+  });
 
   useEffect(() => {
     if (!map) return;
@@ -148,38 +151,59 @@ export function RouteHoverCard(props: {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const wasOpenRef = useRef(false);
 
-  const visible = snapshot != null;
   const openRouteId = open && route ? route.id : null;
+  const [trackedOpenId, setTrackedOpenId] = useState<string | null>(openRouteId);
 
-  // Open/close keyed on route identity only — position updates must not re-run enter anim.
-  useLayoutEffect(() => {
+  // Open/close keyed on route identity — adjust during render to avoid sync setState in effects.
+  if (openRouteId !== trackedOpenId) {
+    const wasOpen = trackedOpenId != null;
+    setTrackedOpenId(openRouteId);
     if (openRouteId && route && position) {
+      setSnapshot({ route, position });
+      setClosing(false);
+      setDropdownOpen(wasOpen);
+    } else if (wasOpen) {
+      setDropdownOpen(false);
+      setClosing(true);
+    }
+  } else if (
+    openRouteId &&
+    route &&
+    position &&
+    !closing &&
+    snapshot &&
+    snapshot.route.id === route.id &&
+    (snapshot.position.lat !== position.lat ||
+      snapshot.position.lng !== position.lng ||
+      snapshot.route.label !== route.label ||
+      snapshot.route.volunteerName !== route.volunteerName ||
+      snapshot.route.bundleCount !== route.bundleCount ||
+      snapshot.route.papers !== route.papers ||
+      snapshot.route.lifecycle !== route.lifecycle)
+  ) {
+    setSnapshot({ route, position });
+  }
+
+  useLayoutEffect(() => {
+    if (openRouteId) {
       if (closeTimerRef.current) {
         clearTimeout(closeTimerRef.current);
         closeTimerRef.current = null;
       }
-      setSnapshot({ route, position });
-      setClosing(false);
-
-      if (!wasOpenRef.current) {
-        wasOpenRef.current = true;
-        setDropdownOpen(false);
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => setDropdownOpen(true));
-        });
-      } else {
-        setDropdownOpen(true);
-      }
-      return;
+      if (dropdownOpen) return;
+      let nested = 0;
+      const outer = requestAnimationFrame(() => {
+        nested = requestAnimationFrame(() => setDropdownOpen(true));
+      });
+      return () => {
+        cancelAnimationFrame(outer);
+        cancelAnimationFrame(nested);
+      };
     }
 
-    if (!wasOpenRef.current && !snapshot) return;
+    if (!closing) return;
 
-    wasOpenRef.current = false;
-    setDropdownOpen(false);
-    setClosing(true);
     const closeMs = readCssDurationMs("--dropdown-close-dur", 150);
     closeTimerRef.current = setTimeout(() => {
       setClosing(false);
@@ -193,16 +217,9 @@ export function RouteHoverCard(props: {
         closeTimerRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openRouteId]);
+  }, [openRouteId, closing, dropdownOpen]);
 
-  // Slide + content refresh while open.
-  useEffect(() => {
-    if (!open || !route || !position || closing) return;
-    setSnapshot({ route, position });
-  }, [open, route, position, closing]);
-
-  if (!visible || !snapshot) return null;
+  if (!snapshot) return null;
 
   const volunteer = snapshot.route.volunteerName ?? "vacant";
   const counts = `${snapshot.route.bundleCount}B, ${snapshot.route.papers}P`;

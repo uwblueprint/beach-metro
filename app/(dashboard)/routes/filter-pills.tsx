@@ -49,20 +49,27 @@ export function FilterPillSlot({
   const [mounted, setMounted] = useState(open);
   const [width, setWidth] = useState(0);
 
+  if (open && !mounted) {
+    setMounted(true);
+  }
+  if (!open && width !== 0) {
+    setWidth(0);
+  }
+
   useLayoutEffect(() => {
     if (open) {
       if (closeTimerRef.current) {
         clearTimeout(closeTimerRef.current);
         closeTimerRef.current = null;
       }
-      setMounted(true);
       return;
     }
 
-    setWidth(0);
+    if (!mounted) return;
+
     if (!innerRef.current) {
-      setMounted(false);
-      return;
+      const t = setTimeout(() => setMounted(false), 0);
+      return () => clearTimeout(t);
     }
     const ms = readCssDurationMsFrom(innerRef.current, "--resize-dur", 300);
     closeTimerRef.current = setTimeout(() => {
@@ -76,7 +83,7 @@ export function FilterPillSlot({
         closeTimerRef.current = null;
       }
     };
-  }, [open]);
+  }, [open, mounted]);
 
   useLayoutEffect(() => {
     if (!open || !mounted) return;
