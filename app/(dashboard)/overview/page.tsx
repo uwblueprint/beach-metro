@@ -5,7 +5,8 @@ import Link from "next/link";
 import { ArrowUpRight, Check, ChevronDown } from "lucide-react";
 
 import { ArchiveBanner } from "@/components/archive-banner";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Dialog,
   DialogContent,
@@ -25,14 +26,12 @@ import { useOverview, useYears, type Overview } from "@/features/finances/api";
 import { cn } from "@/lib/utils";
 
 import {
-  PERIOD_OPTIONS,
   formatCount,
   formatCurrency,
   formatIssueDate,
   monthLabel,
   monthYearLabel,
   yearDateRange,
-  type PaymentPeriod,
 } from "./data";
 
 const PAPERS_PREVIEW_COUNT = 3;
@@ -183,7 +182,11 @@ function YtdRunningCostChart({
 export default function OverviewPage() {
   const [selectedYearId, setSelectedYearId] = React.useState<string | null>(null);
   const [showArchiveBanner, setShowArchiveBanner] = React.useState(false);
-  const [captainPeriod, setCaptainPeriod] = React.useState<PaymentPeriod>("ytd");
+  const [captainMode, setCaptainMode] = React.useState<"ytd" | "custom">("ytd");
+  const [captainStart, setCaptainStart] = React.useState("");
+  const [captainEnd, setCaptainEnd] = React.useState("");
+  const [draftStart, setDraftStart] = React.useState("");
+  const [draftEnd, setDraftEnd] = React.useState("");
   const [periodOpen, setPeriodOpen] = React.useState(false);
   const [hoveredChartIndex, setHoveredChartIndex] = React.useState<number | null>(null);
   const [papersDialogOpen, setPapersDialogOpen] = React.useState(false);
@@ -202,7 +205,11 @@ export default function OverviewPage() {
 
   // Chart, stat cards, and papers always show YTD. Captain payments use their own period picker.
   const { data: overview, isPending, isError, error } = useOverview(activeYearId, "ytd");
-  const { data: captainOverview } = useOverview(activeYearId, captainPeriod);
+  const captainRange =
+    captainMode === "custom" && captainStart && captainEnd
+      ? { from: captainStart, to: captainEnd }
+      : undefined;
+  const { data: captainOverview } = useOverview(activeYearId, "ytd", captainRange);
 
   function handleSelectYear(yearId: string) {
     const next = yearOptions.find((o) => o.id === yearId);
@@ -210,7 +217,27 @@ export default function OverviewPage() {
     setShowArchiveBanner(next?.archived ?? false);
   }
 
-  const periodLabel = PERIOD_OPTIONS.find((o) => o.id === captainPeriod)?.menuLabel ?? "YTD";
+  const periodLabel =
+    captainMode === "custom" && captainStart && captainEnd
+      ? `${formatIssueDate(captainStart)} – ${formatIssueDate(captainEnd)}`
+      : "YTD";
+  const canApplyCustomRange = draftStart !== "" && draftEnd !== "" && draftStart <= draftEnd;
+
+  function handlePeriodOpenChange(next: boolean) {
+    if (next) {
+      setDraftStart(captainMode === "custom" ? captainStart : "");
+      setDraftEnd(captainMode === "custom" ? captainEnd : "");
+    }
+    setPeriodOpen(next);
+  }
+
+  function applyCustomRange() {
+    setCaptainStart(draftStart);
+    setCaptainEnd(draftEnd);
+    setCaptainMode("custom");
+    setPeriodOpen(false);
+  }
+
   const papersPerIssue = overview?.papersPerIssue ?? [];
 
   return (
@@ -364,55 +391,70 @@ export default function OverviewPage() {
                     )}
                   </div>
 
-                  <Popover open={periodOpen} onOpenChange={setPeriodOpen}>
+                  <Popover open={periodOpen} onOpenChange={handlePeriodOpenChange}>
                     <PopoverTrigger
                       render={
-                        <Button variant="outline" size="sm" className="gap-1.5 font-medium">
+                        <button
+                          type="button"
+                          className={cn(
+                            buttonVariants({ variant: "outline", size: "sm" }),
+                            "gap-1.5 font-medium",
+                          )}
+                        >
                           {periodLabel}
                           <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
-                        </Button>
+                        </button>
                       }
                     />
                     <PopoverContent
                       align="end"
                       side="bottom"
                       sideOffset={4}
-                      className="w-44 gap-0 p-1"
+                      className="w-[280px] gap-0 p-1"
                     >
                       <button
                         type="button"
                         onClick={() => {
-                          setCaptainPeriod("ytd");
+                          setCaptainMode("ytd");
                           setPeriodOpen(false);
                         }}
                         className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-muted"
                       >
-                        <span className={cn(captainPeriod === "ytd" && "font-medium")}>YTD</span>
-                        {captainPeriod === "ytd" && (
+                        <span className={cn(captainMode === "ytd" && "font-medium")}>YTD</span>
+                        {captainMode === "ytd" && (
                           <Check className="size-3.5 text-active" strokeWidth={2.5} />
                         )}
                       </button>
 
                       <div className="my-1 h-px bg-hairline" />
 
-                      {PERIOD_OPTIONS.filter((option) => option.id !== "ytd").map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => {
-                            setCaptainPeriod(option.id);
-                            setPeriodOpen(false);
-                          }}
-                          className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-muted"
-                        >
-                          <span className={cn(captainPeriod === option.id && "font-medium")}>
-                            {option.menuLabel}
+                      <div className="flex flex-col gap-2 px-1.5 pt-1 pb-1.5">
+                        <p className="text-xs font-medium text-muted-foreground">Custom range</p>
+                        <div className="flex items-center gap-2">
+                          <div className="min-w-0 flex-1">
+                            <DatePicker
+                              label="Start Date"
+                              value={draftStart}
+                              onChange={setDraftStart}
+                            />
+                          </div>
+                          <span aria-hidden className="shrink-0 text-sm text-muted-foreground">
+                            →
                           </span>
-                          {captainPeriod === option.id && (
-                            <Check className="size-3.5 text-active" strokeWidth={2.5} />
-                          )}
-                        </button>
-                      ))}
+                          <div className="min-w-0 flex-1">
+                            <DatePicker label="End Date" value={draftEnd} onChange={setDraftEnd} />
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          disabled={!canApplyCustomRange}
+                          onClick={applyCustomRange}
+                        >
+                          Apply
+                        </Button>
+                      </div>
                     </PopoverContent>
                   </Popover>
                 </div>

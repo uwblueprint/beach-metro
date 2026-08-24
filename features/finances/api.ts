@@ -27,8 +27,11 @@ export const financeKeys = {
   years: () => ["finances", "years"] as const,
   year: (id: string) => ["finances", "year", id] as const,
   payout: (id: string) => ["finances", "payout", id] as const,
-  overview: (yearId: string | undefined, period: Period) =>
-    ["finances", "overview", yearId ?? "current", period] as const,
+  overview: (
+    yearId: string | undefined,
+    period: Period,
+    customRange?: { from: string; to: string },
+  ) => ["finances", "overview", yearId ?? "current", customRange ?? period] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -61,10 +64,24 @@ export function usePayoutDetail(payoutId: string | null) {
   });
 }
 
-export function useOverview(yearId: string | undefined, period: Period) {
+/**
+ * `customRange`, when given, wins over `period` — same rule as the backend's
+ * `periodQuery` (explicit from/to beats the named period).
+ */
+export function useOverview(
+  yearId: string | undefined,
+  period: Period,
+  customRange?: { from: string; to: string },
+) {
   return useQuery({
-    queryKey: financeKeys.overview(yearId, period),
-    queryFn: () => api.get<Overview>("/api/overview", { yearId, period }),
+    queryKey: financeKeys.overview(yearId, period, customRange),
+    queryFn: () =>
+      api.get<Overview>("/api/overview", {
+        yearId,
+        period,
+        from: customRange?.from,
+        to: customRange?.to,
+      }),
     // Keep the previous figures up while a new period loads, so the stat tiles
     // do not blank out every time the filter changes.
     placeholderData: (previous) => previous,
