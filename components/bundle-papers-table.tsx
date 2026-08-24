@@ -56,10 +56,6 @@ function BundlePapersTable({
     if (value.length === 0) onChange([0]);
   }, [value.length, onChange]);
 
-  useEffect(() => {
-    setLabelled((prev) => resizeFlags(prev, value.length));
-  }, [value.length]);
-
   function startEdit(index: number) {
     setEditingIndex(index);
     setDraft(value[index] ? String(value[index]) : "");
