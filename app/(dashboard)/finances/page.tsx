@@ -115,6 +115,40 @@ function ClosedLockIcon() {
   );
 }
 
+function IssueLockButton({ locked, onToggle }: { locked: boolean; onToggle: () => void }) {
+  const ignoreClickRef = React.useRef(false);
+
+  return (
+    <button
+      type="button"
+      aria-label={locked ? "Unlock issue" : "Lock issue"}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (ignoreClickRef.current) return;
+        ignoreClickRef.current = true;
+        onToggle();
+      }}
+      onPointerLeave={() => {
+        ignoreClickRef.current = false;
+      }}
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-[4px] p-2 text-muted-foreground transition-[background-color,color] duration-100 hover:bg-muted hover:text-primary [&_svg]:pointer-events-none",
+        locked ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+      )}
+    >
+      <span aria-hidden className="relative block size-3">
+        <span className={cn("absolute inset-0", locked ? "opacity-100" : "opacity-0")}>
+          <ClosedLockIcon />
+        </span>
+        <span className={cn("absolute inset-0", locked ? "opacity-0" : "opacity-100")}>
+          <OpenLockIcon />
+        </span>
+      </span>
+    </button>
+  );
+}
+
 type FilterSegmentOption<T extends string> = {
   value: T;
   label: string;
@@ -253,8 +287,10 @@ export default function FinancesPage() {
 
   // Memoised so the `?? []` fallbacks do not produce a new array identity on every
   // render, which would make every downstream memo recompute for nothing.
-  const allCaptains = React.useMemo(() => year?.captains ?? [], [year]);
   const allIssues = React.useMemo<GridIssue[]>(() => year?.issues ?? [], [year]);
+
+  // Captains are sorted alphabetically server-side, so column order is stable.
+  const allCaptains = React.useMemo(() => year?.captains ?? [], [year]);
 
   const visibleCaptains = React.useMemo(
     () => filterFinancesCaptains(allCaptains, filters),
@@ -417,8 +453,8 @@ export default function FinancesPage() {
     }
   }
 
-  function handleCommentChange(key: CellKey, comment: string) {
-    setCellComment.mutate({ payoutId: key, comment: comment.trim() || null });
+  function handleCommentChange(key: CellKey, comment: string | null) {
+    setCellComment.mutate({ payoutId: key, comment: comment?.trim() || null });
   }
 
   /**
@@ -514,10 +550,19 @@ export default function FinancesPage() {
   }
 
   /** One lock per issue ("these numbers are settled"), a bulk freeze over its cells. */
+  const lockInFlightRef = React.useRef(false);
   function toggleIssueLock(issueId: string, locked: boolean) {
-    if (isArchivedYear) return;
+    if (isArchivedYear || lockInFlightRef.current) return;
+    lockInFlightRef.current = true;
     if (editingCell && cellsByPayoutId.get(editingCell)?.payoutId) setEditingCell(null);
-    toggleLock.mutate({ issueId, locked });
+    toggleLock.mutate(
+      { issueId, locked },
+      {
+        onSettled: () => {
+          lockInFlightRef.current = false;
+        },
+      },
+    );
   }
 
   function handleExportCsv() {
@@ -936,31 +981,20 @@ export default function FinancesPage() {
                               </span>
                             )}
                             {!isArchivedYear && !isIssueClosed && (
-                              <button
-                                type="button"
-                                aria-label={isIssueLocked ? "Unlock issue" : "Lock issue"}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleIssueLock(issue.id, isIssueLocked);
-                                }}
-                                className={cn(
-                                  "flex shrink-0 items-center justify-center rounded-[4px] p-2 text-muted-foreground transition-[background-color,color] duration-100 hover:bg-muted hover:text-primary",
-                                  isIssueLocked
-                                    ? "pointer-events-auto opacity-100"
-                                    : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100",
-                                )}
-                              >
-                                {isIssueLocked ? <ClosedLockIcon /> : <OpenLockIcon />}
-                              </button>
+                              <IssueLockButton
+                                locked={isIssueLocked}
+                                onToggle={() => toggleIssueLock(issue.id, isIssueLocked)}
+                              />
                             )}
                           </div>
                         </TableCell>
                         {visibleCaptains.map((captain) => {
                           const cell = issue.cells.find((c) => c.captainId === captain.id);
+                          const cellKey = cell?.payoutId ?? `${issue.id}-${captain.id}`;
                           if (!cell) {
                             return (
                               <TableCell
-                                key={`${issue.id}-${captain.id}`}
+                                key={cellKey}
                                 className={cn("h-12 px-4", FINANCES_TABLE_CELL)}
                                 style={{
                                   width: CAPTAIN_COLUMN_WIDTH,
@@ -991,7 +1025,7 @@ export default function FinancesPage() {
 
                           return (
                             <TableCell
-                              key={key}
+                              key={cellKey}
                               className={cn("p-0", FINANCES_TABLE_CELL)}
                               style={{
                                 width: CAPTAIN_COLUMN_WIDTH,
@@ -999,6 +1033,7 @@ export default function FinancesPage() {
                               }}
                             >
                               <PaymentCell
+                                key={cell.payoutId}
                                 value={cell.effectiveAmount}
                                 paid={cell.paid}
                                 columnCaptain={captain.name}

@@ -161,6 +161,9 @@ export async function listRoutes(filters: z.infer<typeof routesQuery>): Promise<
     );
     all = all.filter((r) => r.assignedVolunteer && volunteerIds.has(r.assignedVolunteer.id));
   }
+  if (filters.captainId) {
+    all = all.filter((r) => r.captain?.id === filters.captainId);
+  }
   if (filters.volunteerId) {
     all = all.filter((r) => r.assignedVolunteer?.id === filters.volunteerId);
   }

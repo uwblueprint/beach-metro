@@ -375,6 +375,8 @@ function vacancyLabel(value: VacancyFilter): string {
   return ASSIGNED_OPTIONS.find((o) => o.value === value)?.label ?? value;
 }
 
+export type CaptainFilterOption = { value: string; label: string };
+
 export type FilterPlacement = "map" | "sidepanel";
 
 /** Custom map controls overlay: filter, search, zoom ±, recenter, fullscreen. */
@@ -388,6 +390,9 @@ function MapControls(props: {
   deliveryType: DeliveryTypeFilter;
   onDeliveryTypeChange: (value: DeliveryTypeFilter) => void;
   defaultBoundsRef: React.RefObject<google.maps.LatLngBounds | null>;
+  captainId: string;
+  onCaptainChange: (value: string) => void;
+  captainOptions: CaptainFilterOption[];
 }) {
   const map = useMap("routes-map");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -411,7 +416,10 @@ function MapControls(props: {
   }
 
   const filterVisible = props.filterOpen || filterClosing;
-  const hasActivePills = props.deliveryType !== "all" || props.vacancy !== "all";
+  const captainLabel =
+    props.captainOptions.find((o) => o.value === props.captainId)?.label ?? props.captainId;
+  const hasActivePills =
+    props.deliveryType !== "all" || props.vacancy !== "all" || props.captainId !== "all";
   // Applied pills only when the menu is collapsed — appear as the panel closes (shared morph).
   const showPillsRow = hasActivePills && !props.filterOpen;
 
@@ -487,7 +495,7 @@ function MapControls(props: {
       cancelAnimationFrame(outer);
       cancelAnimationFrame(nested);
     };
-  }, [filterVisible, props.vacancy, props.deliveryType]);
+  }, [filterVisible, props.vacancy, props.deliveryType, props.captainId, props.captainOptions]);
 
   // Height-tween the applied-pills row only while the filter menu is collapsed.
   useLayoutEffect(() => {
@@ -502,7 +510,7 @@ function MapControls(props: {
       cancelAnimationFrame(outer);
       cancelAnimationFrame(nested);
     };
-  }, [showPillsRow, props.vacancy, props.deliveryType]);
+  }, [showPillsRow, props.vacancy, props.deliveryType, props.captainId]);
 
   const handleZoomIn = useCallback(() => {
     if (!map) return;
@@ -639,6 +647,11 @@ function MapControls(props: {
               label={vacancyLabel(props.vacancy)}
               onClear={() => props.onVacancyChange("all")}
             />
+            <FilterPillSlot
+              open={showPillsRow && props.captainId !== "all"}
+              label={captainLabel}
+              onClear={() => props.onCaptainChange("all")}
+            />
           </div>
         </div>
 
@@ -668,6 +681,17 @@ function MapControls(props: {
                   value={props.vacancy}
                   onChange={(value) => {
                     if (value != null) props.onVacancyChange(value as VacancyFilter);
+                  }}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-secondary">Captain</p>
+                <PillGroup
+                  exclusive
+                  options={props.captainOptions}
+                  value={props.captainId}
+                  onChange={(value) => {
+                    if (value != null) props.onCaptainChange(value);
                   }}
                 />
               </div>
@@ -798,6 +822,9 @@ export function RouteMap(props: {
   onVacancyChange: (value: VacancyFilter) => void;
   deliveryType: DeliveryTypeFilter;
   onDeliveryTypeChange: (value: DeliveryTypeFilter) => void;
+  captainId: string;
+  onCaptainChange: (value: string) => void;
+  captainOptions: CaptainFilterOption[];
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [hoverPosition, setHoverPosition] = useState<google.maps.LatLngLiteral | null>(null);
@@ -880,6 +907,9 @@ export function RouteMap(props: {
             deliveryType={props.deliveryType}
             onDeliveryTypeChange={props.onDeliveryTypeChange}
             defaultBoundsRef={defaultBoundsRef}
+            captainId={props.captainId}
+            onCaptainChange={props.onCaptainChange}
+            captainOptions={props.captainOptions}
           />
         ) : (
           <MapZoomControls defaultBoundsRef={defaultBoundsRef} />
