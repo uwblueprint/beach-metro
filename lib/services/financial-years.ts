@@ -114,13 +114,10 @@ export async function getYearDetail(id: string): Promise<YearDetail> {
 
   const { data: captainData, error: captainError } = await client
     .from("captains")
-    .select("id, first_name, last_name, pay_type, pay_rate");
+    .select("id, display_name, pay_type, pay_rate");
   if (captainError) throwDb(captainError);
   const captains = (
-    (captainData ?? []) as Pick<
-      CaptainRow,
-      "id" | "first_name" | "last_name" | "pay_type" | "pay_rate"
-    >[]
+    (captainData ?? []) as Pick<CaptainRow, "id" | "display_name" | "pay_type" | "pay_rate">[]
   ).map(coerceCaptainNumerics);
 
   const columnCaptainIds = [...new Set(payouts.map((p) => p.captain_id))];
@@ -128,7 +125,7 @@ export async function getYearDetail(id: string): Promise<YearDetail> {
   const nameOf = (cid: string | null): string | null => {
     if (!cid) return null;
     const c = captains.find((x) => x.id === cid);
-    return c ? `${c.first_name} ${c.last_name}` : "Unknown captain";
+    return c ? c.display_name : "Unknown captain";
   };
 
   return {

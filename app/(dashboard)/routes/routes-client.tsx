@@ -26,7 +26,7 @@ interface RouteSummary {
   needsAttention: boolean;
   effectiveHouseCount: number;
   papers: number;
-  assignedVolunteer: { id: string; firstName: string; lastName: string; status: string } | null;
+  assignedVolunteer: { id: string; displayName: string; status: string } | null;
   captain: { id: string; name: string } | null;
   start: { latitude: number; longitude: number } | null;
   end: { latitude: number; longitude: number } | null;
@@ -38,8 +38,9 @@ interface RouteDetail extends RouteSummary {
 }
 interface VolunteerSummary {
   id: string;
-  firstName: string;
-  lastName: string;
+  displayName: string;
+  firstName: string | null;
+  lastName: string | null;
   status: string;
   home: { latitude: number; longitude: number } | null;
 }
@@ -123,7 +124,7 @@ export function RoutesClient() {
   const mapHomes: MapHome[] = showHomes
     ? (volunteers.data ?? []).map((v) => ({
         id: v.id,
-        name: `${v.firstName} ${v.lastName}`,
+        name: v.displayName,
         home: v.home,
       }))
     : [];
@@ -255,9 +256,7 @@ function RouteList(props: {
             >
               <span className="text-sm font-medium">{r.streetName}</span>
               <span className="text-muted-foreground text-xs">
-                {r.assignedVolunteer
-                  ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
-                  : "—"}
+                {r.assignedVolunteer ? r.assignedVolunteer.displayName : "—"}
                 {r.captain ? ` · ${r.captain.name}` : ""}
               </span>
               <span className={cn("text-xs", badge.tone)}>{badge.label}</span>
@@ -354,9 +353,7 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
         <div>
           <Label className="text-xs">Volunteer</Label>
           <p className="text-muted-foreground">
-            {r.assignedVolunteer
-              ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
-              : "—"}
+            {r.assignedVolunteer ? r.assignedVolunteer.displayName : "—"}
           </p>
         </div>
         <div>
@@ -398,7 +395,7 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
             <option value="">— pick a volunteer —</option>
             {(volunteers.data ?? []).map((v) => (
               <option key={v.id} value={v.id}>
-                {v.firstName} {v.lastName}
+                {v.displayName}
               </option>
             ))}
           </select>
@@ -591,7 +588,7 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
           <option value="">— leave vacant —</option>
           {(volunteers.data ?? []).map((v) => (
             <option key={v.id} value={v.id}>
-              {v.firstName} {v.lastName}
+              {v.displayName}
             </option>
           ))}
         </select>

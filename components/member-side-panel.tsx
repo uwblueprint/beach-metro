@@ -414,7 +414,7 @@ function CaptainContent({ id }: { id: string }) {
     return <p className="px-2 text-md text-secondary">Loading…</p>;
   }
 
-  const captainName = `${captain.firstName} ${captain.lastName}`;
+  const captainName = captain.displayName;
   const commercialDrops = territory?.commercialDrops ?? [];
   const territoryVolunteers = territory?.volunteers ?? [];
   const hasDrops = commercialDrops.length > 0 || territoryVolunteers.length > 0;
@@ -440,11 +440,11 @@ function CaptainContent({ id }: { id: string }) {
     setDialogOpen(true);
   }
 
-  function openEditVolunteer(volunteer: { id: string; firstName: string; lastName: string }) {
+  function openEditVolunteer(volunteer: { id: string; displayName: string }) {
     setInitialDrop({
       kind: "volunteer",
       volunteerId: volunteer.id,
-      label: `${volunteer.firstName} ${volunteer.lastName}`,
+      label: volunteer.displayName,
     });
     setDialogOpen(true);
   }
@@ -684,9 +684,7 @@ function CaptainContent({ id }: { id: string }) {
                 meta="Volunteer"
                 onEdit={() => openEditVolunteer(volunteer)}
               >
-                <span className="text-primary">
-                  {volunteer.firstName} {volunteer.lastName}
-                </span>
+                <span className="text-primary">{volunteer.displayName}</span>
               </SidePanelRow>
             ))}
             {commercialDrops.map((drop) => (
@@ -750,6 +748,10 @@ function CreateMemberContent({
   const { data: captains } = useCaptainsList();
 
   const [role, setRole] = useState<MemberRole>("volunteer");
+  // A third of the office's roster is a church, a building or a household rather
+  // than one person, so the name is either two fields or one, never both.
+  const [nameKind, setNameKind] = useState<"person" | "group">("person");
+  const [displayName, setDisplayName] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [startDate, setStartDate] = useState(todayIso);
@@ -775,8 +777,12 @@ function CreateMemberContent({
   }
 
   async function handleCreate() {
-    if (!firstName.trim() || !lastName.trim()) {
+    if (nameKind === "person" && (!firstName.trim() || !lastName.trim())) {
       setCreateError("First and last name are required.");
+      return;
+    }
+    if (nameKind === "group" && !displayName.trim()) {
+      setCreateError("Name is required.");
       return;
     }
     if (!startDate) {
@@ -803,11 +809,16 @@ function CreateMemberContent({
     }
 
     setCreateError(null);
+    // A person sends first + last and lets the server compose the display name;
+    // anything else sends the display name alone and has no first/last.
+    const namePayload =
+      nameKind === "person"
+        ? { firstName: firstName.trim(), lastName: lastName.trim() }
+        : { displayName: displayName.trim() };
     try {
       if (role === "volunteer") {
         const created = await createVolunteer.mutateAsync({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
+          ...namePayload,
           email: email.trim(),
           phone: phone.trim(),
           address: addressPlaceId
@@ -819,12 +830,11 @@ function CreateMemberContent({
         onCreated({
           id: created.id,
           role: "volunteer",
-          name: `${created.firstName} ${created.lastName}`,
+          name: created.displayName,
         });
       } else {
         const created = await createCaptain.mutateAsync({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
+          ...namePayload,
           email: email.trim(),
           phone: phone.trim(),
           payType: payType as "bundle" | "paper" | "drop",
@@ -835,7 +845,7 @@ function CreateMemberContent({
         onCreated({
           id: created.id,
           role: "captain",
-          name: `${created.firstName} ${created.lastName}`,
+          name: created.displayName,
         });
       }
     } catch (err) {
@@ -863,24 +873,48 @@ function CreateMemberContent({
           ]}
         />
       </EditableField>
-      <EditableField label="First Name" htmlFor="cm-first">
-        <Input
-          id="cm-first"
-          value={firstName}
-          onChange={(e) => setFirstName(e.target.value)}
-          placeholder="First name"
-          autoComplete="given-name"
+      <EditableField label="Type" htmlFor="cm-name-kind">
+        <Select
+          id="cm-name-kind"
+          value={nameKind}
+          onChange={(v) => setNameKind(v as "person" | "group")}
+          options={[
+            { value: "person", label: "Person" },
+            { value: "group", label: "Organization or household" },
+          ]}
         />
       </EditableField>
-      <EditableField label="Last Name" htmlFor="cm-last">
-        <Input
-          id="cm-last"
-          value={lastName}
-          onChange={(e) => setLastName(e.target.value)}
-          placeholder="Last name"
-          autoComplete="family-name"
-        />
-      </EditableField>
+      {nameKind === "person" ? (
+        <>
+          <EditableField label="First Name" htmlFor="cm-first">
+            <Input
+              id="cm-first"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="First name"
+              autoComplete="given-name"
+            />
+          </EditableField>
+          <EditableField label="Last Name" htmlFor="cm-last">
+            <Input
+              id="cm-last"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              placeholder="Last name"
+              autoComplete="family-name"
+            />
+          </EditableField>
+        </>
+      ) : (
+        <EditableField label="Name" htmlFor="cm-display">
+          <Input
+            id="cm-display"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="St. Aidan's Church"
+          />
+        </EditableField>
+      )}
       <EditableField label="Start Date" htmlFor="cm-start">
         <Input
           id="cm-start"
@@ -941,7 +975,7 @@ function CreateMemberContent({
                   .filter((c) => c.territory)
                   .map((c) => ({
                     value: c.territory!.id,
-                    label: `${c.firstName} ${c.lastName}`,
+                    label: c.displayName,
                   })),
               ]}
             />

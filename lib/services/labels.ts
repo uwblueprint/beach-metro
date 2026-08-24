@@ -122,9 +122,9 @@ export async function listLabels(): Promise<LabelSheet> {
         "id",
         deliveries.map((d) => d.route_id),
       ),
-    client.from("volunteers").select("id, first_name, last_name, address_id, captain_territory_id"),
+    client.from("volunteers").select("id, display_name, address_id, captain_territory_id"),
     client.from("captain_territories").select("id, assigned_captain_id"),
-    client.from("captains").select("id, first_name, last_name"),
+    client.from("captains").select("id, display_name"),
     client
       .from("bundle_labels")
       .select("delivery_id, bundle_index")
@@ -145,16 +145,13 @@ export async function listLabels(): Promise<LabelSheet> {
   >[];
   const volunteers = (volunteersRes.data ?? []) as Pick<
     VolunteerRow,
-    "id" | "first_name" | "last_name" | "address_id" | "captain_territory_id"
+    "id" | "display_name" | "address_id" | "captain_territory_id"
   >[];
   const territories = (territoriesRes.data ?? []) as Pick<
     CaptainTerritoryRow,
     "id" | "assigned_captain_id"
   >[];
-  const captains = (captainsRes.data ?? []) as Pick<
-    CaptainRow,
-    "id" | "first_name" | "last_name"
-  >[];
+  const captains = (captainsRes.data ?? []) as Pick<CaptainRow, "id" | "display_name">[];
 
   const routeById = new Map(routes.map((r) => [r.id, r]));
   const volunteerById = new Map(volunteers.map((v) => [v.id, v]));
@@ -207,7 +204,7 @@ export async function listLabels(): Promise<LabelSheet> {
         addresses.get(route.start_address_id)?.formattedAddress ?? null,
         addresses.get(route.end_address_id)?.formattedAddress ?? null,
       ),
-      volunteerName: volunteer ? `${volunteer.first_name} ${volunteer.last_name}` : null,
+      volunteerName: volunteer ? volunteer.display_name : null,
       address: volunteer ? (addresses.get(volunteer.address_id)?.formattedAddress ?? null) : null,
       papers: delivery.paper_count,
       bundles,
@@ -219,7 +216,7 @@ export async function listLabels(): Promise<LabelSheet> {
     const key = captain?.id ?? "unassigned";
     const group = groups.get(key) ?? {
       captainId: captain?.id ?? null,
-      captainName: captain ? `${captain.first_name} ${captain.last_name}` : "Unassigned",
+      captainName: captain ? captain.display_name : "Unassigned",
       routes: [],
       bundleCount: 0,
       labelledCount: 0,

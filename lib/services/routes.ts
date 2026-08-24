@@ -42,7 +42,13 @@ export interface RouteSummary {
   papers: number;
   bundles: RouteBundle[];
   notes: string | null;
-  assignedVolunteer: { id: string; firstName: string; lastName: string; status: string } | null;
+  assignedVolunteer: {
+    id: string;
+    displayName: string;
+    firstName: string | null;
+    lastName: string | null;
+    status: string;
+  } | null;
   captain: { id: string; name: string } | null;
   /** Cached start/end coordinates so the map can draw every polyline from one
    * list call (null when the 30-day coordinate cache is empty). */
@@ -58,7 +64,7 @@ export interface RouteDetail extends RouteSummary {
 interface Context {
   volunteers: VolunteerRow[];
   territories: CaptainTerritoryRow[];
-  captains: Pick<CaptainRow, "id" | "first_name" | "last_name">[];
+  captains: Pick<CaptainRow, "id" | "display_name">[];
 }
 
 async function fetchContext(): Promise<Context> {
@@ -66,7 +72,7 @@ async function fetchContext(): Promise<Context> {
   const [vRes, tRes, cRes] = await Promise.all([
     client.from("volunteers").select("*"),
     client.from("captain_territories").select("*"),
-    client.from("captains").select("id, first_name, last_name"),
+    client.from("captains").select("id, display_name"),
   ]);
   if (vRes.error) throwDb(vRes.error);
   if (tRes.error) throwDb(tRes.error);
@@ -74,7 +80,7 @@ async function fetchContext(): Promise<Context> {
   return {
     volunteers: (vRes.data ?? []) as VolunteerRow[],
     territories: (tRes.data ?? []) as CaptainTerritoryRow[],
-    captains: (cRes.data ?? []) as Pick<CaptainRow, "id" | "first_name" | "last_name">[],
+    captains: (cRes.data ?? []) as Pick<CaptainRow, "id" | "display_name">[],
   };
 }
 
@@ -120,14 +126,13 @@ function toSummary(
     assignedVolunteer: volunteer
       ? {
           id: volunteer.id,
+          displayName: volunteer.display_name,
           firstName: volunteer.first_name,
           lastName: volunteer.last_name,
           status: status ?? "active",
         }
       : null,
-    captain: captain
-      ? { id: captain.id, name: `${captain.first_name} ${captain.last_name}` }
-      : null,
+    captain: captain ? { id: captain.id, name: captain.display_name } : null,
     start: coord(addresses?.get(r.start_address_id)),
     end: coord(addresses?.get(r.end_address_id)),
   };

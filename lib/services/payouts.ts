@@ -65,13 +65,9 @@ export interface PayoutDetail extends PayoutSummary {
 }
 
 async function captainName(client: ReturnType<typeof db>, id: string): Promise<string> {
-  const { data } = await client
-    .from("captains")
-    .select("first_name, last_name")
-    .eq("id", id)
-    .maybeSingle();
-  const c = data as Pick<CaptainRow, "first_name" | "last_name"> | null;
-  return c ? `${c.first_name} ${c.last_name}` : "Unknown captain";
+  const { data } = await client.from("captains").select("display_name").eq("id", id).maybeSingle();
+  const c = data as Pick<CaptainRow, "display_name"> | null;
+  return c ? c.display_name : "Unknown captain";
 }
 
 function toSummary(
@@ -111,14 +107,14 @@ export async function listPayouts(issueId: string): Promise<PayoutSummary[]> {
   const client = db();
   const [pRes, cRes] = await Promise.all([
     client.from("captain_payouts").select("*").eq("issue_id", issueId),
-    client.from("captains").select("id, first_name, last_name"),
+    client.from("captains").select("id, display_name"),
   ]);
   if (pRes.error) throwDb(pRes.error);
   if (cRes.error) throwDb(cRes.error);
-  const captains = (cRes.data ?? []) as Pick<CaptainRow, "id" | "first_name" | "last_name">[];
+  const captains = (cRes.data ?? []) as Pick<CaptainRow, "id" | "display_name">[];
   const nameOf = (id: string | null) => {
     const c = id ? captains.find((x) => x.id === id) : undefined;
-    return c ? `${c.first_name} ${c.last_name}` : null;
+    return c ? c.display_name : null;
   };
   return ((pRes.data ?? []) as CaptainPayoutRow[]).map((raw) => {
     const p = coercePayoutNumerics(raw);
@@ -202,7 +198,7 @@ export async function getPayout(id: string): Promise<PayoutDetail> {
     : null;
 
   return {
-    ...toSummary(p, `${captain.first_name} ${captain.last_name}`, substituteName),
+    ...toSummary(p, captain.display_name, substituteName),
     breakdown: {
       payType: captain.pay_type,
       payRate: captain.pay_rate,
@@ -469,7 +465,7 @@ export async function listCaptainPayoutHistory(
   const [issuesRes, othersRes] = await Promise.all([
     client.from("issues").select("id, name, date, status").in("id", issueIds),
     otherCaptainIds.length > 0
-      ? client.from("captains").select("id, first_name, last_name").in("id", otherCaptainIds)
+      ? client.from("captains").select("id, display_name").in("id", otherCaptainIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
   if (issuesRes.error) throwDb(issuesRes.error);
@@ -482,9 +478,9 @@ export async function listCaptainPayoutHistory(
     ]),
   );
   const nameById = new Map(
-    ((othersRes.data ?? []) as Pick<CaptainRow, "id" | "first_name" | "last_name">[]).map((c) => [
+    ((othersRes.data ?? []) as Pick<CaptainRow, "id" | "display_name">[]).map((c) => [
       c.id,
-      `${c.first_name} ${c.last_name}`,
+      c.display_name,
     ]),
   );
 

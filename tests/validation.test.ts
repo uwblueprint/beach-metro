@@ -34,6 +34,53 @@ describe("updateDelivery", () => {
   });
 });
 
+describe("recipient display name", () => {
+  const base = {
+    address: { street: "1 Queen St E", placeId: "place-1" },
+    startDate: "2026-01-06",
+  };
+
+  it("composes a person's display name from first and last", () => {
+    const parsed = createVolunteer.parse({ ...base, firstName: "Ada", lastName: "Lovelace" });
+    expect(parsed.displayName).toBe("Ada Lovelace");
+    expect(parsed.firstName).toBe("Ada");
+  });
+
+  // The cases the office's sheet is full of: churches, buildings, households.
+  it("accepts a name that is not a person, with no first or last", () => {
+    const parsed = createVolunteer.parse({ ...base, displayName: "St. Aidan's Church" });
+    expect(parsed.displayName).toBe("St. Aidan's Church");
+    expect(parsed.firstName).toBeUndefined();
+  });
+
+  it("lets an explicit display name win over the composed one", () => {
+    const parsed = createVolunteer.parse({
+      ...base,
+      displayName: "Ruth, Genevieve and Jamie Neal-Ellis",
+      firstName: "Ruth",
+      lastName: "Neal-Ellis",
+    });
+    expect(parsed.displayName).toBe("Ruth, Genevieve and Jamie Neal-Ellis");
+    expect(parsed.lastName).toBe("Neal-Ellis");
+  });
+
+  it("composes from whichever half is present", () => {
+    expect(createVolunteer.parse({ ...base, firstName: "Cher" }).displayName).toBe("Cher");
+  });
+
+  it("rejects a record with no name at all", () => {
+    expect(() => createVolunteer.parse({ ...base })).toThrow();
+    expect(() =>
+      createCaptain.parse({
+        payType: "bundle",
+        payRate: 1,
+        payCadence: "biweekly",
+        startDate: "2026-01-06",
+      }),
+    ).toThrow();
+  });
+});
+
 describe("optional contact details", () => {
   const volunteer = {
     firstName: "Ada",

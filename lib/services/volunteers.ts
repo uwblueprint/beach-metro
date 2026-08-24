@@ -44,8 +44,11 @@ export interface CarriedRoute {
 
 export interface VolunteerSummary {
   id: string;
-  firstName: string;
-  lastName: string;
+  /** Authoritative name; what lists and labels show. */
+  displayName: string;
+  /** Null when the recipient is not one person. */
+  firstName: string | null;
+  lastName: string | null;
   email: string | null;
   phone: string | null;
   status: VolunteerStatus;
@@ -68,7 +71,7 @@ export interface VolunteerDetail extends VolunteerSummary {
 interface Context {
   routes: RouteLite[];
   territories: CaptainTerritoryRow[];
-  captains: Pick<CaptainRow, "id" | "first_name" | "last_name">[];
+  captains: Pick<CaptainRow, "id" | "display_name">[];
   /** Endpoint addresses for every route, so route labels need no extra round trip. */
   addresses: Map<string, AddressDetail>;
 }
@@ -81,7 +84,7 @@ async function fetchContext(): Promise<Context> {
       .select("id, street_name, assigned_volunteer_id, papers, start_address_id, end_address_id")
       .is("deleted_at", null),
     client.from("captain_territories").select("*"),
-    client.from("captains").select("id, first_name, last_name"),
+    client.from("captains").select("id, display_name"),
   ]);
   if (routesRes.error) throwDb(routesRes.error);
   if (territoriesRes.error) throwDb(territoriesRes.error);
@@ -95,7 +98,7 @@ async function fetchContext(): Promise<Context> {
   return {
     routes,
     territories: (territoriesRes.data ?? []) as CaptainTerritoryRow[],
-    captains: (captainsRes.data ?? []) as Pick<CaptainRow, "id" | "first_name" | "last_name">[],
+    captains: (captainsRes.data ?? []) as Pick<CaptainRow, "id" | "display_name">[],
     addresses: await getAddressDetails(addressIds),
   };
 }
@@ -129,6 +132,7 @@ function toSummary(
     : null;
   return {
     id: v.id,
+    displayName: v.display_name,
     firstName: v.first_name,
     lastName: v.last_name,
     email: v.email,
@@ -139,7 +143,7 @@ function toSummary(
       ? {
           id: territory.id,
           captainId: captain?.id ?? null,
-          captainName: captain ? `${captain.first_name} ${captain.last_name}` : null,
+          captainName: captain ? captain.display_name : null,
         }
       : null,
     routesCarried: ctx.routes
@@ -160,7 +164,7 @@ function toSummary(
 export async function listVolunteers(
   filters: z.infer<typeof volunteersQuery>,
 ): Promise<VolunteerSummary[]> {
-  const { data, error } = await db().from("volunteers").select("*").order("last_name");
+  const { data, error } = await db().from("volunteers").select("*").order("display_name");
   if (error) throwDb(error);
   const ctx = await fetchContext();
   const date = today();
@@ -217,8 +221,9 @@ export async function createVolunteerRecord(
   const { data, error } = await db()
     .from("volunteers")
     .insert({
-      first_name: input.firstName,
-      last_name: input.lastName,
+      display_name: input.displayName,
+      first_name: input.firstName ?? null,
+      last_name: input.lastName ?? null,
       email: input.email,
       phone: input.phone,
       address_id: address.id,
@@ -244,6 +249,7 @@ export async function updateVolunteerRecord(
   if (input.captainTerritoryId) await assertTerritoryExists(input.captainTerritoryId);
 
   const patch: Record<string, unknown> = {};
+  if (input.displayName !== undefined) patch.display_name = input.displayName;
   if (input.firstName !== undefined) patch.first_name = input.firstName;
   if (input.lastName !== undefined) patch.last_name = input.lastName;
   if (input.email !== undefined) patch.email = input.email;

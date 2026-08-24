@@ -12,8 +12,11 @@ import { coerceCaptainNumerics, db, throwDb, today } from "./shared";
 
 export interface CaptainSummary {
   id: string;
-  firstName: string;
-  lastName: string;
+  /** Authoritative name; what lists and labels show. */
+  displayName: string;
+  /** Null when the recipient is not one person. */
+  firstName: string | null;
+  lastName: string | null;
   email: string | null;
   phone: string | null;
   status: "active" | "retired";
@@ -30,6 +33,7 @@ function toSummary(c: CaptainRow, territories: CaptainTerritoryRow[]): CaptainSu
   const territory = territories.find((t) => t.assigned_captain_id === c.id) ?? null;
   return {
     id: c.id,
+    displayName: c.display_name,
     firstName: c.first_name,
     lastName: c.last_name,
     email: c.email,
@@ -54,7 +58,7 @@ async function fetchTerritories(): Promise<CaptainTerritoryRow[]> {
 export async function listCaptains(
   filters: z.infer<typeof captainsQuery>,
 ): Promise<CaptainSummary[]> {
-  const { data, error } = await db().from("captains").select("*").order("last_name");
+  const { data, error } = await db().from("captains").select("*").order("display_name");
   if (error) throwDb(error);
   const territories = await fetchTerritories();
 
@@ -91,8 +95,9 @@ export async function createCaptainRecord(
   const { data, error } = await client
     .from("captains")
     .insert({
-      first_name: input.firstName,
-      last_name: input.lastName,
+      display_name: input.displayName,
+      first_name: input.firstName ?? null,
+      last_name: input.lastName ?? null,
       email: input.email,
       phone: input.phone,
       pay_type: input.payType,
@@ -129,6 +134,7 @@ export async function updateCaptainRecord(
   await fetchCaptain(id);
 
   const patch: Record<string, unknown> = {};
+  if (input.displayName !== undefined) patch.display_name = input.displayName;
   if (input.firstName !== undefined) patch.first_name = input.firstName;
   if (input.lastName !== undefined) patch.last_name = input.lastName;
   if (input.email !== undefined) patch.email = input.email;

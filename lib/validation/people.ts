@@ -25,6 +25,39 @@ const optionalPhone = z
   .nullish()
   .transform((v) => v || null);
 
+/**
+ * A third of the office's roster is not one person — churches, apartment
+ * buildings, households, two people sharing a route. `displayName` is the
+ * authoritative name for all of them; `firstName` / `lastName` are optional and
+ * carried only for individuals, where surname sort and structured search still
+ * earn their keep. See docs/reference/route_labels_spreadsheet.md §2.1.
+ */
+const nameFields = {
+  displayName: z.string().trim().min(1).optional(),
+  firstName: z.string().trim().min(1).nullish(),
+  lastName: z.string().trim().min(1).nullish(),
+};
+
+/**
+ * Fill `displayName` from first + last when the caller gave a person's name but
+ * no display form, so the common case stays a two-field write. Callers naming a
+ * church send `displayName` alone.
+ */
+function composeDisplayName<
+  T extends { displayName?: string; firstName?: string | null; lastName?: string | null },
+>(o: T, ctx: z.RefinementCtx) {
+  const displayName = o.displayName || [o.firstName, o.lastName].filter(Boolean).join(" ");
+  if (!displayName) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Provide displayName, or firstName and lastName.",
+      path: ["displayName"],
+    });
+    return z.NEVER;
+  }
+  return { ...o, displayName };
+}
+
 // ---------------------------------------------------------------------------
 // Volunteers
 // ---------------------------------------------------------------------------
@@ -49,22 +82,24 @@ export const volunteersQuery = z.object({
   q: z.string().trim().min(1).optional(),
 });
 
-export const createVolunteer = z.object({
-  firstName: z.string().trim().min(1),
-  lastName: z.string().trim().min(1),
-  email: optionalEmail,
-  phone: optionalPhone,
-  address: addressInput,
-  captainTerritoryId: uuid.nullish(),
-  startDate: isoDate,
-  endDate: isoDate.nullish(),
-  note: noteField,
-});
+export const createVolunteer = z
+  .object({
+    ...nameFields,
+    email: optionalEmail,
+    phone: optionalPhone,
+    address: addressInput,
+    captainTerritoryId: uuid.nullish(),
+    startDate: isoDate,
+    endDate: isoDate.nullish(),
+    note: noteField,
+  })
+  .transform(composeDisplayName);
 
 export const updateVolunteer = z
   .object({
-    firstName: z.string().trim().min(1),
-    lastName: z.string().trim().min(1),
+    displayName: z.string().trim().min(1),
+    firstName: z.string().trim().min(1).nullable(),
+    lastName: z.string().trim().min(1).nullable(),
     email: optionalEmail,
     phone: optionalPhone,
     address: addressInput, // re-validates + swaps the home address
@@ -96,23 +131,25 @@ export const captainsQuery = z.object({
   q: z.string().trim().min(1).optional(),
 });
 
-export const createCaptain = z.object({
-  firstName: z.string().trim().min(1),
-  lastName: z.string().trim().min(1),
-  email: optionalEmail,
-  phone: optionalPhone,
-  payType: z.enum(["bundle", "paper", "drop"]),
-  payRate: z.number().min(0), // 0 is valid (donate-back)
-  payCadence: z.enum(["biweekly", "monthly"]),
-  startDate: isoDate,
-  endDate: isoDate.nullish(),
-  note: noteField,
-});
+export const createCaptain = z
+  .object({
+    ...nameFields,
+    email: optionalEmail,
+    phone: optionalPhone,
+    payType: z.enum(["bundle", "paper", "drop"]),
+    payRate: z.number().min(0), // 0 is valid (donate-back)
+    payCadence: z.enum(["biweekly", "monthly"]),
+    startDate: isoDate,
+    endDate: isoDate.nullish(),
+    note: noteField,
+  })
+  .transform(composeDisplayName);
 
 export const updateCaptain = z
   .object({
-    firstName: z.string().trim().min(1),
-    lastName: z.string().trim().min(1),
+    displayName: z.string().trim().min(1),
+    firstName: z.string().trim().min(1).nullable(),
+    lastName: z.string().trim().min(1).nullable(),
     email: optionalEmail,
     phone: optionalPhone,
     payType: z.enum(["bundle", "paper", "drop"]),

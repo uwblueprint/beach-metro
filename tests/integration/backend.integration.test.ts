@@ -78,6 +78,7 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
 
   it("creates captains with their 1:1 territories", async () => {
     const c1 = await S().captains.createCaptainRecord({
+      displayName: `IT BundleCaptain`,
       firstName: "IT",
       lastName: "BundleCaptain",
       email: "it-bundle@example.com",
@@ -90,6 +91,7 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
       note: null,
     });
     const c2 = await S().captains.createCaptainRecord({
+      displayName: `IT DropCaptain`,
       firstName: "IT",
       lastName: "DropCaptain",
       email: "it-drop@example.com",
@@ -110,6 +112,7 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
 
   it("creates a volunteer in the bundle captain's territory and routes", async () => {
     const v = await S().volunteers.createVolunteerRecord({
+      displayName: `IT Volunteer`,
       firstName: "IT",
       lastName: "Volunteer",
       email: "it-volunteer@example.com",
@@ -351,6 +354,7 @@ describe.skipIf(!RUN)("retiring a captain zeros their open-issue cells", () => {
   it("recomputes a retired captain's open cells to zero on retire", async () => {
     // Bundle captain @ $1/bundle, with their auto-created 1:1 territory.
     const captain = await S().captains.createCaptainRecord({
+      displayName: `IT RetireKeep`,
       firstName: "IT",
       lastName: "RetireKeep",
       email: `it-retire-${crypto.randomUUID().slice(0, 8)}@example.com`,
@@ -367,6 +371,7 @@ describe.skipIf(!RUN)("retiring a captain zeros their open-issue cells", () => {
 
     // Volunteer in that territory, carrying a 50-paper route → exactly 1 bundle.
     const volunteer = await S().volunteers.createVolunteerRecord({
+      displayName: `IT RetireKeepVol`,
       firstName: "IT",
       lastName: "RetireKeepVol",
       email: `it-retire-vol-${crypto.randomUUID().slice(0, 8)}@example.com`,

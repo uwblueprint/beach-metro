@@ -199,9 +199,11 @@ export function useSetVacation(volunteerId: string) {
   });
 }
 
+/** Either `displayName` alone, or `firstName` + `lastName` for the server to compose. */
 export type CreateVolunteerBody = {
-  firstName: string;
-  lastName: string;
+  displayName?: string;
+  firstName?: string;
+  lastName?: string;
   email: string | null;
   phone: string | null;
   address: { addressLines: string[] } | { placeId: string };
@@ -211,9 +213,11 @@ export type CreateVolunteerBody = {
   note?: string | null;
 };
 
+/** Either `displayName` alone, or `firstName` + `lastName` for the server to compose. */
 export type CreateCaptainBody = {
-  firstName: string;
-  lastName: string;
+  displayName?: string;
+  firstName?: string;
+  lastName?: string;
   email: string | null;
   phone: string | null;
   payType: "bundle" | "paper" | "drop";

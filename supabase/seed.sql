@@ -51,10 +51,10 @@ insert into captain_territories (id, assigned_captain_id, color) values
   ('a0000000-0000-4000-8000-000000000002', null, '#2563eb'),
   ('a0000000-0000-4000-8000-000000000003', null, '#16a34a');
 
-insert into captains (id, first_name, last_name, email, phone, pay_type, pay_rate, pay_cadence, start_date, end_date, retired_at) values
-  ('c0000000-0000-4000-8000-000000000001', 'Emily',  'Chen',     'emily.chen@example.com',  '416-555-0101', 'bundle', 1.25, 'monthly',    '2023-11-20', null, null),
-  ('c0000000-0000-4000-8000-000000000002', 'Oliver', 'Martinez', 'oliver.m@example.com',    '416-555-0102', 'drop',   2.00, 'biweekly', '2024-08-30', null, null),
-  ('c0000000-0000-4000-8000-000000000003', 'Maya',   'Singh',    'maya.singh@example.com',  '416-555-0103', 'paper',  0.00, 'monthly',   '2024-07-27', null, null);
+insert into captains (id, display_name, first_name, last_name, email, phone, pay_type, pay_rate, pay_cadence, start_date, end_date, retired_at) values
+  ('c0000000-0000-4000-8000-000000000001', 'Emily Chen', 'Emily',  'Chen',     'emily.chen@example.com',  '416-555-0101', 'bundle', 1.25, 'monthly',    '2023-11-20', null, null),
+  ('c0000000-0000-4000-8000-000000000002', 'Oliver Martinez', 'Oliver', 'Martinez', 'oliver.m@example.com',    '416-555-0102', 'drop',   2.00, 'biweekly', '2024-08-30', null, null),
+  ('c0000000-0000-4000-8000-000000000003', 'Maya Singh', 'Maya',   'Singh',    'maya.singh@example.com',  '416-555-0103', 'paper',  0.00, 'monthly',   '2024-07-27', null, null);
 
 update captain_territories set assigned_captain_id = 'c0000000-0000-4000-8000-000000000001' where id = 'a0000000-0000-4000-8000-000000000001';
 update captain_territories set assigned_captain_id = 'c0000000-0000-4000-8000-000000000002' where id = 'a0000000-0000-4000-8000-000000000002';
@@ -92,17 +92,17 @@ insert into addresses (id, google_maps_id, type, territory_id) values
 -- Standing bundle counts: one known, one deliberately left null (unknown).
 update addresses set standing_bundles = 4 where id = 'b0000000-0000-4000-8000-000000000021';
 
-insert into volunteers (id, first_name, last_name, email, phone, address_id, captain_territory_id, start_date, end_date, vacation_start, vacation_end, retired_at) values
+insert into volunteers (id, display_name, first_name, last_name, email, phone, address_id, captain_territory_id, start_date, end_date, vacation_start, vacation_end, retired_at) values
   -- Active, assigned to Emily's territory, carries route 1.
-  ('d0000000-0000-4000-8000-000000000001', 'Marcus', 'Smart',    'marcus.smart@example.com', '416-555-0201', 'b0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', '2020-06-03', null, null, null, null),
+  ('d0000000-0000-4000-8000-000000000001', 'Marcus Smart', 'Marcus', 'Smart',    'marcus.smart@example.com', '416-555-0201', 'b0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', '2020-06-03', null, null, null, null),
   -- Active, Oliver's territory, carries route 2.
-  ('d0000000-0000-4000-8000-000000000002', 'Sofia',  'Gomez',    'sofia.gomez@example.com',  '416-555-0202', 'b0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002', '2024-03-03', null, null, null, null),
+  ('d0000000-0000-4000-8000-000000000002', 'Sofia Gomez', 'Sofia',  'Gomez',    'sofia.gomez@example.com',  '416-555-0202', 'b0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002', '2024-03-03', null, null, null, null),
   -- ON VACATION (window straddles today): their route 3 is suspended (derived).
-  ('d0000000-0000-4000-8000-000000000003', 'Aisha',  'Patel',    'aisha.patel@example.com',  '416-555-0203', 'b0000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000001', '2024-01-10', null, (current_date - 7), (current_date + 7), null),
+  ('d0000000-0000-4000-8000-000000000003', 'Aisha Patel', 'Aisha',  'Patel',    'aisha.patel@example.com',  '416-555-0203', 'b0000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000001', '2024-01-10', null, (current_date - 7), (current_date + 7), null),
   -- RETIRED (soft): no routes.
-  ('d0000000-0000-4000-8000-000000000004', 'Chloe',  'Wilson',   'chloe.wilson@example.com', '416-555-0204', 'b0000000-0000-4000-8000-000000000004', 'a0000000-0000-4000-8000-000000000002', '2024-09-14', '2025-12-31', null, null, '2026-01-15'),
+  ('d0000000-0000-4000-8000-000000000004', 'Chloe Wilson', 'Chloe',  'Wilson',   'chloe.wilson@example.com', '416-555-0204', 'b0000000-0000-4000-8000-000000000004', 'a0000000-0000-4000-8000-000000000002', '2024-09-14', '2025-12-31', null, null, '2026-01-15'),
   -- Active but UNASSIGNED (no captain/territory) and end date passed -> needs attention.
-  ('d0000000-0000-4000-8000-000000000005', 'Liam',   'O''Sullivan', 'liam.os@example.com',   '416-555-0205', 'b0000000-0000-4000-8000-000000000005', null, '2024-02-22', (current_date - 30), null, null, null);
+  ('d0000000-0000-4000-8000-000000000005', 'Liam O''Sullivan', 'Liam',   'O''Sullivan', 'liam.os@example.com',   '416-555-0205', 'b0000000-0000-4000-8000-000000000005', null, '2024-02-22', (current_date - 30), null, null, null);
 
 insert into volunteer_routes (id, start_address_id, end_address_id, street_name, side, assigned_volunteer_id, house_count, house_count_override, papers, bundles, notes, deleted_at) values
   -- Assigned to Marcus (Emily's territory via Marcus).

@@ -86,6 +86,7 @@ describe.skipIf(!RUN)("members list", () => {
     if (!RUN) return;
     fixtureSurname = unique("ZzListFixture");
     const captain = await S().captains.createCaptainRecord({
+      displayName: `${TEST_FIRST_NAME} ${fixtureSurname}`,
       firstName: TEST_FIRST_NAME,
       lastName: fixtureSurname,
       email: `${unique("it-listrole")}@example.com`,
@@ -168,6 +169,7 @@ describe.skipIf(!RUN)("members list", () => {
 describe.skipIf(!RUN)("member notes", () => {
   it("creates, lists newest-first, edits and deletes", async () => {
     const captain = await S().captains.createCaptainRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("Notes")}`,
       firstName: TEST_FIRST_NAME,
       lastName: unique("Notes"),
       email: `${unique("it-notes")}@example.com`,
@@ -204,6 +206,7 @@ describe.skipIf(!RUN)("member notes", () => {
 
   it("cascades notes when the person is deleted, rather than orphaning them", async () => {
     const captain = await S().captains.createCaptainRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("Cascade")}`,
       firstName: TEST_FIRST_NAME,
       lastName: unique("Cascade"),
       email: `${unique("it-cascade")}@example.com`,
@@ -236,6 +239,7 @@ describe.skipIf(!RUN)("member notes", () => {
 
   it("rejects a blank note", async () => {
     const captain = await S().captains.createCaptainRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("Blank")}`,
       firstName: TEST_FIRST_NAME,
       lastName: unique("Blank"),
       email: `${unique("it-blank")}@example.com`,
@@ -261,6 +265,7 @@ describe.skipIf(!RUN)("member notes", () => {
   it("refuses a note with two parents, and a note with none", async () => {
     const client = createAdminClient();
     const captain = await S().captains.createCaptainRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("Parent")}`,
       firstName: TEST_FIRST_NAME,
       lastName: unique("Parent"),
       email: `${unique("it-parent")}@example.com`,
@@ -295,6 +300,7 @@ describe.skipIf(!RUN)("captain payout history", () => {
   // a payout vanish between the two reads it compares.
   it("agrees with the per-issue payout list, newest issue first", async () => {
     const captain = await S().captains.createCaptainRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("History")}`,
       firstName: TEST_FIRST_NAME,
       lastName: unique("History"),
       email: `${unique("it-history")}@example.com`,
@@ -377,6 +383,7 @@ describe.skipIf(!RUN)("captain payout history", () => {
   it("shows a covered cell to the owner and the substitute, on opposite sides", async () => {
     const makeCaptain = async (label: string) => {
       const c = await S().captains.createCaptainRecord({
+        displayName: `${TEST_FIRST_NAME} ${unique(label)}`,
         firstName: TEST_FIRST_NAME,
         lastName: unique(label),
         email: `${unique(`it-${label.toLowerCase()}`)}@example.com`,
@@ -532,6 +539,7 @@ afterAll(async () => {
 describe.skipIf(!RUN)("reactivation", () => {
   it("brings a retired captain back, and refuses if they are not retired", async () => {
     const captain = await S().captains.createCaptainRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("React")}`,
       firstName: TEST_FIRST_NAME,
       lastName: unique("React"),
       email: `${unique("it-react")}@example.com`,
@@ -562,6 +570,7 @@ describe.skipIf(!RUN)("reactivation", () => {
 
   it("brings a retired volunteer back without reclaiming their routes", async () => {
     const volunteer = await S().volunteers.createVolunteerRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("ReactVol")}`,
       firstName: TEST_FIRST_NAME,
       lastName: unique("ReactVol"),
       email: `${unique("it-reactvol")}@example.com`,

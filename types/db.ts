@@ -42,8 +42,11 @@ export interface AddressRow {
 
 export interface CaptainRow {
   id: string;
-  first_name: string;
-  last_name: string;
+  /** Authoritative name; what prints and what search matches. */
+  display_name: string;
+  /** Populated only when the recipient is one person. */
+  first_name: string | null;
+  last_name: string | null;
   email: string | null;
   phone: string | null;
   pay_type: PayType;
@@ -56,8 +59,11 @@ export interface CaptainRow {
 
 export interface VolunteerRow {
   id: string;
-  first_name: string;
-  last_name: string;
+  /** Authoritative name; what prints and what search matches. */
+  display_name: string;
+  /** Populated only when the recipient is one person. */
+  first_name: string | null;
+  last_name: string | null;
   email: string | null;
   phone: string | null;
   address_id: string;
