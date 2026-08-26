@@ -48,6 +48,22 @@ export default function MembersPage() {
 
   const rows = members ?? [];
 
+  // `selected` is a click-time snapshot, so a status change (retire, un-retire,
+  // vacation) would leave the side-panel tag showing the old colour. Re-read the
+  // row from live query data, falling back to the snapshot while a refetch is in
+  // flight or when the current filter excludes the row.
+  const selectedRow = selected ? rows.find((m) => m.id === selected.id) : undefined;
+  const selectedLive: MemberSelection | null = selected
+    ? selectedRow
+      ? {
+          id: selectedRow.id,
+          role: selectedRow.role,
+          name: selectedRow.name,
+          status: selectedRow.status,
+        }
+      : selected
+    : null;
+
   function handleRowClick(memberId: string) {
     const member = rows.find((m) => m.id === memberId);
     if (!member) return;
@@ -123,7 +139,7 @@ export default function MembersPage() {
               )}
             </div>
             <MemberSidePanel
-              member={selected}
+              member={selectedLive}
               creating={creating}
               onClose={() => {
                 setCreating(false);

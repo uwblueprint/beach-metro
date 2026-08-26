@@ -16,6 +16,7 @@ import { SidePanelSection } from "@/components/side-panel-section";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { ApiError } from "@/lib/api/client";
+import { RoleTag } from "@/components/role-tag";
 import { cn } from "@/lib/utils";
 import {
   memberKeys,
@@ -106,25 +107,6 @@ const CADENCE_LABEL: Record<string, string> = {
   biweekly: "Bi-Weekly",
   monthly: "Monthly",
 };
-
-const ROLE_TAG_STATUS_CLASSES: Record<MemberStatus, string> = {
-  active: "bg-tag text-primary",
-  "on-vacation": "bg-tag-warning text-warning",
-  retired: "bg-tag-destructive text-destructive",
-};
-
-function RoleTag({ role, status }: { role: MemberRole; status: MemberStatus }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center justify-center rounded-lg px-2 py-1 text-md",
-        ROLE_TAG_STATUS_CLASSES[status],
-      )}
-    >
-      {role === "captain" ? "Captain" : "Volunteer"}
-    </span>
-  );
-}
 
 function VolunteerContent({ id }: { id: string }) {
   const queryClient = useQueryClient();
@@ -1020,7 +1002,16 @@ function MemberSidePanel({ member, creating, onClose, onCreated }: MemberSidePan
   if (creating !== displayedCreating) {
     setDisplayedCreating(creating);
   }
-  if (member && member.id !== displayed?.id) {
+  // Compare contents, not just id: the same member's status/name can change
+  // underneath an open panel (retire, un-retire, rename) and the header tag has
+  // to repaint. Assigning `member` makes the next render's check false.
+  if (
+    member &&
+    (member.id !== displayed?.id ||
+      member.role !== displayed?.role ||
+      member.name !== displayed?.name ||
+      member.status !== displayed?.status)
+  ) {
     setDisplayed(member);
   }
 
@@ -1076,7 +1067,13 @@ function MemberSidePanel({ member, creating, onClose, onCreated }: MemberSidePan
           ) : (
             <div className="flex min-w-0 items-center gap-2">
               <span className="truncate text-md font-semibold text-primary">{displayed?.name}</span>
-              {displayed && <RoleTag role={displayed.role} status={displayed.status} />}
+              {displayed && (
+                <RoleTag
+                  role={displayed.role}
+                  status={displayed.status}
+                  className="rounded-lg text-md"
+                />
+              )}
             </div>
           )}
           <Button
