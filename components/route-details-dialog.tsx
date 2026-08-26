@@ -20,9 +20,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { ApiError } from "@/lib/api/client";
-import { greedySplit, routeLabel } from "@/lib/services/derive";
+import { greedySplit } from "@/lib/services/derive";
 import type { RouteDetail } from "@/lib/services/routes";
-import { useCreateRoute, useRouteDetail, useUpdateRoute } from "@/features/routes/api";
+import {
+  useCreateRoute,
+  useRouteDetail,
+  useUpdateRoute,
+  type RouteSide,
+} from "@/features/routes/api";
 
 export interface RouteDetailsDialogProps {
   open: boolean;
@@ -33,7 +38,8 @@ export interface RouteDetailsDialogProps {
   onSuccess?: () => void;
 }
 
-const DIRECTION_OPTIONS = [
+/** "" is the "no direction recorded" choice; the rest mirror the RouteSide enum. */
+const DIRECTION_OPTIONS: { value: RouteSide | ""; label: string }[] = [
   { value: "", label: "— none —" },
   { value: "NORTH", label: "North" },
   { value: "SOUTH", label: "South" },
@@ -52,7 +58,7 @@ type FormState = {
   initialEndLabel: string;
   papersRows: number[];
   note: string;
-  side: string;
+  side: RouteSide | "";
   startEditingLast: boolean;
 };
 
@@ -80,7 +86,7 @@ function formFromDetail(detail: RouteDetail): FormState {
       ? detail.bundles.map((b) => b.papers)
       : greedySplit(detail.papers).map((b) => b.papers);
   return {
-    streetName: routeLabel(detail.streetName, startLabel || null, endLabel || null),
+    streetName: detail.streetName,
     startAddress: startLabel,
     endAddress: endLabel,
     startPlaceId: detail.startAddress.placeId,
@@ -89,7 +95,7 @@ function formFromDetail(detail: RouteDetail): FormState {
     initialEndLabel: endLabel,
     papersRows: rows.length > 0 ? rows : [0],
     note: detail.notes ?? "",
-    side: detail.side ?? "",
+    side: (detail.side ?? "") as RouteSide | "",
     startEditingLast: false,
   };
 }
@@ -171,7 +177,7 @@ function RouteDetailsFields({
           houseCount: 0,
           bundles,
           note: note.trim() || null,
-          ...(side ? { side } : {}),
+          side: side || null,
         });
       }
       onSuccess?.();
@@ -240,7 +246,9 @@ function RouteDetailsFields({
           <Select
             id="route-direction"
             value={side}
-            onChange={setSide}
+            // Select is string-typed; DIRECTION_OPTIONS is the only source of
+            // values, so narrowing back to the union here is safe.
+            onChange={(value) => setSide(value as RouteSide | "")}
             options={DIRECTION_OPTIONS}
           />
         </DialogField>
