@@ -14,10 +14,9 @@ import {
   useDeleteMember,
   useReactivateMember,
   useRetireMember,
-  type MemberRole,
   type MemberRow,
-  type MemberStatus,
 } from "@/features/members/api";
+import { RoleTag } from "@/components/role-tag";
 import { cn } from "@/lib/utils";
 
 type MembersTableState = "all" | "captains" | "volunteers";
@@ -43,30 +42,6 @@ interface Column {
   /** Optional className for the header cell. */
   headerClassName?: string;
   render: (member: MemberRow) => ReactNode;
-}
-
-const ROLE_LABEL: Record<MemberRole, string> = {
-  volunteer: "Volunteer",
-  captain: "Captain",
-};
-
-const ROLE_TAG_STATUS_CLASSES: Record<MemberStatus, string> = {
-  active: "bg-tag text-primary",
-  "on-vacation": "bg-tag-warning text-warning",
-  retired: "bg-tag-destructive text-destructive",
-};
-
-function RoleTag({ role, status }: { role: MemberRole; status: MemberStatus }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center justify-center rounded-md px-2 py-1",
-        ROLE_TAG_STATUS_CLASSES[status],
-      )}
-    >
-      {ROLE_LABEL[role]}
-    </span>
-  );
 }
 
 /** "2020-06-03" -> "Jun. 3, 2020". The API returns ISO; display is the UI's job. */
@@ -104,7 +79,7 @@ const volunteerColumns: Column[] = [
     key: "role",
     header: "Role",
     headerClassName: "pl-1",
-    render: (m) => <RoleTag role={m.role} status={m.status} />,
+    render: (m) => <RoleTag role={m.role} status={m.status} className="rounded-md" />,
   },
 ];
 
@@ -198,7 +173,7 @@ function RowActions({
             const detail =
               member.role === "volunteer"
                 ? "Their routes will become vacant."
-                : "Their territory and all associated data will be removed.";
+                : "Their territory will be deleted and every volunteer in it will be left without a territory.";
             if (
               !window.confirm(`Permanently delete ${member.name}? This cannot be undone. ${detail}`)
             )
