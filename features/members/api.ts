@@ -141,6 +141,9 @@ export function useReactivateMember() {
     onSuccess: (_data, { id, role }) => {
       queryClient.invalidateQueries({ queryKey: memberKeys.all });
       queryClient.invalidateQueries({ queryKey: routeKeys.all });
+      // Territory summaries embed captain status, so they go stale on
+      // reactivation too — the same set useDeleteMember invalidates.
+      queryClient.invalidateQueries({ queryKey: territoryDropKeys.all });
       queryClient.invalidateQueries({
         queryKey: role === "volunteer" ? memberKeys.volunteer(id) : memberKeys.captain(id),
       });

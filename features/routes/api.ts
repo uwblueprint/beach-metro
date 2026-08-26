@@ -26,11 +26,15 @@ export function useRouteDetail(routeId: string | null | undefined, enabled: bool
   });
 }
 
+/** Mirrors the `side` enum in lib/validation/routes.ts so a typo is a compile
+ * error here rather than a 400 from the server. */
+export type RouteSide = "NORTH" | "SOUTH" | "EAST" | "WEST" | "BOTH";
+
 export type CreateRouteBody = {
   startAddress: { addressLines: string[] } | { placeId: string };
   endAddress: { addressLines: string[] } | { placeId: string };
   streetName: string;
-  side?: string | null;
+  side?: RouteSide | null;
   assignedVolunteerId?: string | null;
   houseCount?: number;
   bundles: Array<{ papers: number }>;
@@ -41,7 +45,7 @@ export type UpdateRouteBody = {
   startAddress?: { addressLines: string[] } | { placeId: string };
   endAddress?: { addressLines: string[] } | { placeId: string };
   streetName?: string;
-  side?: string | null;
+  side?: RouteSide | null;
   bundles?: Array<{ papers: number }>;
   note?: string | null;
 };
