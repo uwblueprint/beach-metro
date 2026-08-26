@@ -16,6 +16,7 @@ import { SidePanelSection } from "@/components/side-panel-section";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { ApiError } from "@/lib/api/client";
+import { RoleTag } from "@/components/role-tag";
 import { cn } from "@/lib/utils";
 import {
   memberKeys,
@@ -28,6 +29,7 @@ import {
   useUpdateVolunteer,
   useVolunteer,
   type MemberRole,
+  type MemberStatus,
 } from "@/features/members/api";
 import { territoryDropKeys, useTerritorySummaries } from "@/features/territory-drops/api";
 
@@ -50,11 +52,12 @@ function todayIso(): string {
   }).format(new Date());
 }
 
-/** The row the user clicked. Name comes along so the header renders immediately. */
+/** The row the user clicked. Name and status come along so the header renders immediately. */
 export interface MemberSelection {
   id: string;
   role: MemberRole;
   name: string;
+  status: MemberStatus;
 }
 
 interface MemberSidePanelProps {
@@ -104,14 +107,6 @@ const CADENCE_LABEL: Record<string, string> = {
   biweekly: "Bi-Weekly",
   monthly: "Monthly",
 };
-
-function RoleTag({ role }: { role: MemberRole }) {
-  return (
-    <span className="inline-flex items-center justify-center rounded-lg bg-tag-active px-2 py-1 text-md text-active">
-      {role === "captain" ? "Captain" : "Volunteer"}
-    </span>
-  );
-}
 
 function VolunteerContent({ id }: { id: string }) {
   const queryClient = useQueryClient();
@@ -819,6 +814,7 @@ function CreateMemberContent({
           id: created.id,
           role: "volunteer",
           name: `${created.firstName} ${created.lastName}`,
+          status: "active",
         });
       } else {
         const created = await createCaptain.mutateAsync({
@@ -835,6 +831,7 @@ function CreateMemberContent({
           id: created.id,
           role: "captain",
           name: `${created.firstName} ${created.lastName}`,
+          status: "active",
         });
       }
     } catch (err) {
@@ -1005,7 +1002,16 @@ function MemberSidePanel({ member, creating, onClose, onCreated }: MemberSidePan
   if (creating !== displayedCreating) {
     setDisplayedCreating(creating);
   }
-  if (member && member.id !== displayed?.id) {
+  // Compare contents, not just id: the same member's status/name can change
+  // underneath an open panel (retire, un-retire, rename) and the header tag has
+  // to repaint. Assigning `member` makes the next render's check false.
+  if (
+    member &&
+    (member.id !== displayed?.id ||
+      member.role !== displayed?.role ||
+      member.name !== displayed?.name ||
+      member.status !== displayed?.status)
+  ) {
     setDisplayed(member);
   }
 
@@ -1061,7 +1067,13 @@ function MemberSidePanel({ member, creating, onClose, onCreated }: MemberSidePan
           ) : (
             <div className="flex min-w-0 items-center gap-2">
               <span className="truncate text-md font-semibold text-primary">{displayed?.name}</span>
-              {displayed && <RoleTag role={displayed.role} />}
+              {displayed && (
+                <RoleTag
+                  role={displayed.role}
+                  status={displayed.status}
+                  className="rounded-lg text-md"
+                />
+              )}
             </div>
           )}
           <Button

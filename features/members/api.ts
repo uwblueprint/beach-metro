@@ -7,7 +7,7 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
-import type { MemberRow } from "@/lib/services/members";
+import type { MemberRow, MemberStatus } from "@/lib/services/members";
 import type { MemberNote } from "@/lib/services/notes";
 import type { CaptainPayoutHistoryEntry } from "@/lib/services/payouts";
 import type { CaptainSummary } from "@/lib/services/captains";
@@ -16,7 +16,7 @@ import type { VolunteerDetail } from "@/lib/services/volunteers";
 import { routeKeys } from "@/features/routes/api";
 import { territoryDropKeys } from "@/features/territory-drops/api";
 
-export type { MemberRow, MemberNote, CaptainPayoutHistoryEntry };
+export type { MemberRow, MemberStatus, MemberNote, CaptainPayoutHistoryEntry };
 
 export type MemberRole = "volunteer" | "captain";
 
@@ -109,6 +109,41 @@ export function useRetireMember() {
     onSuccess: (_data, { id, role }) => {
       queryClient.invalidateQueries({ queryKey: memberKeys.all });
       queryClient.invalidateQueries({ queryKey: routeKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: role === "volunteer" ? memberKeys.volunteer(id) : memberKeys.captain(id),
+      });
+    },
+  });
+}
+
+/** Hard-delete: permanently removes the member and their associated data. */
+export function useDeleteMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, role }: { id: string; role: MemberRole }) => api.del(`/api/${role}s/${id}`),
+    onSuccess: (_data, { id, role }) => {
+      queryClient.invalidateQueries({ queryKey: memberKeys.all });
+      queryClient.invalidateQueries({ queryKey: routeKeys.all });
+      queryClient.invalidateQueries({ queryKey: territoryDropKeys.all });
+      queryClient.removeQueries({
+        queryKey: role === "volunteer" ? memberKeys.volunteer(id) : memberKeys.captain(id),
+      });
+    },
+  });
+}
+
+/** Reactivation: clears retirement. Routes/territory are not re-attached automatically. */
+export function useReactivateMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, role }: { id: string; role: MemberRole }) =>
+      api.post<unknown>(`/api/${role}s/${id}/reactivate`),
+    onSuccess: (_data, { id, role }) => {
+      queryClient.invalidateQueries({ queryKey: memberKeys.all });
+      queryClient.invalidateQueries({ queryKey: routeKeys.all });
+      // Territory summaries embed captain status, so they go stale on
+      // reactivation too — the same set useDeleteMember invalidates.
+      queryClient.invalidateQueries({ queryKey: territoryDropKeys.all });
       queryClient.invalidateQueries({
         queryKey: role === "volunteer" ? memberKeys.volunteer(id) : memberKeys.captain(id),
       });

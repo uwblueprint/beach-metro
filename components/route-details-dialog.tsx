@@ -18,10 +18,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { ApiError } from "@/lib/api/client";
 import { greedySplit } from "@/lib/services/derive";
 import type { RouteDetail } from "@/lib/services/routes";
-import { useCreateRoute, useRouteDetail, useUpdateRoute } from "@/features/routes/api";
+import {
+  useCreateRoute,
+  useRouteDetail,
+  useUpdateRoute,
+  type RouteSide,
+} from "@/features/routes/api";
 
 export interface RouteDetailsDialogProps {
   open: boolean;
@@ -31,6 +37,16 @@ export interface RouteDetailsDialogProps {
   routeId?: string | null;
   onSuccess?: () => void;
 }
+
+/** "" is the "no direction recorded" choice; the rest mirror the RouteSide enum. */
+const DIRECTION_OPTIONS: { value: RouteSide | ""; label: string }[] = [
+  { value: "", label: "— none —" },
+  { value: "NORTH", label: "North" },
+  { value: "SOUTH", label: "South" },
+  { value: "EAST", label: "East" },
+  { value: "WEST", label: "West" },
+  { value: "BOTH", label: "Both" },
+];
 
 type FormState = {
   streetName: string;
@@ -42,6 +58,7 @@ type FormState = {
   initialEndLabel: string;
   papersRows: number[];
   note: string;
+  side: RouteSide | "";
   startEditingLast: boolean;
 };
 
@@ -56,6 +73,7 @@ function blankForm(): FormState {
     initialEndLabel: "",
     papersRows: [0],
     note: "",
+    side: "",
     startEditingLast: true,
   };
 }
@@ -77,6 +95,7 @@ function formFromDetail(detail: RouteDetail): FormState {
     initialEndLabel: endLabel,
     papersRows: rows.length > 0 ? rows : [0],
     note: detail.notes ?? "",
+    side: (detail.side ?? "") as RouteSide | "",
     startEditingLast: false,
   };
 }
@@ -105,6 +124,7 @@ function RouteDetailsFields({
   const [endPlaceId, setEndPlaceId] = useState(initial.endPlaceId);
   const [papersRows, setPapersRows] = useState(initial.papersRows);
   const [note, setNote] = useState(initial.note);
+  const [side, setSide] = useState(initial.side);
   const [error, setError] = useState<string | null>(null);
 
   const busy = createRoute.isPending || updateRoute.isPending;
@@ -139,6 +159,7 @@ function RouteDetailsFields({
           streetName: name,
           bundles,
           note: note.trim() || null,
+          side: side || null,
         };
         if (start !== initial.initialStartLabel || startPlaceId !== initial.startPlaceId) {
           body.startAddress = resolveAddress(start, startPlaceId);
@@ -156,6 +177,7 @@ function RouteDetailsFields({
           houseCount: 0,
           bundles,
           note: note.trim() || null,
+          side: side || null,
         });
       }
       onSuccess?.();
@@ -174,17 +196,6 @@ function RouteDetailsFields({
         </DialogDescription>
       </DialogHeader>
       <DialogBody>
-        <DialogField>
-          <Label htmlFor="route-semantic-name" className="text-md font-normal text-primary">
-            Semantic Name
-          </Label>
-          <Input
-            id="route-semantic-name"
-            value={streetName}
-            onChange={(e) => setStreetName(e.target.value)}
-            placeholder="Queen St E · Woodbine → Coxwell"
-          />
-        </DialogField>
         <DialogField>
           <AddressField
             id="route-start"
@@ -215,6 +226,30 @@ function RouteDetailsFields({
               setEndPlaceId(placeId);
               setEndAddress(text);
             }}
+          />
+        </DialogField>
+        <DialogField>
+          <Label htmlFor="route-semantic-name" className="text-md font-normal text-primary">
+            Semantic Name
+          </Label>
+          <Input
+            id="route-semantic-name"
+            value={streetName}
+            onChange={(e) => setStreetName(e.target.value)}
+            placeholder="Queen St E · Woodbine → Coxwell"
+          />
+        </DialogField>
+        <DialogField>
+          <Label htmlFor="route-direction" className="text-md font-normal text-primary">
+            Direction
+          </Label>
+          <Select
+            id="route-direction"
+            value={side}
+            // Select is string-typed; DIRECTION_OPTIONS is the only source of
+            // values, so narrowing back to the union here is safe.
+            onChange={(value) => setSide(value as RouteSide | "")}
+            options={DIRECTION_OPTIONS}
           />
         </DialogField>
         <DialogField>

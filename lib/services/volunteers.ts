@@ -294,3 +294,29 @@ export async function retireVolunteer(id: string): Promise<VolunteerDetail> {
 
   return getVolunteer(id);
 }
+
+/** Reactivation: clears retirement (people flow Retired → Active). Routes are not
+ * re-attached; the manager assigns them manually after reactivation. */
+export async function reactivateVolunteer(id: string): Promise<VolunteerDetail> {
+  const v = await fetchVolunteer(id);
+  if (!v.retired_at) throw conflict("Volunteer is not retired.");
+  const { error } = await db().from("volunteers").update({ retired_at: null }).eq("id", id);
+  if (error) throwDb(error);
+  return getVolunteer(id);
+}
+
+/** Hard-delete a volunteer. Detaches their routes first so they become vacant. */
+export async function deleteVolunteer(id: string): Promise<void> {
+  await fetchVolunteer(id);
+
+  const client = db();
+  const { error: detachError } = await client
+    .from("volunteer_routes")
+    .update({ assigned_volunteer_id: null })
+    .eq("assigned_volunteer_id", id)
+    .is("deleted_at", null);
+  if (detachError) throwDb(detachError);
+
+  const { error } = await client.from("volunteers").delete().eq("id", id);
+  if (error) throwDb(error);
+}
