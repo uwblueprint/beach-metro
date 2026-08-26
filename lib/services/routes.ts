@@ -26,7 +26,7 @@ import {
   getAddressDetails,
   type AddressDetail,
 } from "./addresses";
-import { greedySplit, volunteerStatus } from "./derive";
+import { greedySplit, routeEndpointLabel, volunteerStatus } from "./derive";
 import { db, throwDb, today } from "./shared";
 
 export interface RouteSummary {
@@ -48,6 +48,11 @@ export interface RouteSummary {
    * list call (null when the 30-day coordinate cache is empty). */
   start: { latitude: number; longitude: number } | null;
   end: { latitude: number; longitude: number } | null;
+  /** House number at each endpoint, so the list and the map hover card can tell
+   * two routes on the same street apart ("Queen St E · 1900 → 2100"). Null when
+   * the address cache has no formatted address for that endpoint yet. */
+  startLabel: string | null;
+  endLabel: string | null;
 }
 
 export interface RouteDetail extends RouteSummary {
@@ -130,6 +135,14 @@ function toSummary(
       : null,
     start: coord(addresses?.get(r.start_address_id)),
     end: coord(addresses?.get(r.end_address_id)),
+    startLabel: routeEndpointLabel(
+      addresses?.get(r.start_address_id)?.formattedAddress ?? null,
+      r.street_name,
+    ),
+    endLabel: routeEndpointLabel(
+      addresses?.get(r.end_address_id)?.formattedAddress ?? null,
+      r.street_name,
+    ),
   };
 }
 

@@ -10,7 +10,7 @@ interface SidePanelRowProps {
   children: ReactNode;
   meta?: ReactNode;
   onEdit?: () => void;
-  /** When set, the row is clickable (e.g. selectable deliveries). Uses a div when onEdit is also set. */
+  /** When set, the row is clickable (e.g. selectable deliveries). */
   onClick?: () => void;
   className?: string;
 }
@@ -64,14 +64,10 @@ function SidePanelRow({ children, meta, onEdit, onClick, className }: SidePanelR
     </>
   );
 
-  if (onClick && !onEdit) {
-    return (
-      <button type="button" className={classes} onClick={onClick}>
-        {content}
-      </button>
-    );
-  }
-
+  // Deliberately a div, never a <button>: `meta` carries interactive content on
+  // the deliveries list (the route actions menu renders its own <button>), and a
+  // button inside a button is invalid HTML — the parser closes the outer one,
+  // and Enter/Space on the inner trigger stops being reliable.
   return (
     <div
       role={onClick ? "button" : undefined}

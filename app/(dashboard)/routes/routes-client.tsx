@@ -37,7 +37,7 @@ import {
   type MapRoute,
   type VacancyFilter,
 } from "./route-map";
-import { RouteTag } from "./route-tag";
+import { RouteStateTag, RouteTag } from "./route-tag";
 
 const SIDE_OPTIONS = [
   { value: "", label: "— none —" },
@@ -52,11 +52,26 @@ const SIDE_OPTIONS = [
 const inputTriggerClassName =
   "flex h-auto w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-hairline bg-bg px-3 py-2 text-left text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-bg-secondary disabled:text-disabled disabled:opacity-50";
 
+/**
+ * Attention flag for a row, or null when the route is healthy (route flow
+ * §4f/§4g). The two are not exclusive — a carrier on vacation can also be past
+ * their end date — so needs-attention wins: suspension clears itself when the
+ * vacation window ends, a passed end date needs the manager to act.
+ */
+function routeState(r: RouteSummary): "attention" | "suspended" | null {
+  if (r.needsAttention) return "attention";
+  if (r.suspended) return "suspended";
+  return null;
+}
+
+/** Client-side twin of derive.ts's routeLabel, over the already-extracted
+ * endpoint labels the list endpoint sends (the summary has no full addresses). */
 function routeLabel(r: RouteSummary): string {
   const start = r.startLabel ?? "";
   const end = r.endLabel ?? "";
-  if (start && end) return `${r.streetName} · ${start} → ${end}`;
-  return r.streetName;
+  if (!start || !end) return r.streetName;
+  if (start === end) return `${r.streetName} · ${start}`;
+  return `${r.streetName} · ${start} → ${end}`;
 }
 
 /* ---------- API shapes (subset the page uses) ---------- */
@@ -74,8 +89,8 @@ interface RouteSummary {
   captain: { id: string; name: string } | null;
   start: { latitude: number; longitude: number } | null;
   end: { latitude: number; longitude: number } | null;
-  startLabel?: string | null;
-  endLabel?: string | null;
+  startLabel: string | null;
+  endLabel: string | null;
 }
 interface RouteDetail extends RouteSummary {
   notes: string | null;
@@ -594,6 +609,7 @@ function RouteList(props: {
         const volunteerName = r.assignedVolunteer
           ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
           : "vacant";
+        const state = routeState(r);
 
         return (
           // TODO: Harmonize SidePanelRow height with members (h-8 vs h-10 here).
@@ -602,6 +618,7 @@ function RouteList(props: {
             className="h-10 px-2 py-2"
             meta={
               <div className="flex shrink-0 items-center gap-2">
+                {state && <RouteStateTag state={state} />}
                 <span className="text-md text-secondary">{volunteerName}</span>
                 <RouteActionsMenu
                   routeId={r.id}
@@ -759,6 +776,7 @@ function InputField(props: {
   onChange?: (value: string) => void;
   placeholder?: string;
   type?: string;
+  min?: number;
   labelSuffix?: string;
 }) {
   return (
@@ -769,6 +787,7 @@ function InputField(props: {
         readOnly={!props.onChange}
         placeholder={props.placeholder}
         type={props.type}
+        min={props.min}
       />
     </SidePanelField>
   );
@@ -867,12 +886,19 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
         }
       }
     },
+    // Local edits clear only when the whole save landed.
     onSuccess: () => {
       setStreetName(null);
       setNotes(null);
       setVolunteerId(null);
       setSide(null);
       setPapersRows(null);
+    },
+    // A save is up to two calls (PATCH, then assign/reassign/unassign) with no
+    // transaction across them. If the second fails the first is already
+    // committed, so refetch either way — otherwise the panel keeps diffing
+    // against a baseline the database no longer matches.
+    onSettled: () => {
       detail.refetch();
       props.onChanged();
     },
@@ -985,6 +1011,9 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
               options={[...SIDE_OPTIONS]}
               onChange={setSide}
             />
+            {/* Read-only: house count is manual for MVP and has no edit path in
+                this panel yet. A drop is one address, so it has no house count. */}
+            <InputField label="House Count" value={String(r.effectiveHouseCount)} />
           </>
         )}
 
@@ -1033,6 +1062,7 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
   const [startPlaceId, setStartPlaceId] = useState<string | null>(null);
   const [endPlaceId, setEndPlaceId] = useState<string | null>(null);
   const [papersRows, setPapersRows] = useState<number[]>([0]);
+  const [houseCount, setHouseCount] = useState("0");
   const [side, setSide] = useState("");
   const [volunteerId, setVolunteerId] = useState("");
   const [note, setNote] = useState("");
@@ -1048,6 +1078,10 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
         };
 
   const bundles = toBundles(papersRows);
+  // The API rejects a non-integer or negative count (min(0)); gate Create on it
+  // here so the form doesn't fill in fully and then fail as a 400.
+  const houseCountValue = Number(houseCount);
+  const houseCountValid = Number.isInteger(houseCountValue) && houseCountValue >= 0;
 
   const create = useMutation({
     mutationFn: () =>
@@ -1055,7 +1089,7 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
         streetName: streetName.trim(),
         startAddress: address(startLine, startPlaceId),
         endAddress: address(endLine, endPlaceId),
-        houseCount: 0,
+        houseCount: houseCountValue,
         bundles,
         ...(side ? { side } : {}),
         ...(volunteerId ? { assignedVolunteerId: volunteerId } : {}),
@@ -1064,7 +1098,12 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
     onSuccess: (route) => props.onCreated(route.id),
   });
 
-  const ready = streetName.trim() && startLine.trim() && endLine.trim() && bundles.length > 0;
+  const ready =
+    streetName.trim() &&
+    startLine.trim() &&
+    endLine.trim() &&
+    bundles.length > 0 &&
+    houseCountValid;
 
   const volunteerOptions = [
     { value: "", label: "— leave vacant —" },
@@ -1131,6 +1170,17 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
           display={sideDisplay}
           options={[...SIDE_OPTIONS]}
           onChange={setSide}
+        />
+
+        {/* Manual entry for MVP (docs/design_decisions.md); auto-calc from
+            Toronto Open Data is post-MVP. */}
+        <InputField
+          label="House Count"
+          type="number"
+          min={0}
+          value={houseCount}
+          onChange={setHouseCount}
+          placeholder="0"
         />
 
         <BundlePapersTable value={papersRows} onChange={setPapersRows} startEditingLast />
