@@ -138,8 +138,12 @@ person. Listing notes for an unknown person is a `404`, not an empty list.
 | PATCH  | `/api/volunteers/{id}`          | Edit fields / territory assignment (notes have their own resource)                                     | 4d        |
 | POST   | `/api/volunteers/{id}/vacation` | Set or clear the vacation window (suspends/auto-resumes routes)                                        | 4e        |
 | POST   | `/api/volunteers/{id}/retire`   | Soft retire (`retiredAt`); detaches routes → they become vacant                                        | 4f        |
+| POST   | `/api/volunteers/{id}/reactivate` | Clear retirement (Retired → Active). Routes are **not** re-attached; assign them afterwards         | 4f        |
+| DELETE | `/api/volunteers/{id}`          | **Hard delete.** Routes are detached (become vacant) and member notes cascade. `204 No Content`        | 4f        |
 
-No `DELETE` — volunteers are soft-retired, never deleted.
+Retire is still the normal path; `DELETE` exists for records created in error.
+Deleting a volunteer does not remove delivery history — `RouteDelivery` hangs off
+the route, not the carrier.
 
 ```ts
 // POST /api/volunteers
@@ -182,6 +186,8 @@ type AddressInput =
 | GET    | `/api/captains/{id}`        | Detail (includes territory)                                                        | 4i        |
 | PATCH  | `/api/captains/{id}`        | Edit fields / pay config (type, rate, cadence); notes have their own resource       | 4j        |
 | POST   | `/api/captains/{id}/retire` | Soft retire; leaves the territory captain-less and prompts reassignment            | 4k        |
+| POST   | `/api/captains/{id}/reactivate` | Clear retirement (Retired → Active). The territory is **not** re-attached      | 4k        |
+| DELETE | `/api/captains/{id}`        | **Hard delete**, with the 1:1 territory. `409` when the captain has payout history | 4k        |
 | GET    | `/api/captains/{id}/payouts` | This captain's payout across every issue, newest first (read-only)               | people 4i |
 
 ```ts
@@ -528,10 +534,14 @@ the resulting `Address` + `GoogleMapsLocation`. A scheduled refresh job re-resol
 - **Sub-resources:** `notes` (under a volunteer or captain to list/create, then by its
   own id to edit/delete); `payouts` under a captain (read-only history).
 - **Standard methods:** List/Create on the collection; Get/Update on the item;
-  Delete only on `routes` (soft — sets `deletedAt`, row retained) and on a payout's
-  `substitute` sub-resource — people are soft-retired, finance/delivery rows are
-  lifecycle-bound.
-- **Custom actions:** volunteer `vacation`/`retire`; captain `retire`; route
+  Delete on `routes` (soft — sets `deletedAt`, row retained), on a payout's
+  `substitute` sub-resource, and on `volunteers`/`captains` (hard). Retiring is
+  still the normal path for a person who has left; `DELETE` is for records created
+  in error, and it refuses (`409`) when finance history would be orphaned —
+  `captain_payouts.captain_id` has no `ON DELETE` clause. Finance/delivery rows
+  stay lifecycle-bound.
+- **Custom actions:** volunteer `vacation`/`retire`/`reactivate`; captain
+  `retire`/`reactivate`; route
   `assign`/`unassign`/`reassign`/`refresh-house-count` + `nearest-vacant`; year
   `archive`/`export`; issue `close`/`reopen`; payout
   `override`/`clear-override`/`mark-paid`/`unmark-paid`/`freeze`/

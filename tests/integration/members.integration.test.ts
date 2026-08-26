@@ -484,6 +484,126 @@ describe.skipIf(!RUN)("commercial drop standing counts", () => {
   });
 });
 
+describe.skipIf(!RUN)("reactivation and hard delete", () => {
+  async function makeCaptain(tag: string) {
+    const captain = await S().captains.createCaptainRecord({
+      firstName: TEST_FIRST_NAME,
+      lastName: unique(tag),
+      email: `${unique(`it-${tag.toLowerCase()}`)}@example.com`,
+      phone: "416-555-0430",
+      payType: "bundle",
+      payRate: 1,
+      payCadence: "biweekly",
+      startDate: "2026-01-01",
+      endDate: null,
+      note: null,
+    });
+    created.captainIds.push(captain.id);
+    if (captain.territory) created.territoryIds.push(captain.territory.id);
+    return captain;
+  }
+
+  it("clears a volunteer's retirement, and refuses when they are not retired", async () => {
+    const volunteer = await S().volunteers.createVolunteerRecord({
+      firstName: TEST_FIRST_NAME,
+      lastName: unique("Reactivate"),
+      email: `${unique("it-vreactivate")}@example.com`,
+      phone: "416-555-0431",
+      address: {
+        addressLines: ["1900 Queen St E"],
+        locality: "Toronto",
+        administrativeArea: "ON",
+        regionCode: "CA",
+      },
+      startDate: "2026-01-01",
+      endDate: null,
+      note: null,
+    });
+    created.volunteerIds.push(volunteer.id);
+
+    // Not retired yet, so reactivation is a conflict rather than a no-op.
+    await expectServiceError(S().volunteers.reactivateVolunteer(volunteer.id), 409);
+
+    await S().volunteers.retireVolunteer(volunteer.id);
+    expect((await S().volunteers.getVolunteer(volunteer.id)).status).toBe("retired");
+
+    const back = await S().volunteers.reactivateVolunteer(volunteer.id);
+    expect(back.status).toBe("active");
+  });
+
+  it("clears a captain's retirement, and refuses when they are not retired", async () => {
+    const captain = await makeCaptain("CReactivate");
+
+    await expectServiceError(S().captains.reactivateCaptain(captain.id), 409);
+
+    await S().captains.retireCaptain(captain.id);
+    expect((await S().captains.getCaptain(captain.id)).status).toBe("retired");
+
+    const back = await S().captains.reactivateCaptain(captain.id);
+    expect(back.status).toBe("active");
+  });
+
+  it("hard-deletes a volunteer and vacates the routes they carried", async () => {
+    const volunteer = await S().volunteers.createVolunteerRecord({
+      firstName: TEST_FIRST_NAME,
+      lastName: unique("Delete"),
+      email: `${unique("it-vdelete")}@example.com`,
+      phone: "416-555-0432",
+      address: {
+        addressLines: ["2100 Queen St E"],
+        locality: "Toronto",
+        administrativeArea: "ON",
+        regionCode: "CA",
+      },
+      startDate: "2026-01-01",
+      endDate: null,
+      note: null,
+    });
+    created.volunteerIds.push(volunteer.id);
+
+    await S().volunteers.deleteVolunteer(volunteer.id);
+    await expectServiceError(S().volunteers.getVolunteer(volunteer.id), 404);
+  });
+
+  it("hard-deletes a captain along with their 1:1 territory", async () => {
+    const captain = await makeCaptain("CDelete");
+    const territoryId = captain.territory?.id;
+
+    await S().captains.deleteCaptain(captain.id);
+    await expectServiceError(S().captains.getCaptain(captain.id), 404);
+
+    if (territoryId) {
+      const { data } = await createAdminClient()
+        .from("captain_territories")
+        .select("id")
+        .eq("id", territoryId);
+      expect(data ?? []).toHaveLength(0);
+    }
+  });
+
+  it("refuses to delete a captain who has payout history", async () => {
+    const captain = await makeCaptain("CPayout");
+
+    // Creating an issue makes a payout cell for every active captain, so this
+    // gives our captain finance history to be protected by.
+    const years = await import("@/lib/services/financial-years");
+    const issues = await import("@/lib/services/issues");
+    const year = await years.createYear({
+      name: `IT-DEL ${crypto.randomUUID().slice(0, 8)}`,
+      startDate: "2026-01-01",
+    });
+    createdYearIds.push(year.id);
+    await issues.createIssuesBatch(year.id, { issues: [{ name: "Del A", date: "2026-04-10" }] });
+
+    // captain_payouts.captain_id has no ON DELETE clause, so without the guard
+    // this surfaces as a 400 "A referenced record does not exist."
+    await expectServiceError(S().captains.deleteCaptain(captain.id), 409);
+
+    // Still there, and still reachable.
+    expect((await S().captains.getCaptain(captain.id)).id).toBe(captain.id);
+  });
+});
+
 afterAll(async () => {
   if (!RUN) return;
   const client = createAdminClient();
