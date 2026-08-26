@@ -675,7 +675,7 @@ export default function FinancesPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button size="sm" onClick={handleExportCsv}>
+              <Button variant="default" size="sm" onClick={handleExportCsv}>
                 Export as CSV
               </Button>
               <Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
