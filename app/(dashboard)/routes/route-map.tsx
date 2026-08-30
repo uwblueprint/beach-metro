@@ -46,6 +46,13 @@ export interface MapHome {
   home: { latitude: number; longitude: number } | null;
 }
 
+/** Home coordinates for the member associated with the selected route. */
+export interface SelectedMemberHome {
+  latitude: number;
+  longitude: number;
+  name: string;
+}
+
 export type VacancyFilter = "all" | "vacant" | "assigned";
 export type DeliveryTypeFilter = "all" | "routes" | "drops";
 
@@ -89,6 +96,41 @@ const ROUTE_COLORS = {
     selected: "#006eab",
   },
 } as const;
+
+/** Google Maps circle symbol `scale` is the radius in px. */
+const ROUTE_ENDPOINT_DOT_SCALE = 3.5;
+const ROUTE_ENDPOINT_DOT_SCALE_SELECTED = 5;
+const HOME_PIN_SIZE_MULTIPLIER = 5;
+/** Diameter of the home pin — always 5× the default route endpoint dot. */
+const HOME_PIN_DIAMETER_PX = ROUTE_ENDPOINT_DOT_SCALE * 2 * HOME_PIN_SIZE_MULTIPLIER;
+
+/** Toolbar icon-button tokens as hex (see components/ui/toolbar-control.ts). */
+const HOME_PIN_STYLE = {
+  bg: "#ffffff",
+  border: "#e8e8e8", // --border
+  icon: "#1a1a1a", // --foreground / --primary
+} as const;
+
+function homePinMarkerIcon(): google.maps.Icon {
+  const d = HOME_PIN_DIAMETER_PX;
+  const r = d / 2;
+  const inset = 8;
+  const iconBox = d - inset * 2;
+  const houseScale = iconBox / 24;
+  const svg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${d}" height="${d}" viewBox="0 0 ${d} ${d}">`,
+    `<circle cx="${r}" cy="${r}" r="${r - 1}" fill="${HOME_PIN_STYLE.bg}" stroke="${HOME_PIN_STYLE.border}" stroke-width="1"/>`,
+    `<g transform="translate(${inset},${inset}) scale(${houseScale})">`,
+    `<path fill="none" stroke="${HOME_PIN_STYLE.icon}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/>`,
+    `<path fill="none" stroke="${HOME_PIN_STYLE.icon}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`,
+    `</g></svg>`,
+  ].join("");
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(d, d),
+    anchor: new google.maps.Point(r, r),
+  };
+}
 
 function routeColor(route: MapRoute, selected: boolean, hovered: boolean): string {
   const palette = ROUTE_COLORS[route.lifecycle];
@@ -185,7 +227,7 @@ function RouteOverlay(props: {
         clickable: true,
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
-          scale: 3.5,
+          scale: ROUTE_ENDPOINT_DOT_SCALE,
           fillColor: color,
           fillOpacity: 1,
           strokeColor: "#ffffff",
@@ -229,9 +271,9 @@ function RouteOverlay(props: {
   useEffect(() => {
     const color = routeColor(route, selected, hovered);
     const weight = selected ? 6 : 4;
-    const zLine = selected ? 20 : 2;
-    const zMark = selected ? 21 : 3;
-    const scale = selected ? 5 : 3.5;
+    const zLine = selected ? 20 : hovered ? 12 : 2;
+    const zMark = selected ? 21 : hovered ? 13 : 3;
+    const scale = selected ? ROUTE_ENDPOINT_DOT_SCALE_SELECTED : ROUTE_ENDPOINT_DOT_SCALE;
     const line = lineRef.current;
     if (line) {
       line.setOptions({ strokeColor: color, strokeWeight: weight, zIndex: zLine });
@@ -345,6 +387,102 @@ function FitBounds(props: {
 }
 
 const BEACHES_CENTER = { lat: 43.6725, lng: -79.2915 };
+
+/**
+ * Nudge-zoom the map when a route is selected so the whole route (plus home pin)
+ * fits with breathing room, but never more than 2 zoom levels tighter than the
+ * current view. Deselecting leaves the camera where it is.
+ */
+function FitSelection(props: { route: MapRoute | null; memberHome: SelectedMemberHome | null }) {
+  const map = useMap("routes-map");
+  const preSelectRef = useRef<{ center: google.maps.LatLngLiteral; zoom: number } | null>(null);
+
+  useEffect(() => {
+    if (!map) return;
+    const routeId = props.route?.id ?? null;
+
+    if (!routeId) {
+      preSelectRef.current = null;
+      return;
+    }
+
+    const route = props.route!;
+    if (!route.start || !route.end) {
+      return;
+    }
+
+    if (!preSelectRef.current) {
+      preSelectRef.current = {
+        center: map.getCenter()?.toJSON() ?? BEACHES_CENTER,
+        zoom: map.getZoom() ?? 14,
+      };
+    }
+
+    const bounds = new google.maps.LatLngBounds();
+    bounds.extend({ lat: route.start.latitude, lng: route.start.longitude });
+    bounds.extend({ lat: route.end.latitude, lng: route.end.longitude });
+    if (route.path) {
+      for (const p of route.path) bounds.extend(p);
+    }
+    if (props.memberHome) {
+      bounds.extend({ lat: props.memberHome.latitude, lng: props.memberHome.longitude });
+    }
+
+    const maxZoom = (preSelectRef.current?.zoom ?? map.getZoom() ?? 14) + 2;
+
+    const listener = map.addListener("idle", () => {
+      google.maps.event.removeListener(listener);
+      const z = map.getZoom();
+      if (z !== undefined && z > maxZoom) {
+        map.setZoom(maxZoom);
+      }
+    });
+
+    map.fitBounds(bounds, 80);
+  }, [map, props.route?.id, props.route, props.memberHome]);
+
+  return null;
+}
+
+let homePinMarkerIconCache: google.maps.Icon | null = null;
+function getHomePinMarkerIcon(): google.maps.Icon {
+  homePinMarkerIconCache ??= homePinMarkerIcon();
+  return homePinMarkerIconCache;
+}
+
+function HomePinMarker(props: { home: SelectedMemberHome | null }) {
+  const map = useMap("routes-map");
+  const markerRef = useRef<google.maps.Marker | null>(null);
+
+  useEffect(() => {
+    if (!map || !props.home) {
+      if (markerRef.current) {
+        markerRef.current.setMap(null);
+        markerRef.current = null;
+      }
+      return;
+    }
+    const position = { lat: props.home.latitude, lng: props.home.longitude };
+    if (markerRef.current) {
+      markerRef.current.setPosition(position);
+      markerRef.current.setTitle(props.home.name);
+      return;
+    }
+    markerRef.current = new google.maps.Marker({
+      map,
+      position,
+      title: props.home.name,
+      icon: getHomePinMarkerIcon(),
+      zIndex: 30,
+    });
+    return () => {
+      markerRef.current?.setMap(null);
+      markerRef.current = null;
+    };
+  }, [map, props.home?.latitude, props.home?.longitude, props.home?.name, props.home]);
+
+  return null;
+}
 
 // Roughly Halton–Durham, Lake Ontario–north York Region: keeps panning/zooming
 // within the GTA since routes and volunteers are only ever in this area.
@@ -808,6 +946,8 @@ export function RouteMap(props: {
   routes: MapRoute[];
   homes: MapHome[];
   selectedId: string | null;
+  /** Home coordinates for the volunteer (route) or captain (drop) on the selected route. */
+  selectedMemberHome: SelectedMemberHome | null;
   onSelect: (id: string) => void;
   /** Changes when filters that should re-fit the map change (vacancy, search, type, homes). */
   boundsFitKey: string;
@@ -895,6 +1035,15 @@ export function RouteMap(props: {
             ready={props.boundsFitReady}
             onInitialFit={handleInitialFit}
           />
+          <FitSelection
+            route={
+              props.selectedId
+                ? (props.routes.find((r) => r.id === props.selectedId) ?? null)
+                : null
+            }
+            memberHome={props.selectedMemberHome}
+          />
+          <HomePinMarker home={props.selectedMemberHome} />
         </Map>
         {props.filterPlacement === "map" ? (
           <MapControls

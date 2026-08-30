@@ -9,6 +9,7 @@ import { Attribute } from "@/components/attribute";
 import { Button } from "@/components/ui/button";
 import { NewTerritoryDropDialog, type DropSelection } from "@/components/new-territory-drop-dialog";
 import { NotesSection } from "@/components/notes-section";
+import { ReimbursementsSection } from "@/components/reimbursements-section";
 import { RouteDetailsDialog } from "@/components/route-details-dialog";
 import { SidePanelField } from "@/components/side-panel-field";
 import { SidePanelRow } from "@/components/side-panel-row";
@@ -339,7 +340,7 @@ function VolunteerContent({ id }: { id: string }) {
         </div>
       </div>
 
-      <NotesSection role="volunteer" memberId={id} />
+      <NotesSection key={id} role="volunteer" memberId={id} />
 
       <SidePanelSection title="Route Info" onAdd={openCreate}>
         {volunteer.routesCarried.length === 0 ? (
@@ -631,35 +632,9 @@ function CaptainContent({ id }: { id: string }) {
         </div>
       </div>
 
-      <NotesSection role="captain" memberId={id} />
+      <NotesSection key={id} role="captain" memberId={id} />
 
-      <SidePanelSection title="Reimbursements">
-        {payoutsPending ? (
-          <SidePanelRow className="text-secondary">Loading…</SidePanelRow>
-        ) : (payouts ?? []).length === 0 ? (
-          <SidePanelRow className="text-secondary">No Record of Reimbursement</SidePanelRow>
-        ) : (
-          (payouts ?? []).map((entry) => (
-            <SidePanelRow key={entry.id} meta={formatDate(entry.issueDate)}>
-              {entry.role === "covered_by" ? (
-                // Someone else covered and was paid, so no amount is shown here:
-                // under a "Reimbursements" heading a figure would read as income.
-                <span className="text-secondary">
-                  {entry.issueName} · covered by {entry.substitutedBy}
-                </span>
-              ) : (
-                <span className="text-primary">
-                  ${entry.amount.toFixed(2)} ·{" "}
-                  {entry.role === "covered_for"
-                    ? `Covered for ${entry.coveredFor}`
-                    : entry.issueName}
-                  {entry.paid ? " · paid" : ""}
-                </span>
-              )}
-            </SidePanelRow>
-          ))
-        )}
-      </SidePanelSection>
+      <ReimbursementsSection key={id} captainId={id} payouts={payouts} isPending={payoutsPending} />
 
       <SidePanelSection title="Territory Drops" onAdd={openAdd}>
         {!captain.territory ? (

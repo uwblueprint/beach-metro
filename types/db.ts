@@ -89,6 +89,8 @@ export interface VolunteerRouteRow {
   street_name: string;
   side: RouteSide | null;
   assigned_volunteer_id: string | null;
+  /** Drops only: captain assignment bypasses the volunteer→territory chain. */
+  assigned_captain_id: string | null;
   house_count: number;
   house_count_override: number | null;
   papers: number;

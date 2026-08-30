@@ -3,7 +3,12 @@
 import type { z } from "zod";
 
 import { conflict, notFound } from "@/lib/api/errors";
-import type { captainsQuery, createCaptain, updateCaptain } from "@/lib/validation/people";
+import type {
+  captainsQuery,
+  createCaptain,
+  retireMember,
+  updateCaptain,
+} from "@/lib/validation/people";
 import type { CaptainRow, CaptainTerritoryRow, PayCadence, PayType } from "@/types/db";
 
 import { createNoteRecord } from "./notes";
@@ -212,7 +217,10 @@ export async function deleteCaptain(id: string): Promise<void> {
 }
 
 /** Soft retire; the territory becomes captain-less and awaits reassignment (§4k). */
-export async function retireCaptain(id: string): Promise<CaptainSummary> {
+export async function retireCaptain(
+  id: string,
+  input: z.infer<typeof retireMember> = {},
+): Promise<CaptainSummary> {
   const c = await fetchCaptain(id);
   if (c.retired_at) throw conflict("Captain is already retired.");
 
@@ -232,6 +240,8 @@ export async function retireCaptain(id: string): Promise<CaptainSummary> {
   // Territory is now detached, so open-issue cells no longer roll up to this
   // captain — recompute them to zero (unpaid cells only; paid stay frozen).
   await recalculateOpenIssues();
+
+  if (input.note) await createNoteRecord("captain", id, { text: input.note });
 
   return getCaptain(id);
 }

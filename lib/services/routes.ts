@@ -102,9 +102,14 @@ function toSummary(
   const territory = volunteer?.captain_territory_id
     ? (ctx.territories.find((t) => t.id === volunteer.captain_territory_id) ?? null)
     : null;
-  const captain = territory?.assigned_captain_id
-    ? (ctx.captains.find((c) => c.id === territory.assigned_captain_id) ?? null)
+  const directCaptain = r.assigned_captain_id
+    ? (ctx.captains.find((c) => c.id === r.assigned_captain_id) ?? null)
     : null;
+  const territoryCaptain =
+    territory?.assigned_captain_id && !directCaptain
+      ? (ctx.captains.find((c) => c.id === territory.assigned_captain_id) ?? null)
+      : null;
+  const captain = directCaptain ?? territoryCaptain;
 
   return {
     id: r.id,
@@ -266,8 +271,22 @@ async function assertAssignableVolunteer(volunteerId: string): Promise<void> {
   }
 }
 
+async function assertAssignableCaptain(captainId: string): Promise<void> {
+  const { data, error } = await db()
+    .from("captains")
+    .select("id, retired_at")
+    .eq("id", captainId)
+    .maybeSingle();
+  if (error) throwDb(error);
+  if (!data) throw notFound("Captain");
+  if ((data as CaptainRow).retired_at) {
+    throw conflict("Cannot assign a retired captain to a drop.");
+  }
+}
+
 export async function createRouteRecord(input: z.infer<typeof createRoute>): Promise<RouteDetail> {
   if (input.assignedVolunteerId) await assertAssignableVolunteer(input.assignedVolunteerId);
+  if (input.assignedCaptainId) await assertAssignableCaptain(input.assignedCaptainId);
   // Route endpoints are stored as residential addresses (they're intersections /
   // street points, not commercial drops) — recorded as an interpretation.
   const [start, end] = await Promise.all([
@@ -288,6 +307,7 @@ export async function createRouteRecord(input: z.infer<typeof createRoute>): Pro
       street_name: input.streetName,
       side: input.side ?? null,
       assigned_volunteer_id: input.assignedVolunteerId ?? null,
+      assigned_captain_id: input.assignedCaptainId ?? null,
       house_count: input.houseCount ?? 0,
       papers,
       bundles,
@@ -311,6 +331,10 @@ export async function updateRouteRecord(
   if (input.houseCount !== undefined) patch.house_count = input.houseCount;
   if (input.houseCountOverride !== undefined) patch.house_count_override = input.houseCountOverride;
   if (input.note !== undefined) patch.notes = input.note;
+  if (input.assignedCaptainId !== undefined) {
+    if (input.assignedCaptainId) await assertAssignableCaptain(input.assignedCaptainId);
+    patch.assigned_captain_id = input.assignedCaptainId;
+  }
   if (input.startAddress !== undefined) {
     patch.start_address_id = (await createAddress(input.startAddress, "residential")).address.id;
   }
