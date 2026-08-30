@@ -5,7 +5,15 @@
 // assign) — the design engineers restyle it. Structural Tailwind only.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { AddressField } from "@/components/address-field";
 import { BundlePapersTable, papersRowsDiffer } from "@/components/bundle-papers-table";
 import { SidePanelField } from "@/components/side-panel-field";
@@ -37,6 +45,7 @@ import {
   type FilterPlacement,
   type MapHome,
   type MapRoute,
+  type SelectedMemberHome,
   type VacancyFilter,
 } from "./route-map";
 import { RouteStateTag, RouteTag } from "./route-tag";
@@ -381,6 +390,7 @@ export function RoutesClient() {
   const [q, setQ] = useState("");
   const [showHomes] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailMemberHome, setDetailMemberHome] = useState<SelectedMemberHome | null>(null);
   const [creating, setCreating] = useState(false);
   const [creatingDrop, setCreatingDrop] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -388,6 +398,14 @@ export function RoutesClient() {
   const [captainId, setCaptainId] = useState("all");
   // TEMP: Shift+F toggles filter UI between map overlay and side panel.
   const [filterPlacement, setFilterPlacement] = useState<FilterPlacement>("map");
+
+  const handleDetailMemberHomeChange = useCallback((home: SelectedMemberHome | null) => {
+    setDetailMemberHome(home);
+  }, []);
+
+  useEffect(() => {
+    setDetailMemberHome(null);
+  }, [selectedId]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -526,6 +544,7 @@ export function RoutesClient() {
               routes={mapRoutes}
               homes={mapHomes}
               selectedId={selectedId}
+              selectedMemberHome={detailMemberHome}
               onSelect={(id) => {
                 setCreating(false);
                 setCreatingDrop(false);
@@ -574,6 +593,7 @@ export function RoutesClient() {
               <RouteDetailPanel
                 routeId={selectedId}
                 onClose={() => setSelectedId(null)}
+                onMemberHomeChange={handleDetailMemberHomeChange}
                 onChanged={() => {
                   qc.invalidateQueries({ queryKey: ["routes"] });
                   qc.invalidateQueries({ queryKey: ["route", selectedId] });
@@ -891,7 +911,12 @@ function DetailBreadcrumb(props: { title: string; onBack: () => void; actions?: 
   );
 }
 
-function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChanged: () => void }) {
+function RouteDetailPanel(props: {
+  routeId: string;
+  onClose: () => void;
+  onChanged: () => void;
+  onMemberHomeChange?: (home: SelectedMemberHome | null) => void;
+}) {
   const detail = useQuery({
     queryKey: ["route", props.routeId],
     queryFn: () => getJson<RouteDetail>(`/api/routes/${props.routeId}`),
@@ -932,6 +957,37 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
   }, [props.routeId]);
 
   const r = detail.data;
+  const asDropForMap = r ? isDropRoute(r) : false;
+  const mapVolunteerId = volunteerId ?? r?.assignedVolunteer?.id ?? "";
+  const mapCaptainId = captainId ?? r?.captain?.id ?? "";
+
+  useEffect(() => {
+    if (!props.onMemberHomeChange) return;
+    if (!r) {
+      props.onMemberHomeChange(null);
+      return;
+    }
+    if (asDropForMap) {
+      // Captains have no home address in member data yet — pin stays hidden for drops.
+      props.onMemberHomeChange(null);
+      return;
+    }
+    if (!mapVolunteerId) {
+      props.onMemberHomeChange(null);
+      return;
+    }
+    const vol = volunteers.data?.find((v) => v.id === mapVolunteerId);
+    if (vol?.home) {
+      props.onMemberHomeChange({
+        latitude: vol.home.latitude,
+        longitude: vol.home.longitude,
+        name: `${vol.firstName} ${vol.lastName}`,
+      });
+    } else {
+      props.onMemberHomeChange(null);
+    }
+  }, [props.onMemberHomeChange, r, asDropForMap, mapVolunteerId, mapCaptainId, volunteers.data]);
+
   const labelRoute = findLabelRoute(labels.data, props.routeId);
   const currentPapersRowsForLabels = papersRows ?? (r ? papersRowsFromRoute(r) : []);
   const baselineLabelled = baselineLabelledForRoute(
