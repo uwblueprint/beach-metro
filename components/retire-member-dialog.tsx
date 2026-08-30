@@ -8,7 +8,6 @@ import {
   DialogBody,
   DialogClose,
   DialogContent,
-  DialogDescription,
   DialogField,
   DialogFooter,
   DialogHeader,
@@ -70,10 +69,11 @@ function RetireMemberForm({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Retire {member.name}?</DialogTitle>
+        <DialogTitle>
+          Are you sure you want to retire {member.name}? {retireConsequence(member.role)}
+        </DialogTitle>
       </DialogHeader>
       <DialogBody>
-        <DialogDescription>{retireConsequence(member.role)}</DialogDescription>
         <DialogField>
           <Label htmlFor="retire-reason" className="text-md font-normal text-primary">
             Retirement reason
