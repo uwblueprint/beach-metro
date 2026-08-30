@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { AddressField } from "@/components/address-field";
-import { BundlePapersTable } from "@/components/bundle-papers-table";
+import { BundlePapersTable, papersRowsDiffer } from "@/components/bundle-papers-table";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,8 +20,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { ApiError } from "@/lib/api/client";
+import { baselineLabelledForRoute, diffLabelMarks, labelledArraysEqual } from "@/lib/bundle-labels";
 import { greedySplit } from "@/lib/services/derive";
 import type { RouteDetail } from "@/lib/services/routes";
+import { useLabels, type LabelSheet } from "@/features/labels/api";
 import {
   useCreateRoute,
   useRouteDetail,
@@ -78,6 +80,53 @@ function blankForm(): FormState {
   };
 }
 
+function toBundles(rows: number[]): Array<{ papers: number }> {
+  return rows.filter((p) => p > 0).map((papers) => ({ papers }));
+}
+
+function findLabelRoute(sheet: LabelSheet | undefined, routeId: string) {
+  if (!sheet) return null;
+  for (const group of sheet.groups) {
+    const route = group.routes.find((r) => r.routeId === routeId);
+    if (route) return route;
+  }
+  return null;
+}
+
+function formHasChanges(
+  initial: FormState,
+  current: {
+    streetName: string;
+    startAddress: string;
+    endAddress: string;
+    startPlaceId: string | null;
+    endPlaceId: string | null;
+    papersRows: number[];
+    note: string;
+    side: RouteSide | "";
+    labelled: boolean[];
+    baselineLabelled: boolean[];
+  },
+): boolean {
+  if (current.streetName.trim() !== initial.streetName) return true;
+  if (current.note.trim() !== initial.note) return true;
+  if (current.side !== initial.side) return true;
+  if (
+    current.startAddress.trim() !== initial.startAddress ||
+    current.startPlaceId !== initial.startPlaceId
+  ) {
+    return true;
+  }
+  if (
+    current.endAddress.trim() !== initial.endAddress ||
+    current.endPlaceId !== initial.endPlaceId
+  ) {
+    return true;
+  }
+  if (!labelledArraysEqual(current.labelled, current.baselineLabelled)) return true;
+  return papersRowsDiffer(current.papersRows, initial.papersRows);
+}
+
 function formFromDetail(detail: RouteDetail): FormState {
   const startLabel = detail.startAddress.formattedAddress ?? "";
   const endLabel = detail.endAddress.formattedAddress ?? "";
@@ -116,6 +165,7 @@ function RouteDetailsFields({
   const isEdit = !!routeId;
   const createRoute = useCreateRoute(volunteerId);
   const updateRoute = useUpdateRoute(volunteerId);
+  const labels = useLabels();
 
   const [streetName, setStreetName] = useState(initial.streetName);
   const [startAddress, setStartAddress] = useState(initial.startAddress);
@@ -126,8 +176,34 @@ function RouteDetailsFields({
   const [note, setNote] = useState(initial.note);
   const [side, setSide] = useState(initial.side);
   const [error, setError] = useState<string | null>(null);
+  const [papersValid, setPapersValid] = useState(true);
+  const [labelledRows, setLabelledRows] = useState<boolean[] | null>(null);
+
+  useEffect(() => {
+    setLabelledRows(null);
+  }, [routeId]);
+
+  const labelRoute = routeId ? findLabelRoute(labels.data, routeId) : null;
+  const baselineLabelled = useMemo(
+    () => baselineLabelledForRoute(papersRows.length, labelRoute?.bundles),
+    [papersRows.length, labelRoute?.bundles],
+  );
+  const currentLabelled = labelledRows ?? baselineLabelled;
 
   const busy = createRoute.isPending || updateRoute.isPending;
+  const hasChanges = formHasChanges(initial, {
+    streetName,
+    startAddress,
+    endAddress,
+    startPlaceId,
+    endPlaceId,
+    papersRows,
+    note,
+    side,
+    labelled: currentLabelled,
+    baselineLabelled,
+  });
+  const canConfirm = papersValid && (!isEdit || hasChanges);
 
   async function handleConfirm() {
     setError(null);
@@ -168,6 +244,45 @@ function RouteDetailsFields({
           body.endAddress = resolveAddress(end, endPlaceId);
         }
         await updateRoute.mutateAsync({ id: routeId, body });
+        if (labelRoute && labelledRows && !labelledArraysEqual(labelledRows, baselineLabelled)) {
+          const { mark, unmark } = diffLabelMarks(
+            labelRoute.deliveryId,
+            baselineLabelled,
+            labelledRows,
+          );
+          const markCalls = [];
+          if (mark.length > 0) {
+            markCalls.push(
+              fetch("/api/labels/mark", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ bundles: mark, labelled: true }),
+              }),
+            );
+          }
+          if (unmark.length > 0) {
+            markCalls.push(
+              fetch("/api/labels/mark", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ bundles: unmark, labelled: false }),
+              }),
+            );
+          }
+          const results = await Promise.all(markCalls);
+          for (const res of results) {
+            if (!res.ok) {
+              const body = (await res.json().catch(() => null)) as {
+                error?: { message?: string };
+              } | null;
+              throw new ApiError(
+                "internal",
+                body?.error?.message ?? "Could not save label changes.",
+                res.status,
+              );
+            }
+          }
+        }
       } else {
         await createRoute.mutateAsync({
           streetName: name,
@@ -256,7 +371,10 @@ function RouteDetailsFields({
           <BundlePapersTable
             value={papersRows}
             onChange={setPapersRows}
+            labelled={currentLabelled}
+            onLabelledChange={setLabelledRows}
             startEditingLast={initial.startEditingLast}
+            onValidityChange={setPapersValid}
           />
         </DialogField>
         <DialogField>
@@ -274,7 +392,11 @@ function RouteDetailsFields({
       </DialogBody>
       <DialogFooter>
         <DialogClose render={<Button variant="default" disabled={busy} />}>Cancel</DialogClose>
-        <Button variant="primary" disabled={busy} onClick={() => void handleConfirm()}>
+        <Button
+          variant="primary"
+          disabled={busy || !canConfirm}
+          onClick={() => void handleConfirm()}
+        >
           Confirm
         </Button>
       </DialogFooter>

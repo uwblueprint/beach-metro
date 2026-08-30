@@ -27,6 +27,8 @@ export const createRoute = z
     streetName: z.string().trim().min(1),
     side: z.enum(["NORTH", "SOUTH", "EAST", "WEST", "BOTH"]).nullish(),
     assignedVolunteerId: uuid.nullish(), // optional shortcut: born Active-Assigned
+    /** Drops only: assign directly to a captain (mutually exclusive with volunteer). */
+    assignedCaptainId: uuid.nullish(),
     houseCount: z.number().int().min(0).default(0), // manual entry for MVP
     papers: z.number().int().min(0).optional(),
     bundles: z.array(routeBundle).optional(),
@@ -41,7 +43,10 @@ export const createRoute = z
       o.bundles === undefined ||
       o.bundles.reduce((s, b) => s + b.papers, 0) === o.papers,
     { message: "bundles must sum to papers." },
-  );
+  )
+  .refine((o) => !(o.assignedVolunteerId && o.assignedCaptainId), {
+    message: "Assign a volunteer or a captain, not both.",
+  });
 
 export const updateRoute = z
   .object({
@@ -54,6 +59,7 @@ export const updateRoute = z
     papers: z.number().int().min(0),
     bundles: z.array(routeBundle),
     note: noteField,
+    assignedCaptainId: uuid.nullable(),
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, { message: "No fields to update." })

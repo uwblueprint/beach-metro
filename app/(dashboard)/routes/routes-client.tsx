@@ -7,7 +7,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { AddressField } from "@/components/address-field";
-import { BundlePapersTable } from "@/components/bundle-papers-table";
+import { BundlePapersTable, papersRowsDiffer } from "@/components/bundle-papers-table";
 import { SidePanelField } from "@/components/side-panel-field";
 import { SidePanelRow } from "@/components/side-panel-row";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,9 @@ import { Input } from "@/components/ui/input";
 import { PillGroup } from "@/components/ui/pill-group";
 import { SearchBar } from "@/components/ui/search-bar";
 import { api } from "@/lib/api/client";
+import { baselineLabelledForRoute, diffLabelMarks, labelledArraysEqual } from "@/lib/bundle-labels";
 import { greedySplit } from "@/lib/services/derive";
+import type { LabelSheet } from "@/features/labels/api";
 import { cn } from "@/lib/utils";
 import { ChevronDown, Filter, MoreHorizontal, Plus } from "lucide-react";
 
@@ -109,10 +111,13 @@ function toBundles(rows: number[]): Array<{ papers: number }> {
   return rows.filter((p) => p > 0).map((papers) => ({ papers }));
 }
 
-function bundlesDiffer(rows: number[], original: Array<{ papers: number }>): boolean {
-  const next = toBundles(rows);
-  if (next.length !== original.length) return true;
-  return next.some((b, i) => b.papers !== original[i].papers);
+function findLabelRoute(sheet: LabelSheet | undefined, routeId: string) {
+  if (!sheet) return null;
+  for (const group of sheet.groups) {
+    const route = group.routes.find((r) => r.routeId === routeId);
+    if (route) return route;
+  }
+  return null;
 }
 interface VolunteerSummary {
   id: string;
@@ -120,6 +125,7 @@ interface VolunteerSummary {
   lastName: string;
   status: string;
   home: { latitude: number; longitude: number } | null;
+  territory: { id: string; captainId: string | null; captainName: string | null } | null;
 }
 
 /* ---------- fetch helpers ---------- */
@@ -376,8 +382,9 @@ export function RoutesClient() {
   const [showHomes] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [creatingDrop, setCreatingDrop] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [deliveryType, setDeliveryType] = useState<DeliveryTypeFilter>("routes");
+  const [deliveryType, setDeliveryType] = useState<DeliveryTypeFilter>("all");
   const [captainId, setCaptainId] = useState("all");
   // TEMP: Shift+F toggles filter UI between map overlay and side panel.
   const [filterPlacement, setFilterPlacement] = useState<FilterPlacement>("map");
@@ -446,6 +453,10 @@ export function RoutesClient() {
 
   const mapRoutes: MapRoute[] = (routes.data ?? [])
     // Drops aren't on this map yet — Type=Drops shows an empty set for now.
+    // PR note: Create Drop POSTs to /api/routes with assignedCaptainId, but that
+    // needs migration 20260807000000_route_assigned_captain.sql (pnpm db:push).
+    // Without it the insert hits a missing column → "Unexpected database error."
+    // After the migration lands, wire isDrop on RouteSummary and filter here.
     .filter(() => deliveryType !== "drops")
     .map((r) => ({
       id: r.id,
@@ -482,16 +493,30 @@ export function RoutesClient() {
               {routes.data ? `Showing ${routes.data.length}` : "Loading…"}
             </p>
           </div>
-          <Button
-            variant="primary"
-            onClick={() => {
-              setSelectedId(null);
-              setCreating(true);
-            }}
-          >
-            <Plus data-icon="inline-start" />
-            Add Route
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="default"
+              onClick={() => {
+                setSelectedId(null);
+                setCreating(false);
+                setCreatingDrop(true);
+              }}
+            >
+              <Plus data-icon="inline-start" />
+              Add Drop
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setSelectedId(null);
+                setCreatingDrop(false);
+                setCreating(true);
+              }}
+            >
+              <Plus data-icon="inline-start" />
+              Add Route
+            </Button>
+          </div>
         </div>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -503,6 +528,7 @@ export function RoutesClient() {
               selectedId={selectedId}
               onSelect={(id) => {
                 setCreating(false);
+                setCreatingDrop(false);
                 setSelectedId(id);
               }}
               boundsFitKey={`${vacancy}|${q.trim()}|${deliveryType}|${captainId}|${showHomes ? "homes" : "no-homes"}`}
@@ -524,7 +550,17 @@ export function RoutesClient() {
 
           {/* Right panel — border-left, no rounding, matches member side panel structure */}
           <div className="flex h-full w-[400px] shrink-0 flex-col border-l border-border bg-bg">
-            {creating ? (
+            {creatingDrop ? (
+              <CreateDropPanel
+                onClose={() => setCreatingDrop(false)}
+                onCreated={(id) => {
+                  setCreatingDrop(false);
+                  setSelectedId(id);
+                  qc.invalidateQueries({ queryKey: ["routes"] });
+                  qc.invalidateQueries({ queryKey: ["route-paths"] });
+                }}
+              />
+            ) : creating ? (
               <CreateRoutePanel
                 onClose={() => setCreating(false)}
                 onCreated={(id) => {
@@ -571,6 +607,7 @@ export function RoutesClient() {
                     selectedId={selectedId}
                     onSelect={(id) => {
                       setCreating(false);
+                      setCreatingDrop(false);
                       setSelectedId(id);
                     }}
                     onClearSelection={() => setSelectedId(null)}
@@ -675,6 +712,26 @@ function DropdownField(props: {
         </DropdownMenuContent>
       </DropdownMenu>
     </SidePanelField>
+  );
+}
+
+/** Derived captain copy under the volunteer picker on route create/edit (not drops). */
+function RouteVolunteerCaptainHint(props: {
+  volunteerId: string;
+  volunteers: VolunteerSummary[] | undefined;
+}) {
+  if (!props.volunteerId) {
+    return <p className="text-md text-secondary">Select a volunteer for this route</p>;
+  }
+
+  const captainName =
+    props.volunteers?.find((v) => v.id === props.volunteerId)?.territory?.captainName ?? null;
+
+  return (
+    <p className="text-md text-secondary">
+      The captain responsible for this volunteer, thus this route is{" "}
+      <span className="font-semibold text-primary">{captainName ?? "no captain"}</span>
+    </p>
   );
 }
 
@@ -839,32 +896,73 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
     queryKey: ["route", props.routeId],
     queryFn: () => getJson<RouteDetail>(`/api/routes/${props.routeId}`),
   });
+  const labels = useQuery({
+    queryKey: ["labels", "sheet"],
+    queryFn: () => getJson<LabelSheet>("/api/labels"),
+    retry: false,
+  });
   const volunteers = useQuery({
     queryKey: ["volunteers", "assignable"],
     queryFn: () => getJson<VolunteerSummary[]>("/api/volunteers?status=active"),
+  });
+  const captains = useQuery({
+    queryKey: ["captains", "assignable"],
+    queryFn: () =>
+      getJson<
+        {
+          id: string;
+          firstName: string;
+          lastName: string;
+          status: string;
+        }[]
+      >("/api/captains?status=active"),
   });
 
   const [streetName, setStreetName] = useState<string | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
   const [volunteerId, setVolunteerId] = useState<string | null>(null);
+  const [captainId, setCaptainId] = useState<string | null>(null);
   const [side, setSide] = useState<string | null>(null);
   const [papersRows, setPapersRows] = useState<number[] | null>(null);
+  const [papersValid, setPapersValid] = useState(true);
+  const [labelledRows, setLabelledRows] = useState<boolean[] | null>(null);
+
+  useEffect(() => {
+    setLabelledRows(null);
+  }, [props.routeId]);
 
   const r = detail.data;
-  const baselineBundles = r ? (r.bundles.length > 0 ? r.bundles : greedySplit(r.papers)) : [];
+  const labelRoute = findLabelRoute(labels.data, props.routeId);
+  const currentPapersRowsForLabels = papersRows ?? (r ? papersRowsFromRoute(r) : []);
+  const baselineLabelled = baselineLabelledForRoute(
+    currentPapersRowsForLabels.length,
+    labelRoute?.bundles,
+  );
+  const currentLabelled = labelledRows ?? baselineLabelled;
   const dirtyStreet = streetName !== null && r && streetName !== r.streetName;
   const dirtyNotes = notes !== null && r && (notes || null) !== (r.notes || null);
   const dirtyVolunteer =
     volunteerId !== null && r && volunteerId !== (r.assignedVolunteer?.id ?? "");
+  const dirtyCaptain = captainId !== null && r && captainId !== (r.captain?.id ?? "");
   const dirtySide = side !== null && r && (side || null) !== (r.side || null);
-  const dirtyBundles = papersRows !== null && r && bundlesDiffer(papersRows, baselineBundles);
-  const dirty = dirtyStreet || dirtyNotes || dirtyVolunteer || dirtySide || dirtyBundles;
+  const dirtyBundles =
+    papersRows !== null && r && papersRowsDiffer(papersRows, papersRowsFromRoute(r));
+  const dirtyLabels = labelledRows !== null && !labelledArraysEqual(labelledRows, baselineLabelled);
+  const dirty =
+    dirtyStreet ||
+    dirtyNotes ||
+    dirtyVolunteer ||
+    dirtyCaptain ||
+    dirtySide ||
+    dirtyBundles ||
+    dirtyLabels;
 
   const save = useMutation({
     mutationFn: async () => {
       const body: Record<string, unknown> = {};
       if (dirtyStreet) body.streetName = streetName;
       if (dirtyNotes) body.note = notes ?? "";
+      if (dirtyCaptain) body.assignedCaptainId = captainId || null;
       if (dirtySide) body.side = side || null;
       if (dirtyBundles && papersRows) {
         const bundles = toBundles(papersRows);
@@ -875,6 +973,19 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
       }
       if (Object.keys(body).length > 0) {
         await sendJson(`/api/routes/${props.routeId}`, "PATCH", body);
+      }
+      if (dirtyLabels && labelRoute && labelledRows) {
+        const { mark, unmark } = diffLabelMarks(
+          labelRoute.deliveryId,
+          baselineLabelled,
+          labelledRows,
+        );
+        if (mark.length > 0) {
+          await sendJson("/api/labels/mark", "POST", { bundles: mark, labelled: true });
+        }
+        if (unmark.length > 0) {
+          await sendJson("/api/labels/mark", "POST", { bundles: unmark, labelled: false });
+        }
       }
       if (dirtyVolunteer && volunteerId !== null) {
         const currentId = r?.assignedVolunteer?.id;
@@ -891,8 +1002,10 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
       setStreetName(null);
       setNotes(null);
       setVolunteerId(null);
+      setCaptainId(null);
       setSide(null);
       setPapersRows(null);
+      setLabelledRows(null);
     },
     // A save is up to two calls (PATCH, then assign/reassign/unassign) with no
     // transaction across them. If the second fails the first is already
@@ -908,8 +1021,10 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
     setStreetName(null);
     setNotes(null);
     setVolunteerId(null);
+    setCaptainId(null);
     setSide(null);
     setPapersRows(null);
+    setLabelledRows(null);
   }
 
   if (detail.isLoading) return <p className="px-6 py-4 text-md text-secondary">Loading…</p>;
@@ -918,6 +1033,7 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
   if (!r) return null;
 
   const currentVolunteerId = volunteerId ?? r.assignedVolunteer?.id ?? "";
+  const currentCaptainId = captainId ?? r.captain?.id ?? "";
   const currentSide = side ?? r.side ?? "";
   const currentPapersRows = papersRows ?? papersRowsFromRoute(r);
   const asDrop = isDropRoute(r);
@@ -929,11 +1045,19 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
       label: `${v.firstName} ${v.lastName}`,
     })),
   ];
+  const captainOptions = [
+    { value: "", label: "— no captain —" },
+    ...(captains.data ?? []).map((c) => ({
+      value: c.id,
+      label: `${c.firstName} ${c.lastName}`,
+    })),
+  ];
 
   const volunteerDisplay =
     volunteerOptions.find((o) => o.value === currentVolunteerId)?.label ?? "— vacant —";
+  const captainDisplay =
+    captainOptions.find((o) => o.value === currentCaptainId)?.label ?? "— no captain —";
   const sideDisplay = SIDE_OPTIONS.find((o) => o.value === currentSide)?.label ?? "— none —";
-  const captainDisplay = r.captain?.name ?? "— no captain —";
 
   return (
     <div className="flex h-full flex-col">
@@ -958,27 +1082,30 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-4">
         {!asDrop && (
-          <DropdownField
-            label="Volunteer"
-            value={currentVolunteerId}
-            display={volunteerDisplay}
-            options={volunteerOptions}
-            onChange={setVolunteerId}
-          />
+          <div className="flex flex-col gap-2">
+            <DropdownField
+              label="Volunteer"
+              value={currentVolunteerId}
+              display={volunteerDisplay}
+              options={volunteerOptions}
+              onChange={setVolunteerId}
+            />
+            <RouteVolunteerCaptainHint
+              volunteerId={currentVolunteerId}
+              volunteers={volunteers.data}
+            />
+          </div>
         )}
 
-        {/* Captain is derived via the volunteer — display only (route flow §4). */}
-        <DropdownField
-          label="Captain"
-          value={r.captain?.id ?? ""}
-          display={captainDisplay}
-          options={
-            r.captain
-              ? [{ value: r.captain.id, label: r.captain.name }]
-              : [{ value: "", label: "— no captain —" }]
-          }
-          disabled
-        />
+        {asDrop && (
+          <DropdownField
+            label="Captain"
+            value={currentCaptainId}
+            display={captainDisplay}
+            options={captainOptions}
+            onChange={setCaptainId}
+          />
+        )}
 
         <InputField label="Name" value={streetName ?? r.streetName} onChange={setStreetName} />
 
@@ -1017,7 +1144,13 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
           </>
         )}
 
-        <BundlePapersTable value={currentPapersRows} onChange={setPapersRows} />
+        <BundlePapersTable
+          value={currentPapersRows}
+          onChange={setPapersRows}
+          labelled={currentLabelled}
+          onLabelledChange={setLabelledRows}
+          onValidityChange={setPapersValid}
+        />
 
         <SidePanelField label={asDrop ? "Drop Notes" : "Route Notes"} labelSuffix="(optional)">
           <textarea
@@ -1034,7 +1167,11 @@ function RouteDetailPanel(props: { routeId: string; onClose: () => void; onChang
           <Button variant="default" onClick={discard}>
             Discard Changes
           </Button>
-          <Button variant="primary" disabled={save.isPending} onClick={() => save.mutate()}>
+          <Button
+            variant="primary"
+            disabled={save.isPending || !papersValid}
+            onClick={() => save.mutate()}
+          >
             {save.isPending ? "Saving…" : "Save Changes"}
           </Button>
           {save.error && <span className="text-md text-destructive">{save.error.message}</span>}
@@ -1062,6 +1199,7 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
   const [startPlaceId, setStartPlaceId] = useState<string | null>(null);
   const [endPlaceId, setEndPlaceId] = useState<string | null>(null);
   const [papersRows, setPapersRows] = useState<number[]>([0]);
+  const [papersValid, setPapersValid] = useState(true);
   const [houseCount, setHouseCount] = useState("0");
   const [side, setSide] = useState("");
   const [volunteerId, setVolunteerId] = useState("");
@@ -1103,7 +1241,8 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
     startLine.trim() &&
     endLine.trim() &&
     bundles.length > 0 &&
-    houseCountValid;
+    houseCountValid &&
+    papersValid;
 
   const volunteerOptions = [
     { value: "", label: "— leave vacant —" },
@@ -1121,13 +1260,16 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
       <DetailBreadcrumb title="New route" onBack={props.onClose} />
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-4">
-        <DropdownField
-          label="Volunteer"
-          value={volunteerId}
-          display={volunteerDisplay}
-          options={volunteerOptions}
-          onChange={setVolunteerId}
-        />
+        <div className="flex flex-col gap-2">
+          <DropdownField
+            label="Volunteer"
+            value={volunteerId}
+            display={volunteerDisplay}
+            options={volunteerOptions}
+            onChange={setVolunteerId}
+          />
+          <RouteVolunteerCaptainHint volunteerId={volunteerId} volunteers={volunteers.data} />
+        </div>
 
         <InputField
           label="Name"
@@ -1183,7 +1325,12 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
           placeholder="0"
         />
 
-        <BundlePapersTable value={papersRows} onChange={setPapersRows} startEditingLast />
+        <BundlePapersTable
+          value={papersRows}
+          onChange={setPapersRows}
+          startEditingLast
+          onValidityChange={setPapersValid}
+        />
 
         <SidePanelField label="Route Notes" labelSuffix="(optional)">
           <textarea
@@ -1207,6 +1354,160 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
           onClick={() => create.mutate()}
         >
           {create.isPending ? "Creating…" : "Create Route"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Create a drop (point delivery): one address stored as both start and end so
+ * the route detail panel treats it as a drop.
+ *
+ * PR note: not verified end-to-end on dev machines until
+ * supabase/migrations/20260807000000_route_assigned_captain.sql is applied
+ * (`pnpm db:push`). The API writes assigned_captain_id on volunteer_routes;
+ * without that column Postgres returns an error that surfaces as "Unexpected
+ * database error." in the UI.
+ */
+function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) => void }) {
+  const captains = useQuery({
+    queryKey: ["captains", "assignable"],
+    queryFn: () =>
+      getJson<
+        {
+          id: string;
+          firstName: string;
+          lastName: string;
+          status: string;
+        }[]
+      >("/api/captains?status=active"),
+  });
+
+  const [captainId, setCaptainId] = useState("");
+  const [streetName, setStreetName] = useState("");
+  const [addressLine, setAddressLine] = useState("");
+  const [placeId, setPlaceId] = useState<string | null>(null);
+  const [papersRows, setPapersRows] = useState<number[]>([0]);
+  const [papersValid, setPapersValid] = useState(true);
+  const [unitCount, setUnitCount] = useState("0");
+  const [note, setNote] = useState("");
+
+  const address = (line: string, pickedPlaceId: string | null) =>
+    pickedPlaceId
+      ? { placeId: pickedPlaceId }
+      : {
+          addressLines: [line.trim()],
+          locality: "Toronto",
+          administrativeArea: "ON",
+          regionCode: "CA" as const,
+        };
+
+  const bundles = toBundles(papersRows);
+  const unitCountValue = Number(unitCount);
+  const unitCountValid = Number.isInteger(unitCountValue) && unitCountValue >= 0;
+
+  const create = useMutation({
+    mutationFn: () => {
+      const resolved = address(addressLine, placeId);
+      return sendJson<RouteDetail>("/api/routes", "POST", {
+        streetName: streetName.trim(),
+        startAddress: resolved,
+        endAddress: resolved,
+        houseCount: unitCountValue,
+        bundles,
+        ...(captainId ? { assignedCaptainId: captainId } : {}),
+        ...(note.trim() ? { note: note.trim() } : {}),
+      });
+    },
+    onSuccess: (route) => props.onCreated(route.id),
+  });
+
+  const ready =
+    streetName.trim() && addressLine.trim() && bundles.length > 0 && unitCountValid && papersValid;
+
+  const captainOptions = [
+    { value: "", label: "— leave unassigned —" },
+    ...(captains.data ?? []).map((c) => ({
+      value: c.id,
+      label: `${c.firstName} ${c.lastName}`,
+    })),
+  ];
+  const captainDisplay =
+    captainOptions.find((o) => o.value === captainId)?.label ?? "— leave unassigned —";
+
+  return (
+    <div className="flex h-full flex-col">
+      <DetailBreadcrumb title="New drop" onBack={props.onClose} />
+
+      <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-4">
+        <DropdownField
+          label="Captain"
+          value={captainId}
+          display={captainDisplay}
+          options={captainOptions}
+          onChange={setCaptainId}
+        />
+
+        <InputField
+          label="Name"
+          value={streetName}
+          onChange={setStreetName}
+          placeholder="Queen St E"
+        />
+
+        <AddressField
+          label="Address"
+          placeholder="1900 Queen St E"
+          value={addressLine}
+          onChange={(text) => {
+            setAddressLine(text);
+            setPlaceId(null);
+          }}
+          onPick={(pickedPlaceId, text) => {
+            setPlaceId(pickedPlaceId);
+            setAddressLine(text);
+          }}
+        />
+
+        <InputField
+          label="Unit Count"
+          type="number"
+          min={0}
+          value={unitCount}
+          onChange={setUnitCount}
+          placeholder="0"
+        />
+
+        <BundlePapersTable
+          value={papersRows}
+          onChange={setPapersRows}
+          startEditingLast
+          onValidityChange={setPapersValid}
+        />
+
+        <SidePanelField label="Drop Notes" labelSuffix="(optional)">
+          <textarea
+            className="w-full rounded-[8px] border border-hairline bg-bg px-3 py-2 text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40"
+            rows={4}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </SidePanelField>
+
+        {create.error && <p className="text-md text-destructive">{create.error.message}</p>}
+      </div>
+
+      <div className="panel-header shrink-0 justify-end gap-2 border-t border-border">
+        <Button variant="default" onClick={props.onClose}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          disabled={!ready || create.isPending}
+          onClick={() => create.mutate()}
+        >
+          {create.isPending ? "Creating…" : "Create Drop"}
         </Button>
       </div>
     </div>
