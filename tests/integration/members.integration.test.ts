@@ -202,6 +202,30 @@ describe.skipIf(!RUN)("member notes", () => {
     expect(notes).toHaveLength(1);
   });
 
+  it("stores an optional retirement reason as a member note", async () => {
+    const volunteer = await S().volunteers.createVolunteerRecord({
+      firstName: TEST_FIRST_NAME,
+      lastName: unique("RetireNote"),
+      email: `${unique("it-retirenote")}@example.com`,
+      phone: "416-555-0401",
+      address: {
+        addressLines: ["1700 Queen St E"],
+        locality: "Toronto",
+        administrativeArea: "ON",
+        regionCode: "CA",
+      },
+      startDate: "2026-01-01",
+      endDate: null,
+      note: null,
+    });
+    created.volunteerIds.push(volunteer.id);
+
+    await S().volunteers.retireVolunteer(volunteer.id, { note: "Graduated high school" });
+    const notes = await S().notes.listNotes("volunteer", volunteer.id);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].text).toBe("Graduated high school");
+  });
+
   it("cascades notes when the person is deleted, rather than orphaning them", async () => {
     const captain = await S().captains.createCaptainRecord({
       firstName: TEST_FIRST_NAME,

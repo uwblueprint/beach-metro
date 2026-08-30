@@ -55,6 +55,13 @@ export const updateVolunteer = z
   .partial()
   .refine((o) => Object.keys(o).length > 0, { message: "No fields to update." });
 
+/** Optional retirement reason, stored as a member note when present. */
+export const retireMember = z
+  .object({
+    note: noteField,
+  })
+  .partial();
+
 /** Set or clear the vacation window. */
 export const setVacation = z.union([
   z

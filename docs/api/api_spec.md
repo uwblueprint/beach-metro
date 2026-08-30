@@ -137,7 +137,7 @@ person. Listing notes for an unknown person is a `404`, not an empty list.
 | GET    | `/api/volunteers/{id}`          | Detail (includes derived status, routes carried, territory)                                            | 4c        |
 | PATCH  | `/api/volunteers/{id}`          | Edit fields / territory assignment (notes have their own resource)                                     | 4d        |
 | POST   | `/api/volunteers/{id}/vacation` | Set or clear the vacation window (suspends/auto-resumes routes)                                        | 4e        |
-| POST   | `/api/volunteers/{id}/retire`   | Soft retire (`retiredAt`); detaches routes → they become vacant                                        | 4f        |
+| POST   | `/api/volunteers/{id}/retire`   | Soft retire (`retiredAt`); detaches routes → they become vacant. Optional body: `{ note?: string }` stored as a member note | 4f        |
 | POST   | `/api/volunteers/{id}/reactivate` | Clear retirement (Retired → Active). Routes are **not** re-attached; assign them afterwards         | 4f        |
 | DELETE | `/api/volunteers/{id}`          | **Hard delete.** Routes are detached (become vacant) and member notes cascade. `204 No Content`        | 4f        |
 
@@ -185,7 +185,7 @@ type AddressInput =
 | POST   | `/api/captains`             | Create (no address; pay config required; **also creates the 1:1 empty territory**) | 4g        |
 | GET    | `/api/captains/{id}`        | Detail (includes territory)                                                        | 4i        |
 | PATCH  | `/api/captains/{id}`        | Edit fields / pay config (type, rate, cadence); notes have their own resource       | 4j        |
-| POST   | `/api/captains/{id}/retire` | Soft retire; leaves the territory captain-less and prompts reassignment            | 4k        |
+| POST   | `/api/captains/{id}/retire` | Soft retire; leaves the territory captain-less and prompts reassignment. Optional body: `{ note?: string }` stored as a member note | 4k        |
 | POST   | `/api/captains/{id}/reactivate` | Clear retirement (Retired → Active). The territory is **not** re-attached      | 4k        |
 | DELETE | `/api/captains/{id}`        | **Hard delete**, with the 1:1 territory. `409` when the captain has payout history | 4k        |
 | GET    | `/api/captains/{id}/payouts` | This captain's payout across every issue, newest first (read-only)               | people 4i |
