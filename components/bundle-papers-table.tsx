@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -85,15 +85,13 @@ function BundlePapersTable({
     if (value.length === 0) onChange([0]);
   }, [value.length, onChange]);
 
-  useEffect(() => {
-    setInvalidRows((prev) => {
-      const next = new Set<number>();
-      for (const i of prev) {
-        if (i < value.length && value[i] === 0) next.add(i);
-      }
-      return next.size === prev.size && [...next].every((i) => prev.has(i)) ? prev : next;
-    });
-  }, [value]);
+  const visibleInvalidRows = useMemo(() => {
+    const next = new Set<number>();
+    for (const i of invalidRows) {
+      if (i < value.length && value[i] === 0) next.add(i);
+    }
+    return next;
+  }, [invalidRows, value]);
 
   useEffect(() => {
     // Block save while any row is still empty — including a newly added draft row
@@ -212,7 +210,7 @@ function BundlePapersTable({
       </div>
 
       {value.map((papers, index) => {
-        const invalid = invalidRows.has(index);
+        const invalid = visibleInvalidRows.has(index);
 
         return (
           <div key={index} className="group/bundle flex h-10 items-center px-2 py-1">
@@ -256,7 +254,7 @@ function BundlePapersTable({
               ) : (
                 <button
                   type="button"
-                  aria-invalid={invalid || undefined}
+                  data-invalid={invalid || undefined}
                   className={cn(
                     "flex h-8 w-full cursor-text items-center rounded-[4px] text-left text-md tabular-nums outline-none",
                     invalid

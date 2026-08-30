@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { SidePanelRow } from "@/components/side-panel-row";
 import { SidePanelSection } from "@/components/side-panel-section";
@@ -54,16 +54,16 @@ interface ReimbursementsSectionProps {
   isPending: boolean;
 }
 
-function ReimbursementsSection({ captainId, payouts, isPending }: ReimbursementsSectionProps) {
+function ReimbursementsSection({
+  captainId: _captainId,
+  payouts,
+  isPending,
+}: ReimbursementsSectionProps) {
   const [expanded, setExpanded] = useState(false);
   const rows = payouts ?? [];
   const preview = rows.slice(0, VISIBLE_COUNT);
   const extra = rows.slice(VISIBLE_COUNT);
   const hasMore = extra.length > 0;
-
-  useEffect(() => {
-    setExpanded(false);
-  }, [captainId]);
 
   return (
     <SidePanelSection title="Reimbursements">

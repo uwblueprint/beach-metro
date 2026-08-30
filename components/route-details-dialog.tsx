@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { AddressField } from "@/components/address-field";
 import { BundlePapersTable, papersRowsDiffer } from "@/components/bundle-papers-table";
@@ -78,10 +78,6 @@ function blankForm(): FormState {
     side: "",
     startEditingLast: true,
   };
-}
-
-function toBundles(rows: number[]): Array<{ papers: number }> {
-  return rows.filter((p) => p > 0).map((papers) => ({ papers }));
 }
 
 function findLabelRoute(sheet: LabelSheet | undefined, routeId: string) {
@@ -178,10 +174,6 @@ function RouteDetailsFields({
   const [error, setError] = useState<string | null>(null);
   const [papersValid, setPapersValid] = useState(true);
   const [labelledRows, setLabelledRows] = useState<boolean[] | null>(null);
-
-  useEffect(() => {
-    setLabelledRows(null);
-  }, [routeId]);
 
   const labelRoute = routeId ? findLabelRoute(labels.data, routeId) : null;
   const baselineLabelled = useMemo(

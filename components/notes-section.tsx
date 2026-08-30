@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { NoteEditor } from "@/components/note-editor";
 import { SidePanelRow } from "@/components/side-panel-row";
@@ -72,10 +72,6 @@ function NotesSection({ role, memberId }: NotesSectionProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const isAdding = editingId === NEW_NOTE_ID;
-
-  useEffect(() => {
-    setExpanded(false);
-  }, [memberId]);
 
   function stopEditing() {
     setEditingId(null);

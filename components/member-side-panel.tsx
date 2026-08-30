@@ -340,7 +340,7 @@ function VolunteerContent({ id }: { id: string }) {
         </div>
       </div>
 
-      <NotesSection role="volunteer" memberId={id} />
+      <NotesSection key={id} role="volunteer" memberId={id} />
 
       <SidePanelSection title="Route Info" onAdd={openCreate}>
         {volunteer.routesCarried.length === 0 ? (
@@ -632,9 +632,9 @@ function CaptainContent({ id }: { id: string }) {
         </div>
       </div>
 
-      <NotesSection role="captain" memberId={id} />
+      <NotesSection key={id} role="captain" memberId={id} />
 
-      <ReimbursementsSection captainId={id} payouts={payouts} isPending={payoutsPending} />
+      <ReimbursementsSection key={id} captainId={id} payouts={payouts} isPending={payoutsPending} />
 
       <SidePanelSection title="Territory Drops" onAdd={openAdd}>
         {!captain.territory ? (

@@ -403,9 +403,10 @@ export function RoutesClient() {
     setDetailMemberHome(home);
   }, []);
 
-  useEffect(() => {
+  const selectRoute = useCallback((id: string | null) => {
     setDetailMemberHome(null);
-  }, [selectedId]);
+    setSelectedId(id);
+  }, []);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -515,7 +516,7 @@ export function RoutesClient() {
             <Button
               variant="default"
               onClick={() => {
-                setSelectedId(null);
+                selectRoute(null);
                 setCreating(false);
                 setCreatingDrop(true);
               }}
@@ -526,7 +527,7 @@ export function RoutesClient() {
             <Button
               variant="primary"
               onClick={() => {
-                setSelectedId(null);
+                selectRoute(null);
                 setCreatingDrop(false);
                 setCreating(true);
               }}
@@ -544,11 +545,11 @@ export function RoutesClient() {
               routes={mapRoutes}
               homes={mapHomes}
               selectedId={selectedId}
-              selectedMemberHome={detailMemberHome}
+              selectedMemberHome={selectedId ? detailMemberHome : null}
               onSelect={(id) => {
                 setCreating(false);
                 setCreatingDrop(false);
-                setSelectedId(id);
+                selectRoute(id);
               }}
               boundsFitKey={`${vacancy}|${q.trim()}|${deliveryType}|${captainId}|${showHomes ? "homes" : "no-homes"}`}
               boundsFitReady={!routes.isFetching && (!showHomes || !volunteers.isFetching)}
@@ -574,7 +575,7 @@ export function RoutesClient() {
                 onClose={() => setCreatingDrop(false)}
                 onCreated={(id) => {
                   setCreatingDrop(false);
-                  setSelectedId(id);
+                  selectRoute(id);
                   qc.invalidateQueries({ queryKey: ["routes"] });
                   qc.invalidateQueries({ queryKey: ["route-paths"] });
                 }}
@@ -584,15 +585,16 @@ export function RoutesClient() {
                 onClose={() => setCreating(false)}
                 onCreated={(id) => {
                   setCreating(false);
-                  setSelectedId(id);
+                  selectRoute(id);
                   qc.invalidateQueries({ queryKey: ["routes"] });
                   qc.invalidateQueries({ queryKey: ["route-paths"] });
                 }}
               />
             ) : selectedId ? (
               <RouteDetailPanel
+                key={selectedId}
                 routeId={selectedId}
-                onClose={() => setSelectedId(null)}
+                onClose={() => selectRoute(null)}
                 onMemberHomeChange={handleDetailMemberHomeChange}
                 onChanged={() => {
                   qc.invalidateQueries({ queryKey: ["routes"] });
@@ -628,9 +630,9 @@ export function RoutesClient() {
                     onSelect={(id) => {
                       setCreating(false);
                       setCreatingDrop(false);
-                      setSelectedId(id);
+                      selectRoute(id);
                     }}
-                    onClearSelection={() => setSelectedId(null)}
+                    onClearSelection={() => selectRoute(null)}
                     onRoutesChanged={() => {
                       qc.invalidateQueries({ queryKey: ["routes"] });
                       qc.invalidateQueries({ queryKey: ["route-paths"] });
@@ -911,15 +913,20 @@ function DetailBreadcrumb(props: { title: string; onBack: () => void; actions?: 
   );
 }
 
-function RouteDetailPanel(props: {
+function RouteDetailPanel({
+  routeId,
+  onClose,
+  onChanged,
+  onMemberHomeChange,
+}: {
   routeId: string;
   onClose: () => void;
   onChanged: () => void;
   onMemberHomeChange?: (home: SelectedMemberHome | null) => void;
 }) {
   const detail = useQuery({
-    queryKey: ["route", props.routeId],
-    queryFn: () => getJson<RouteDetail>(`/api/routes/${props.routeId}`),
+    queryKey: ["route", routeId],
+    queryFn: () => getJson<RouteDetail>(`/api/routes/${routeId}`),
   });
   const labels = useQuery({
     queryKey: ["labels", "sheet"],
@@ -952,43 +959,39 @@ function RouteDetailPanel(props: {
   const [papersValid, setPapersValid] = useState(true);
   const [labelledRows, setLabelledRows] = useState<boolean[] | null>(null);
 
-  useEffect(() => {
-    setLabelledRows(null);
-  }, [props.routeId]);
-
   const r = detail.data;
   const asDropForMap = r ? isDropRoute(r) : false;
   const mapVolunteerId = volunteerId ?? r?.assignedVolunteer?.id ?? "";
   const mapCaptainId = captainId ?? r?.captain?.id ?? "";
 
   useEffect(() => {
-    if (!props.onMemberHomeChange) return;
+    if (!onMemberHomeChange) return;
     if (!r) {
-      props.onMemberHomeChange(null);
+      onMemberHomeChange(null);
       return;
     }
     if (asDropForMap) {
       // Captains have no home address in member data yet — pin stays hidden for drops.
-      props.onMemberHomeChange(null);
+      onMemberHomeChange(null);
       return;
     }
     if (!mapVolunteerId) {
-      props.onMemberHomeChange(null);
+      onMemberHomeChange(null);
       return;
     }
     const vol = volunteers.data?.find((v) => v.id === mapVolunteerId);
     if (vol?.home) {
-      props.onMemberHomeChange({
+      onMemberHomeChange({
         latitude: vol.home.latitude,
         longitude: vol.home.longitude,
         name: `${vol.firstName} ${vol.lastName}`,
       });
     } else {
-      props.onMemberHomeChange(null);
+      onMemberHomeChange(null);
     }
-  }, [props.onMemberHomeChange, r, asDropForMap, mapVolunteerId, mapCaptainId, volunteers.data]);
+  }, [onMemberHomeChange, r, asDropForMap, mapVolunteerId, mapCaptainId, volunteers.data]);
 
-  const labelRoute = findLabelRoute(labels.data, props.routeId);
+  const labelRoute = findLabelRoute(labels.data, routeId);
   const currentPapersRowsForLabels = papersRows ?? (r ? papersRowsFromRoute(r) : []);
   const baselineLabelled = baselineLabelledForRoute(
     currentPapersRowsForLabels.length,
@@ -1028,7 +1031,7 @@ function RouteDetailPanel(props: {
         body.bundles = bundles;
       }
       if (Object.keys(body).length > 0) {
-        await sendJson(`/api/routes/${props.routeId}`, "PATCH", body);
+        await sendJson(`/api/routes/${routeId}`, "PATCH", body);
       }
       if (dirtyLabels && labelRoute && labelledRows) {
         const { mark, unmark } = diffLabelMarks(
@@ -1047,9 +1050,9 @@ function RouteDetailPanel(props: {
         const currentId = r?.assignedVolunteer?.id;
         if (volunteerId && volunteerId !== currentId) {
           const action = currentId ? "reassign" : "assign";
-          await sendJson(`/api/routes/${props.routeId}/${action}`, "POST", { volunteerId });
+          await sendJson(`/api/routes/${routeId}/${action}`, "POST", { volunteerId });
         } else if (!volunteerId && currentId) {
-          await sendJson(`/api/routes/${props.routeId}/unassign`, "POST");
+          await sendJson(`/api/routes/${routeId}/unassign`, "POST");
         }
       }
     },
@@ -1069,7 +1072,7 @@ function RouteDetailPanel(props: {
     // against a baseline the database no longer matches.
     onSettled: () => {
       detail.refetch();
-      props.onChanged();
+      onChanged();
     },
   });
 
@@ -1119,19 +1122,19 @@ function RouteDetailPanel(props: {
     <div className="flex h-full flex-col">
       <DetailBreadcrumb
         title={asDrop ? dropLabel(r) : routeLabel(r)}
-        onBack={props.onClose}
+        onBack={onClose}
         actions={
           <RouteActionsMenu
-            routeId={props.routeId}
+            routeId={routeId}
             hasVolunteer={Boolean(r.assignedVolunteer)}
             showRouteDetails={false}
             onOpenDetails={() => {}}
             onChanged={() => {
               setVolunteerId(null);
               detail.refetch();
-              props.onChanged();
+              onChanged();
             }}
-            onRetired={props.onClose}
+            onRetired={onClose}
           />
         }
       />
