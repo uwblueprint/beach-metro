@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { NoteEditor } from "@/components/note-editor";
 import { SidePanelRow } from "@/components/side-panel-row";
@@ -10,10 +10,13 @@ import {
   useDeleteNote,
   useMemberNotes,
   useUpdateNote,
+  type MemberNote,
   type MemberRole,
 } from "@/features/members/api";
+import { cn } from "@/lib/utils";
 
 const NEW_NOTE_ID = "__new-note__";
+const VISIBLE_COUNT = 4;
 
 interface NotesSectionProps {
   role: MemberRole;
@@ -67,13 +70,52 @@ function NotesSection({ role, memberId }: NotesSectionProps) {
   const deleteNote = useDeleteNote(role, memberId);
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const isAdding = editingId === NEW_NOTE_ID;
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [memberId]);
 
   function stopEditing() {
     setEditingId(null);
   }
 
   const rows = notes ?? [];
+  const preview = rows.slice(0, VISIBLE_COUNT);
+  const extra = rows.slice(VISIBLE_COUNT);
+  const hasMore = extra.length > 0;
+
+  function renderNoteRow(note: MemberNote) {
+    if (editingId === note.id) {
+      return (
+        <NoteEditor
+          key={note.id}
+          initialText={note.text}
+          onSave={(text) => {
+            updateNote.mutate({ id: note.id, text });
+            stopEditing();
+          }}
+          onDelete={() => {
+            deleteNote.mutate(note.id);
+            stopEditing();
+          }}
+          onCancel={stopEditing}
+        />
+      );
+    }
+
+    return (
+      <SidePanelRow
+        key={note.id}
+        meta={formatTimestamp(note.createdAt)}
+        // An optimistic row has no server id yet, so editing it would 404.
+        onEdit={note.id.startsWith("optimistic-") ? undefined : () => setEditingId(note.id)}
+      >
+        <span className="text-primary">{note.text}</span>
+      </SidePanelRow>
+    );
+  }
 
   return (
     <SidePanelSection title="Notes" onAdd={() => setEditingId(NEW_NOTE_ID)}>
@@ -94,32 +136,29 @@ function NotesSection({ role, memberId }: NotesSectionProps) {
       ) : rows.length === 0 && !isAdding ? (
         <SidePanelRow className="text-secondary">No notes</SidePanelRow>
       ) : (
-        rows.map((note) =>
-          editingId === note.id ? (
-            <NoteEditor
-              key={note.id}
-              initialText={note.text}
-              onSave={(text) => {
-                updateNote.mutate({ id: note.id, text });
-                stopEditing();
-              }}
-              onDelete={() => {
-                deleteNote.mutate(note.id);
-                stopEditing();
-              }}
-              onCancel={stopEditing}
-            />
-          ) : (
-            <SidePanelRow
-              key={note.id}
-              meta={formatTimestamp(note.createdAt)}
-              // An optimistic row has no server id yet, so editing it would 404.
-              onEdit={note.id.startsWith("optimistic-") ? undefined : () => setEditingId(note.id)}
-            >
-              <span className="text-primary">{note.text}</span>
-            </SidePanelRow>
-          ),
-        )
+        <>
+          {preview.map((note) => renderNoteRow(note))}
+          {hasMore ? (
+            <>
+              <div className="t-reimburse-list-expand grid" data-open={expanded ? "true" : "false"}>
+                <div className="min-h-0 overflow-hidden">
+                  {extra.map((note) => renderNoteRow(note))}
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-expanded={expanded}
+                className={cn(
+                  "mt-1 self-start text-md text-secondary transition-colors",
+                  "hover:text-primary active:scale-[0.98]",
+                )}
+                onClick={() => setExpanded((open) => !open)}
+              >
+                {expanded ? "See less" : "See more"}
+              </button>
+            </>
+          ) : null}
+        </>
       )}
     </SidePanelSection>
   );
