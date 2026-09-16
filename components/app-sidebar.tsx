@@ -37,7 +37,7 @@ export function AppSidebar({ userEmail }: { userEmail: string | null }) {
   const pathname = usePathname();
 
   return (
-    <aside className="bg-bg-tertiary flex h-screen w-[200px] shrink-0 flex-col px-4 pt-5 pb-4">
+    <aside className="relative z-10 flex h-screen w-[200px] shrink-0 flex-col bg-transparent pl-4 pt-5 pb-4">
       {/* Brand notch */}
       <div className="bg-bg mb-5 flex shrink-0 items-center gap-2 rounded-2xl px-2.5 py-3 shadow-ring-xs">
         <Send aria-hidden className="size-4 shrink-0" strokeWidth={1.75} />
