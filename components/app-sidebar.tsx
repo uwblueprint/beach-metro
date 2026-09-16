@@ -39,7 +39,7 @@ export function AppSidebar({ userEmail }: { userEmail: string | null }) {
   return (
     <aside className="bg-bg-tertiary flex h-screen w-[200px] shrink-0 flex-col px-4 pt-5 pb-4">
       {/* Brand notch */}
-      <div className="bg-bg border-border mb-5 flex shrink-0 items-center gap-2 rounded-2xl border px-2.5 py-3">
+      <div className="bg-bg mb-5 flex shrink-0 items-center gap-2 rounded-2xl px-2.5 py-3 shadow-ring-xs">
         <Send aria-hidden className="size-4 shrink-0" strokeWidth={1.75} />
         <span className="text-md text-primary">Dispatch</span>
       </div>
