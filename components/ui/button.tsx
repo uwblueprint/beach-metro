@@ -8,7 +8,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 cursor-pointer items-center justify-center border border-transparent bg-clip-padding text-md font-normal whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 cursor-pointer items-center justify-center border border-transparent bg-clip-padding text-md font-normal whitespace-nowrap outline-none select-none transition-[color,background-color,border-color,box-shadow,opacity,transform] duration-150 ease-out hover:scale-[0.97] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed motion-reduce:transition-none motion-reduce:hover:scale-100 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -16,9 +16,9 @@ const buttonVariants = cva(
           "bg-secondary-fill text-primary hover:bg-secondary-fill-hover disabled:bg-secondary-fill disabled:text-disabled disabled:opacity-50",
         primary: "bg-active text-bg hover:bg-active-hover disabled:bg-active/50",
         outline:
-          "border-hairline text-primary hover:border-transparent hover:bg-secondary-fill-hover disabled:text-disabled",
+          "border-hairline text-primary hover:border-transparent hover:bg-bg-tertiary disabled:text-disabled",
         danger: "bg-destructive text-bg hover:bg-destructive-hover disabled:bg-destructive/50",
-        text: "text-primary hover:bg-secondary-fill-hover disabled:text-disabled",
+        text: "text-primary hover:bg-bg-tertiary disabled:text-disabled",
         link: "text-active underline-offset-4 hover:underline",
         /** Circular icon for toolbars (map chrome, filter toggles). Pair with size=toolbar shape=rounded. */
         toolbar: toolbarIconButtonClass,
@@ -36,7 +36,7 @@ const buttonVariants = cva(
         toolbar: "size-9 shrink-0 p-0 [&_svg:not([class*='size-'])]:size-4",
       },
       shape: {
-        default: "rounded-[4px]",
+        default: "rounded-[8px]",
         rounded: "rounded-full",
       },
     },

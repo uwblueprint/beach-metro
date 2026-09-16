@@ -24,7 +24,7 @@ function SidePanelRow({ children, meta, onEdit, onClick, className }: SidePanelR
     // Full-row hover is for selectable lists (e.g. deliveries). Edit rows use the right-side gradient + pencil only.
     onClick &&
       !onEdit &&
-      "transition-colors hover:bg-tag-hover focus-visible:ring-3 focus-visible:ring-ring/50",
+      "transition-colors hover:bg-bg-tertiary focus-visible:ring-3 focus-visible:ring-ring/50",
     className,
   );
 
@@ -43,7 +43,7 @@ function SidePanelRow({ children, meta, onEdit, onClick, className }: SidePanelR
         <>
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 right-0 w-1/2 rounded-[4px] bg-gradient-to-r from-transparent to-tag-hover opacity-0 transition-opacity group-hover/row:opacity-100"
+            className="pointer-events-none absolute inset-y-0 right-0 w-1/2 rounded-[4px] bg-gradient-to-r from-transparent to-bg-tertiary opacity-0 transition-opacity group-hover/row:opacity-100"
           />
           <div className="absolute right-0 top-0 flex h-full items-center justify-end px-1 opacity-0 transition-opacity group-hover/row:opacity-100">
             <Button

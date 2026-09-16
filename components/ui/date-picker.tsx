@@ -109,7 +109,7 @@ function DatePickerCalendar({
           onClick={() =>
             onViewMonthChange(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))
           }
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
+          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-bg-tertiary hover:text-primary"
         >
           <ChevronLeft className="size-4" strokeWidth={2} />
         </button>
@@ -120,7 +120,7 @@ function DatePickerCalendar({
           onClick={() =>
             onViewMonthChange(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))
           }
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
+          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-bg-tertiary hover:text-primary"
         >
           <ChevronRight className="size-4" strokeWidth={2} />
         </button>
@@ -150,7 +150,7 @@ function DatePickerCalendar({
               onClick={() => onSelect(iso)}
               className={cn(
                 "flex size-8 items-center justify-center rounded-md text-sm transition-colors",
-                !isSelected && "hover:bg-muted",
+                !isSelected && "hover:bg-bg-tertiary",
                 isToday && !isSelected && "font-medium",
                 isSelected && "bg-active text-white",
                 outside && !isSelected && "text-muted-foreground opacity-40",

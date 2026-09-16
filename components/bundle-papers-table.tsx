@@ -110,7 +110,7 @@ function BundlePapersTable({
 
   return (
     <div className={cn("flex w-full flex-col gap-1", className)}>
-      <div className="flex h-10 items-center rounded-[8px] bg-bg-secondary px-2 py-2">
+      <div className="flex h-10 items-center rounded-[8px] bg-bg-tertiary px-2 py-2">
         <div className="flex w-fit shrink-0 items-center pr-2">
           <Checkbox
             checked={allLabelled}

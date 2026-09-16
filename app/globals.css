@@ -5,6 +5,10 @@
 @theme inline {
   --color-bg: var(--bg);
   --color-bg-secondary: var(--bg-secondary);
+  --color-bg-tertiary: var(--bg-tertiary);
+  --color-bg-quaternary: var(--bg-quaternary);
+  --color-bg-quinary: var(--bg-quinary);
+  --color-bg-senary: var(--bg-senary);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
@@ -41,6 +45,8 @@
 
   --color-primary: var(--primary);
   --color-secondary: var(--secondary);
+  --color-tertiary: var(--tertiary);
+  --color-quaternary: var(--quaternary);
 
   /* button / surface fills (not for text-*) */
   --color-secondary-fill: var(--secondary-fill);
@@ -96,31 +102,40 @@
 
 :root {
   --sidebar-width: 200px;
+  /* bg scale: --bg is primary (not renamed). ΔL = 0.01; non-primary ever-so-slightly warm.
+     Hover = +2 from resting surface, active = +3. Senary exists so tertiary surfaces can +3. */
   --bg: oklch(1 0 0);
-  --bg-secondary: oklch(0.98 0 0);
+  --bg-secondary: oklch(0.99 0.004 80);
+  --bg-tertiary: oklch(0.98 0.004 80); /* former --bg-secondary */
+  --bg-quaternary: oklch(0.97 0.004 80);
+  --bg-quinary: oklch(0.96 0.004 80);
+  --bg-senary: oklch(0.95 0.004 80);
   --foreground: oklch(0.216 0.009 255.6);
   --card: var(--bg);
   --card-foreground: var(--foreground);
   --popover: var(--bg);
   --popover-foreground: var(--foreground);
 
-  /* text colors — use with text-primary / text-secondary only */
+  /* text colors — primary/secondary unchanged; tertiary/quaternary continue ΔL ≈ 0.312 */
   --primary: var(--foreground);
   --secondary: oklch(0.528 0 0); /* Figma text/secondary ≈ #6B6B6B */
+  --tertiary: oklch(0.84 0 0);
+  --quaternary: oklch(1 0 0);
 
-  /* button / surface fills */
-  --secondary-fill: oklch(0.94 0 0);
-  --secondary-fill-hover: oklch(0.805 0 0);
+  /* Neutral fills — hover +2 / active +3 from resting surface.
+     On primary: hover tertiary, active quinary. On tertiary: hover quinary, active senary. */
+  --secondary-fill: var(--bg-tertiary);
+  --secondary-fill-hover: var(--bg-quinary);
 
   --active: oklch(0.717 0.149 234.3);
-  --active-hover: oklch(0.607 0.126 234.5);
-  --active-grey: oklch(0.946 0 0); /* #EDEDED */
-  --muted: var(--bg-secondary);
+  --active-hover: oklch(0.697 0.149 234.3);
+  --active-grey: var(--bg-quinary);
+  --muted: var(--bg-tertiary);
   --muted-foreground: var(--secondary);
-  --accent: oklch(0.967 0 0);
+  --accent: var(--bg-secondary);
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.664 0.224 32.3);
-  --destructive-hover: oklch(0.542 0.208 31.5);
+  --destructive-hover: oklch(0.644 0.224 32.3);
   --success: oklch(0.68 0.215 144.9);
   --warning: oklch(0.818 0.169 77.5);
   --disabled: oklch(0.845 0 0);
@@ -135,8 +150,9 @@
   --input: var(--border);
   --ring: oklch(0.605 0.186 257.6);
 
-  --tag: oklch(0.976 0 0);
-  --tag-hover: oklch(0.96 0 0);
+  /* Pills at tertiary → hover +2 = quinary */
+  --tag: var(--bg-tertiary);
+  --tag-hover: var(--bg-quinary);
   --tag-success: oklch(0.985 0.027 140.2);
   --tag-active: oklch(0.98 0.04 220.6);
   --tag-active-hover: oklch(0.964 0.06 220.6);
@@ -152,7 +168,7 @@
 
   /* misc styles */
   --radius: 0.625rem;
-  --sidebar: var(--bg-secondary);
+  --sidebar: var(--bg-tertiary);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--active);
   --sidebar-primary-foreground: var(--bg);
@@ -254,11 +270,25 @@
   html {
     @apply font-sans;
   }
+
+  /* Clickable affordances always show a pointer (unless explicitly overridden, e.g. cursor-text). */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  a[href] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled="true"],
+  a[aria-disabled="true"] {
+    cursor: not-allowed;
+  }
 }
 
 @keyframes payment-cell-flash {
   from {
-    background-color: var(--bg-secondary);
+    background-color: var(--bg-tertiary);
   }
   to {
     background-color: transparent;
@@ -274,7 +304,7 @@
 @layer components {
   /* Outer shell beside the sidebar — Figma: pt 12 / pr 12 / pb 16, no left pad */
   .page-container {
-    @apply bg-bg-secondary flex h-full w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-3 pr-3 pb-4;
+    @apply bg-bg-tertiary flex h-full w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-3 pr-3 pb-4;
   }
 
   /* White content panel that fills the container */
@@ -308,7 +338,7 @@
   @apply flex h-10 w-full cursor-pointer items-center gap-10 rounded-md p-2 transition-colors select-none;
 
   &:hover {
-    @apply bg-tag-hover;
+    @apply bg-bg-tertiary;
   }
 
   &[data-active="true"] {

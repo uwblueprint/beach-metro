@@ -37,7 +37,7 @@ export function AppSidebar({ userEmail }: { userEmail: string | null }) {
   const pathname = usePathname();
 
   return (
-    <aside className="bg-bg-secondary flex h-screen w-[200px] shrink-0 flex-col px-4 pt-5 pb-4">
+    <aside className="bg-bg-tertiary flex h-screen w-[200px] shrink-0 flex-col px-4 pt-5 pb-4">
       {/* Brand notch */}
       <div className="bg-bg border-border mb-5 flex shrink-0 items-center gap-2 rounded-2xl border px-2.5 py-3">
         <Send aria-hidden className="size-4 shrink-0" strokeWidth={1.75} />
@@ -54,6 +54,7 @@ export function AppSidebar({ userEmail }: { userEmail: string | null }) {
               href={href}
               size="md"
               type="leading-icon"
+              surface="tertiary"
               active={active}
               icon={<Icon aria-hidden strokeWidth={1.75} />}
             >
@@ -69,6 +70,7 @@ export function AppSidebar({ userEmail }: { userEmail: string | null }) {
           href="/settings"
           size="md"
           type="leading-icon"
+          surface="tertiary"
           active={pathname === "/settings" || pathname.startsWith("/settings/")}
           icon={<Settings aria-hidden strokeWidth={1.75} />}
           className="text-muted-foreground data-[active=true]:text-primary"
@@ -83,6 +85,7 @@ export function AppSidebar({ userEmail }: { userEmail: string | null }) {
             nativeType="submit"
             type="leading-icon"
             size="md"
+            surface="tertiary"
             icon={<User aria-hidden strokeWidth={1.75} />}
             title={userEmail ? `Sign out (${userEmail})` : "Sign out"}
           >

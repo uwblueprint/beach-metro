@@ -21,6 +21,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PageBreadcrumb } from "@/components/ui/page-breadcrumb";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useOverview, useYears, type Overview } from "@/features/finances/api";
 import { cn } from "@/lib/utils";
@@ -245,27 +246,24 @@ export default function OverviewPage() {
       <div className="page">
         <div className="flex flex-col gap-4 p-6">
           {/* Page header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              {/* The breadcrumb's first segment is the page's only title, so it
-                  carries the h1. Same classes, so it renders identically. */}
-              <h1 className="text-md text-muted-foreground">Overview</h1>
-              <span className="text-md text-muted-foreground">/</span>
+          <PageBreadcrumb
+            root="Overview"
+            current={
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={
-                    <button
+                    <Button
                       type="button"
+                      variant="text"
+                      size="sm"
                       aria-label="Switch year"
-                      className="inline-flex items-center gap-1"
-                    >
-                      <span className="text-md font-medium text-primary">
-                        {selectedYearOption?.name ?? "…"}
-                      </span>
-                      <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
-                    </button>
+                      className="gap-1 font-medium"
+                    />
                   }
-                />
+                >
+                  <span className="text-md">{selectedYearOption?.name ?? "…"}</span>
+                  <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
+                </DropdownMenuTrigger>
                 <DropdownMenuContent
                   align="start"
                   side="bottom"
@@ -295,8 +293,8 @@ export default function OverviewPage() {
                   </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-          </div>
+            }
+          />
 
           {showArchiveBanner && selectedYearOption?.archived && (
             <ArchiveBanner
@@ -418,7 +416,7 @@ export default function OverviewPage() {
                           setCaptainMode("ytd");
                           setPeriodOpen(false);
                         }}
-                        className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-muted"
+                        className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-bg-tertiary"
                       >
                         <span className={cn(captainMode === "ytd" && "font-medium")}>YTD</span>
                         {captainMode === "ytd" && (

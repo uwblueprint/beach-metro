@@ -8,13 +8,13 @@ import { CheckboxIcon } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 /** Shared item surface — aligned with ListItem (4px radius, 8px padding).
- * Hover: tag-hover (lighter). Selected / open: active-grey (darker). */
+ * TRY: hover +2 (tertiary), selected/open +3 (quinary via active-grey). */
 const dropdownItemStyles = [
   "group/dropdown-menu-item relative flex w-full cursor-pointer items-center gap-2 rounded-[4px] p-2",
   "text-sm font-normal text-primary whitespace-nowrap transition-colors",
   "outline-none select-none",
-  "hover:bg-tag-hover",
-  "data-highlighted:bg-tag-hover data-highlighted:text-primary",
+  "hover:bg-bg-tertiary",
+  "data-highlighted:bg-bg-tertiary data-highlighted:text-primary",
   "data-checked:bg-active-grey data-checked:text-primary",
   "data-checked:data-highlighted:bg-active-grey data-checked:hover:bg-active-grey",
   "data-popup-open:bg-active-grey data-popup-open:text-primary data-popup-open:hover:bg-active-grey",
@@ -185,7 +185,7 @@ function DropdownMenuCheckboxItem({
       className={cn(
         dropdownItemStyles,
         // Multiselect: selection is the left checkbox only — no selected row fill.
-        "data-checked:bg-transparent data-checked:hover:bg-tag-hover data-checked:data-highlighted:bg-tag-hover",
+        "data-checked:bg-transparent data-checked:hover:bg-bg-tertiary data-checked:data-highlighted:bg-bg-tertiary",
         "data-inset:pl-7",
         className,
       )}

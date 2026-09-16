@@ -9,10 +9,7 @@ const listItemVariants = cva(
     "group/list-item inline-flex w-full cursor-pointer items-center rounded-[4px] font-normal whitespace-nowrap transition-colors",
     "outline-none select-none",
     "text-primary",
-    "hover:bg-tag-hover",
     "focus-visible:ring-3 focus-visible:ring-ring/50",
-    "data-[active=true]:bg-active-grey data-[active=true]:text-primary",
-    "data-[active=true]:hover:bg-active-grey",
     "disabled:pointer-events-none disabled:text-disabled disabled:hover:bg-transparent",
     "[&_svg]:pointer-events-none [&_svg]:shrink-0",
   ].join(" "),
@@ -27,10 +24,18 @@ const listItemVariants = cva(
         "leading-icon": "",
         "trailing-icon": "justify-between",
       },
+      /** Resting surface — hover +2 / active +3 on the bg scale. */
+      surface: {
+        primary:
+          "hover:bg-bg-tertiary data-[active=true]:bg-bg-quinary data-[active=true]:text-primary data-[active=true]:hover:bg-bg-quinary",
+        tertiary:
+          "hover:bg-bg-quinary data-[active=true]:bg-bg-senary data-[active=true]:text-primary data-[active=true]:hover:bg-bg-senary",
+      },
     },
     defaultVariants: {
       size: "md",
       type: "text",
+      surface: "primary",
     },
   },
 );
@@ -93,12 +98,13 @@ function ListItem({
   className,
   size = "md",
   type = "text",
+  surface = "primary",
   active = false,
   icon,
   children,
   ...props
 }: ListItemProps) {
-  const classes = cn(listItemVariants({ size, type, className }));
+  const classes = cn(listItemVariants({ size, type, surface }), className);
   const content = (
     <ListItemContent type={type ?? "text"} icon={icon}>
       {children}

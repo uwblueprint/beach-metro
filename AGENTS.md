@@ -13,6 +13,7 @@ Install third-party skills once per machine (user-global). Verify each before tr
 | `web-design-guidelines` | Audit UI / a11y / UX against Vercel Web Interface Guidelines | `npx skills add https://github.com/vercel-labs/agent-skills --skill web-design-guidelines -y -g` |
 | `transitions-dev` | Drop-in CSS transitions (modal, dropdown, panel, icon swap, …) | `npx skills add jakubantalik/transitions-dev -y -g` |
 | `emil-design-eng` | Emil Kowalski motion/taste framework | `npx skills add https://github.com/emilkowalski/skill --skill emil-design-eng -y -g` |
+| `beach-metro-design-logic` | House design expectations (motion first; more later) | Bundled in `.claude/skills/` |
 | `blueprint-*` | Commit, PR, self-review, wrapup | Bundled in `.claude/skills/` |
 
 Open the matching skill’s `SKILL.md` before inventing polish, audit criteria, or motion recipes.
@@ -23,7 +24,8 @@ Open the matching skill’s `SKILL.md` before inventing polish, audit criteria, 
 | --- | --- |
 | `make-interfaces-feel-better` | **Proactive default** on UI work — do not wait to be asked. Always make use **evident in the chat response** (short note that polish ran — not a prescribed reply template). |
 | `web-design-guidelines` | **Default on UI work / UI reviews** — run unless it would clearly slow the turn a lot (huge diff, unrelated non-UI task, or user said to skip). Prefer a focused pass on touched files. |
-| `transitions-dev` | **Only when the user explicitly wants animation/motion** (e.g. “animate this”, “add a transition”, “smooth open”). Do not invent motion recipes otherwise. |
+| `beach-metro-design-logic` | **Default when implementing or reviewing motion** (animation, transitions, press/hover/focus feedback, overlay open/close). House constraints beat third-party recipes when they conflict. |
+| `transitions-dev` | **Only when the user explicitly wants animation/motion** (e.g. “animate this”, “add a transition”, “smooth open”). Do not invent motion recipes otherwise. Still apply `beach-metro-design-logic` durations/easing/scale. |
 | `emil-design-eng` | **Only when the user explicitly names/calls it.** Never auto-invoke. |
 
 ## Product overrides for design skills

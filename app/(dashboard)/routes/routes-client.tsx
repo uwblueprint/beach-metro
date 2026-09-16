@@ -50,7 +50,7 @@ const SIDE_OPTIONS = [
 
 /** Input-shell trigger — same class as testing InputsSection dropdowns. */
 const inputTriggerClassName =
-  "flex h-auto w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-hairline bg-bg px-3 py-2 text-left text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-bg-secondary disabled:text-disabled disabled:opacity-50";
+  "flex h-auto w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-hairline bg-bg px-3 py-2 text-left text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-bg-tertiary disabled:text-disabled disabled:opacity-50";
 
 /**
  * Attention flag for a row, or null when the route is healthy (route flow
@@ -821,7 +821,7 @@ function DetailBreadcrumb(props: { title: string; onBack: () => void; actions?: 
       <div className="flex min-w-0 items-center gap-2.5 text-md font-semibold">
         <button
           type="button"
-          className="shrink-0 text-secondary hover:text-primary"
+          className="shrink-0 cursor-pointer text-secondary hover:text-primary"
           onClick={props.onBack}
         >
           Deliveries

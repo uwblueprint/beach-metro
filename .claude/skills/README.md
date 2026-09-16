@@ -15,7 +15,8 @@ folder.
   - `blueprint-wrapup` — end-of-session LEARNINGS reflection
   - `blueprint-consolidate-learnings` — LEARNINGS cleanup (when it passes ~100 entries)
 - **`beach-metro-*` — specific to this product** (route rules, PostGIS house
-  counts, etc.). None yet; add as the codebase grows.
+  counts, etc.):
+  - `beach-metro-design-logic` — house UI expectations (motion first; more later)
 
 ## Reusing across projects
 - **Today:** `cp -r .claude/skills/blueprint-* <new-repo>/.claude/skills/`

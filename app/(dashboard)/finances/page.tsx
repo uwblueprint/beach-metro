@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DatePicker } from "@/components/ui/date-picker";
+import { PageBreadcrumb } from "@/components/ui/page-breadcrumb";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
@@ -133,7 +134,7 @@ function IssueLockButton({ locked, onToggle }: { locked: boolean; onToggle: () =
         ignoreClickRef.current = false;
       }}
       className={cn(
-        "flex shrink-0 items-center justify-center rounded-[4px] p-2 text-muted-foreground transition-[background-color,color] duration-100 hover:bg-muted hover:text-primary [&_svg]:pointer-events-none",
+        "flex shrink-0 items-center justify-center rounded-[4px] p-2 text-muted-foreground transition-[background-color,color] duration-100 hover:bg-bg-tertiary hover:text-primary [&_svg]:pointer-events-none",
         locked ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
       )}
     >
@@ -595,13 +596,10 @@ export default function FinancesPage() {
       <div className="page">
         <div className="flex flex-col gap-4 p-6">
           {/* Page header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              {/* Same as Overview: the breadcrumb's first segment is the page's
-                  only title, so it carries the h1. Classes unchanged. */}
-              <h1 className="text-md text-muted-foreground">Finances</h1>
-              <span className="text-md text-muted-foreground">/</span>
-              <div className="inline-flex items-center gap-1">
+          <PageBreadcrumb
+            root="Finances"
+            current={
+              <div className="inline-flex min-w-0 items-center gap-1">
                 {isEditingTableTitle ? (
                   <span className="inline-grid items-center [&>*]:col-start-1 [&>*]:row-start-1">
                     <span aria-hidden className="invisible whitespace-pre px-0 text-md font-medium">
@@ -622,26 +620,19 @@ export default function FinancesPage() {
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
-                      <button
+                      <Button
                         type="button"
+                        variant="text"
+                        size="sm"
                         aria-label="Switch table"
-                        className="inline-flex items-center gap-1"
+                        className="gap-1 font-medium"
                         onDoubleClick={!isEditingTableTitle ? startTableTitleEdit : undefined}
-                      >
-                        {!isEditingTableTitle && (
-                          <span
-                            className={cn(
-                              "text-md font-medium text-primary",
-                              !isArchivedYear && "cursor-text",
-                            )}
-                          >
-                            {tableDisplayLabel}
-                          </span>
-                        )}
-                        <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
-                      </button>
+                      />
                     }
-                  />
+                  >
+                    {!isEditingTableTitle && <span className="text-md">{tableDisplayLabel}</span>}
+                    <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
+                  </DropdownMenuTrigger>
                   <DropdownMenuContent
                     align="start"
                     side="bottom"
@@ -672,54 +663,52 @@ export default function FinancesPage() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button variant="default" size="sm" onClick={handleExportCsv}>
-                Export as CSV
-              </Button>
-              <Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
-                <PopoverTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label="More actions"
-                      className={cn(
-                        "flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[background-color,color] duration-300 ease-out",
-                        "hover:bg-muted hover:text-primary",
-                        "data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:hover:bg-muted data-popup-open:hover:text-primary",
-                      )}
-                    >
-                      <MoreHorizontal className="size-4" />
-                    </button>
-                  }
-                />
-                <PopoverContent
-                  align="end"
-                  side="bottom"
-                  sideOffset={4}
-                  className="w-auto min-w-0 gap-0 rounded-lg p-1 shadow-md ring-1 ring-foreground/10"
-                >
-                  {!isArchivedYear && (
-                    <button
-                      type="button"
-                      onClick={handleArchiveTable}
-                      className="flex w-full rounded-md px-3 py-1.5 text-left text-sm text-primary hover:bg-tag-hover active:bg-secondary-fill-hover"
-                    >
-                      Archive table
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={openCreateTableDialog}
-                    className="flex w-full rounded-md px-3 py-1.5 text-left text-sm text-primary hover:bg-tag-hover active:bg-secondary-fill-hover"
+            }
+            actions={
+              <>
+                <Button variant="default" size="sm" onClick={handleExportCsv}>
+                  Export as CSV
+                </Button>
+                <Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
+                  <PopoverTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="text"
+                        size="icon-sm"
+                        aria-label="More actions"
+                      />
+                    }
                   >
-                    Create new table
-                  </button>
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
+                    <MoreHorizontal className="size-4 text-muted-foreground" />
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    side="bottom"
+                    sideOffset={4}
+                    className="w-auto min-w-0 gap-0 rounded-lg p-1 shadow-md ring-1 ring-foreground/10"
+                  >
+                    {!isArchivedYear && (
+                      <button
+                        type="button"
+                        onClick={handleArchiveTable}
+                        className="flex w-full rounded-md px-3 py-1.5 text-left text-sm text-primary hover:bg-bg-tertiary active:bg-bg-quinary"
+                      >
+                        Archive table
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={openCreateTableDialog}
+                      className="flex w-full rounded-md px-3 py-1.5 text-left text-sm text-primary hover:bg-bg-tertiary active:bg-bg-quinary"
+                    >
+                      Create new table
+                    </button>
+                  </PopoverContent>
+                </Popover>
+              </>
+            }
+          />
 
           {showArchiveBanner && archivedYearDateRange && (
             <ArchiveBanner
@@ -747,8 +736,8 @@ export default function FinancesPage() {
                       aria-label="Filter"
                       className={cn(
                         "flex size-7 shrink-0 items-center justify-center rounded-[8px] border-[0.5px] border-border bg-bg text-muted-foreground transition-[background-color,color,border-color] duration-300 ease-out",
-                        "hover:border-transparent hover:bg-muted hover:text-primary",
-                        "data-popup-open:border-transparent data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:hover:bg-muted data-popup-open:hover:text-primary",
+                        "hover:border-transparent hover:bg-bg-tertiary hover:text-primary",
+                        "data-popup-open:border-transparent data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:hover:bg-bg-tertiary data-popup-open:hover:text-primary",
                       )}
                     >
                       <Filter className="size-4" strokeWidth={1.5} />
