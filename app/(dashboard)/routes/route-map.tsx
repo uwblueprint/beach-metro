@@ -38,6 +38,8 @@ export interface MapRoute {
   volunteerName: string | null;
   bundleCount: number;
   papers: number;
+  /** Point delivery — render a single marker instead of a polyline. */
+  isDrop?: boolean;
 }
 
 export interface MapHome {
@@ -142,6 +144,7 @@ function routeColor(route: MapRoute, selected: boolean, hovered: boolean): strin
 /**
  * One route: a polyline from start→end plus a small dot at each endpoint, so the
  * segment reads as a real stretch of street (not a line between random points).
+ * Drops (`isDrop` / coincident endpoints) render as a single point marker.
  * Managed imperatively — vis.gl has no Polyline/Marker component.
  */
 function RouteOverlay(props: {
@@ -168,8 +171,15 @@ function RouteOverlay(props: {
     onRouteLeaveRef.current = onRouteLeave;
   });
 
+  const asDrop =
+    route.isDrop === true ||
+    (Boolean(route.start) &&
+      Boolean(route.end) &&
+      route.start!.latitude === route.end!.latitude &&
+      route.start!.longitude === route.end!.longitude);
+
   const pathKey =
-    route.path && route.path.length >= 2
+    !asDrop && route.path && route.path.length >= 2
       ? route.path.map((p) => `${p.lat},${p.lng}`).join(";")
       : "";
 
@@ -179,14 +189,46 @@ function RouteOverlay(props: {
     if (!map || !route.start || !route.end) return;
     const from = { lat: route.start.latitude, lng: route.start.longitude };
     const to = { lat: route.end.latitude, lng: route.end.longitude };
-    const dashed = route.suspended;
-    const linePath = route.path && route.path.length >= 2 ? route.path : [from, to];
     const color = routeColor(routeRef.current, false, false);
 
     const emitHoverAt = (cursor: google.maps.LatLngLiteral) => {
       const r = routeRef.current;
       onRouteHoverRef.current(r.id, closestPointOnRoute(r, cursor) ?? cursor);
     };
+
+    const endpoint = (position: google.maps.LatLngLiteral) =>
+      new google.maps.Marker({
+        map,
+        position,
+        clickable: true,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: ROUTE_ENDPOINT_DOT_SCALE,
+          fillColor: color,
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 1.5,
+        },
+        zIndex: 3,
+      });
+
+    if (asDrop) {
+      const marker = endpoint(from);
+      marker.addListener("click", () => onSelectRef.current());
+      marker.addListener("mouseover", () => emitHoverAt(from));
+      marker.addListener("mouseout", () => onRouteLeaveRef.current());
+      markersRef.current = [marker];
+      lineRef.current = null;
+
+      return () => {
+        google.maps.event.clearInstanceListeners(marker);
+        marker.setMap(null);
+        markersRef.current = [];
+      };
+    }
+
+    const dashed = route.suspended;
+    const linePath = route.path && route.path.length >= 2 ? route.path : [from, to];
 
     const line = new google.maps.Polyline({
       map,
@@ -220,21 +262,6 @@ function RouteOverlay(props: {
     line.addListener("mouseout", () => onRouteLeaveRef.current());
     lineRef.current = line;
 
-    const endpoint = (position: google.maps.LatLngLiteral) =>
-      new google.maps.Marker({
-        map,
-        position,
-        clickable: true,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: ROUTE_ENDPOINT_DOT_SCALE,
-          fillColor: color,
-          fillOpacity: 1,
-          strokeColor: "#ffffff",
-          strokeWeight: 1.5,
-        },
-        zIndex: 3,
-      });
     const markers = [endpoint(from), endpoint(to)];
     markers.forEach((m, i) => {
       const at = i === 0 ? from : to;
@@ -264,6 +291,8 @@ function RouteOverlay(props: {
     route.end?.latitude,
     route.end?.longitude,
     route.suspended,
+    route.isDrop,
+    asDrop,
     pathKey,
   ]);
 

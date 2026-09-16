@@ -85,6 +85,38 @@ function routeLabel(r: RouteSummary): string {
   return `${r.streetName} · ${start} → ${end}`;
 }
 
+/**
+ * Point delivery (drop) on the list/map: same start/end place.
+ * Prefers coordinates when both are cached; otherwise matching endpoint labels.
+ *
+ * TODO(backend): Prefer a server `isDrop` (or one shared address id for start+end)
+ * so Type=Drops still works when the 30-day coord cache is empty.
+ */
+function isDropSummary(r: RouteSummary): boolean {
+  if (
+    r.start &&
+    r.end &&
+    r.start.latitude === r.end.latitude &&
+    r.start.longitude === r.end.longitude
+  ) {
+    return true;
+  }
+  if (r.startLabel && r.endLabel && r.startLabel === r.endLabel) return true;
+  return false;
+}
+
+function matchesDeliveryType(r: RouteSummary, deliveryType: DeliveryTypeFilter): boolean {
+  if (deliveryType === "all") return true;
+  const drop = isDropSummary(r);
+  return deliveryType === "drops" ? drop : !drop;
+}
+
+function deliveryListLabel(r: RouteSummary): string {
+  if (!isDropSummary(r)) return routeLabel(r);
+  const addr = r.startLabel ?? r.endLabel;
+  return addr ? `${r.streetName} · ${addr}` : r.streetName;
+}
+
 /* ---------- API shapes (subset the page uses) ---------- */
 
 interface RouteSummary {
@@ -471,29 +503,28 @@ export function RoutesClient() {
   );
 
   const mapRoutes: MapRoute[] = (routes.data ?? [])
-    // Drops aren't on this map yet — Type=Drops shows an empty set for now.
-    // PR note: Create Drop POSTs to /api/routes with assignedCaptainId, but that
-    // needs migration 20260807000000_route_assigned_captain.sql (pnpm db:push).
-    // Without it the insert hits a missing column → "Unexpected database error."
-    // After the migration lands, wire isDrop on RouteSummary and filter here.
-    .filter(() => deliveryType !== "drops")
-    .map((r) => ({
-      id: r.id,
-      streetName: r.streetName,
-      lifecycle: r.lifecycle,
-      suspended: r.suspended,
-      needsAttention: r.needsAttention,
-      start: r.start,
-      end: r.end,
-      path: pathById.get(r.id) ?? null,
-      label: routeLabel(r),
-      volunteerName: r.assignedVolunteer
-        ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
-        : null,
-      bundleCount: greedySplit(Math.max(0, Math.floor(r.papers))).length,
-      papers: r.papers,
-    }));
-  const listRoutes = deliveryType === "drops" ? [] : (routes.data ?? []);
+    .filter((r) => matchesDeliveryType(r, deliveryType))
+    .map((r) => {
+      const drop = isDropSummary(r);
+      return {
+        id: r.id,
+        streetName: r.streetName,
+        lifecycle: r.lifecycle,
+        suspended: r.suspended,
+        needsAttention: r.needsAttention,
+        start: r.start,
+        end: r.end,
+        path: drop ? null : (pathById.get(r.id) ?? null),
+        label: deliveryListLabel(r),
+        volunteerName: r.assignedVolunteer
+          ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
+          : null,
+        bundleCount: greedySplit(Math.max(0, Math.floor(r.papers))).length,
+        papers: r.papers,
+        isDrop: drop,
+      };
+    });
+  const listRoutes = (routes.data ?? []).filter((r) => matchesDeliveryType(r, deliveryType));
   const mapHomes: MapHome[] = showHomes
     ? (volunteers.data ?? []).map((v) => ({
         id: v.id,
@@ -664,10 +695,13 @@ function RouteList(props: {
   return (
     <div className="flex flex-col gap-2">
       {props.routes.map((r) => {
-        const isVacant = r.lifecycle === "vacant";
-        const volunteerName = r.assignedVolunteer
-          ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
-          : "vacant";
+        const drop = isDropSummary(r);
+        const isVacant = drop ? !r.captain : r.lifecycle === "vacant";
+        const metaName = drop
+          ? (r.captain?.name ?? "no captain")
+          : r.assignedVolunteer
+            ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
+            : "vacant";
         const state = routeState(r);
 
         return (
@@ -678,7 +712,7 @@ function RouteList(props: {
             meta={
               <div className="flex shrink-0 items-center gap-2">
                 {state && <RouteStateTag state={state} />}
-                <span className="text-md text-secondary">{volunteerName}</span>
+                <span className="text-md text-secondary">{metaName}</span>
                 <RouteActionsMenu
                   routeId={r.id}
                   hasVolunteer={Boolean(r.assignedVolunteer)}
@@ -692,7 +726,7 @@ function RouteList(props: {
             }
             onClick={() => props.onSelect(r.id)}
           >
-            <RouteTag label={routeLabel(r)} vacant={isVacant} />
+            <RouteTag label={deliveryListLabel(r)} vacant={isVacant} />
           </SidePanelRow>
         );
       })}
@@ -1421,13 +1455,18 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
 
 /**
  * Create a drop (point delivery): one address stored as both start and end so
- * the route detail panel treats it as a drop.
+ * the route detail panel treats it as a drop. Captain is required in the UI.
  *
- * PR note: not verified end-to-end on dev machines until
- * supabase/migrations/20260807000000_route_assigned_captain.sql is applied
- * (`pnpm db:push`). The API writes assigned_captain_id on volunteer_routes;
- * without that column Postgres returns an error that surfaces as "Unexpected
- * database error." in the UI.
+ * TODO(backend / PR):
+ * - Apply supabase/migrations/20260807000000_route_assigned_captain.sql
+ *   (`pnpm db:push`) or POST with assignedCaptainId fails (missing column).
+ * - Prefer server `isDrop` (or one shared address id for start+end) so Type
+ *   filters work when the coord cache is empty; create currently inserts two
+ *   address rows with the same input.
+ * - Optionally require assignedCaptainId in Zod createRoute when start===end;
+ *   lifecycle for drops is still volunteer-based (shows vacant without a volunteer).
+ * - Captain home pin needs captain address data (not modeled in people flow).
+ * - Places autocomplete for editing drop address in detail remains out of scope.
  */
 function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) => void }) {
   const captains = useQuery({
@@ -1475,7 +1514,7 @@ function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) =
         endAddress: resolved,
         houseCount: unitCountValue,
         bundles,
-        ...(captainId ? { assignedCaptainId: captainId } : {}),
+        assignedCaptainId: captainId,
         ...(note.trim() ? { note: note.trim() } : {}),
       });
     },
@@ -1483,17 +1522,22 @@ function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) =
   });
 
   const ready =
-    streetName.trim() && addressLine.trim() && bundles.length > 0 && unitCountValid && papersValid;
+    Boolean(captainId) &&
+    streetName.trim() &&
+    addressLine.trim() &&
+    bundles.length > 0 &&
+    unitCountValid &&
+    papersValid;
 
   const captainOptions = [
-    { value: "", label: "— leave unassigned —" },
+    { value: "", label: "Select a captain" },
     ...(captains.data ?? []).map((c) => ({
       value: c.id,
       label: `${c.firstName} ${c.lastName}`,
     })),
   ];
   const captainDisplay =
-    captainOptions.find((o) => o.value === captainId)?.label ?? "— leave unassigned —";
+    captainOptions.find((o) => o.value === captainId)?.label ?? "Select a captain";
 
   return (
     <div className="flex h-full flex-col">
