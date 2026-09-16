@@ -104,14 +104,15 @@ export function useTerritory(id: string | null | undefined) {
 export function useRetireMember() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, role }: { id: string; role: MemberRole }) =>
-      api.post<unknown>(`/api/${role}s/${id}/retire`),
+    mutationFn: ({ id, role, note }: { id: string; role: MemberRole; note?: string }) =>
+      api.post<unknown>(`/api/${role}s/${id}/retire`, note ? { note } : undefined),
     onSuccess: (_data, { id, role }) => {
       queryClient.invalidateQueries({ queryKey: memberKeys.all });
       queryClient.invalidateQueries({ queryKey: routeKeys.all });
       queryClient.invalidateQueries({
         queryKey: role === "volunteer" ? memberKeys.volunteer(id) : memberKeys.captain(id),
       });
+      queryClient.invalidateQueries({ queryKey: memberKeys.notes(role, id) });
     },
   });
 }

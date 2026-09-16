@@ -368,6 +368,22 @@
   }
 }
 
+/* transitions-dev — reimbursements list expand (grid 0fr ↔ 1fr, uses resize tokens) */
+.t-reimburse-list-expand {
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--resize-dur) var(--resize-ease);
+  will-change: grid-template-rows;
+}
+.t-reimburse-list-expand[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-reimburse-list-expand {
+    transition: none !important;
+  }
+}
+
 /* transitions-dev — panel reveal */
 .t-panel-slide {
   transform: translateY(var(--panel-translate-y));

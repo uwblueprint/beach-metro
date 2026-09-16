@@ -13,15 +13,14 @@ const STATUS_LABEL: Record<MemberStatus, string> = {
 };
 
 /**
- * Status tint. The foreground stays `text-primary` on every variant: the obvious
- * pairing for on-vacation, `text-warning` on `bg-tag-warning`, computes to
- * 1.74:1 against a WCAG AA floor of 4.5:1. `text-primary` is 16.89:1 here and
- * keeps the three statuses distinguishable by background alone.
+ * Status tint. Active and on-vacation keep `text-primary` on their backgrounds;
+ * retired uses `text-destructive` on `bg-tag-destructive` (same pairing as vacant
+ * RouteTag chips).
  */
 const STATUS_CLASSES: Record<MemberStatus, string> = {
-  active: "bg-tag",
-  "on-vacation": "bg-tag-warning",
-  retired: "bg-tag-destructive",
+  active: "bg-tag text-primary",
+  "on-vacation": "bg-tag-warning text-primary",
+  retired: "bg-tag-destructive text-destructive",
 };
 
 /**
@@ -45,7 +44,7 @@ export function RoleTag({
     <span
       aria-label={`${ROLE_LABEL[role]}, ${STATUS_LABEL[status]}`}
       className={cn(
-        "inline-flex items-center justify-center px-2 py-1 text-primary",
+        "inline-flex items-center justify-center px-2 py-1",
         STATUS_CLASSES[status],
         className,
       )}

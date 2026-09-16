@@ -1,7 +1,7 @@
 "use client";
 
 import { MoreHorizontal } from "lucide-react";
-import { type CSSProperties, type ReactNode } from "react";
+import { type CSSProperties, type ReactNode, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -10,12 +10,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  useDeleteMember,
-  useReactivateMember,
-  useRetireMember,
-  type MemberRow,
-} from "@/features/members/api";
+import { useDeleteMember, useReactivateMember, type MemberRow } from "@/features/members/api";
+import { RetireMemberDialog, type RetireMemberTarget } from "@/components/retire-member-dialog";
 import { RoleTag } from "@/components/role-tag";
 import { cn } from "@/lib/utils";
 
@@ -114,16 +110,17 @@ function RowActions({
   member,
   onOpenDetails,
   onDeleted,
+  onRequestRetire,
 }: {
   member: MemberRow;
   onOpenDetails?: (memberId: string) => void;
   onDeleted?: (memberId: string) => void;
+  onRequestRetire: (member: RetireMemberTarget) => void;
 }) {
-  const retire = useRetireMember();
   const reactivate = useReactivateMember();
   const deleteMember = useDeleteMember();
   const isRetired = member.status === "retired";
-  const isBusy = retire.isPending || reactivate.isPending || deleteMember.isPending;
+  const isBusy = reactivate.isPending || deleteMember.isPending;
 
   return (
     <DropdownMenu>
@@ -154,16 +151,9 @@ function RowActions({
         ) : (
           <DropdownMenuItem
             disabled={isBusy}
-            onClick={() => {
-              const detail =
-                member.role === "volunteer"
-                  ? "Their routes will become vacant."
-                  : "Their territory will be left without a captain.";
-              if (!window.confirm(`Retire ${member.name}? ${detail}`)) return;
-              retire.mutate({ id: member.id, role: member.role });
-            }}
+            onClick={() => onRequestRetire({ id: member.id, role: member.role, name: member.name })}
           >
-            {retire.isPending ? "Retiring…" : "Retire member"}
+            Retire member
           </DropdownMenuItem>
         )}
         <DropdownMenuItem
@@ -193,34 +183,50 @@ function RowActions({
 
 function MembersTable({ state, members, selectedId, onRowClick, onDeleted }: MembersTableProps) {
   const columns = COLUMNS[state];
+  const [retireTarget, setRetireTarget] = useState<RetireMemberTarget | null>(null);
 
   return (
-    <div className="flex w-full flex-col gap-1">
-      <div className="flex h-10 w-full items-center gap-10 px-2 py-1 text-secondary">
-        {columns.map((col) => (
-          <TableCell key={col.key} width={col.width} className={col.headerClassName}>
-            {col.header}
-          </TableCell>
-        ))}
-        {/* Spacer matching the row actions button, keeps columns aligned. */}
-        <div className="size-6 shrink-0" />
-      </div>
-      {members.map((member) => (
-        <div
-          key={member.id}
-          className="table-row group/table-row"
-          data-active={selectedId === member.id || undefined}
-          onClick={() => onRowClick?.(member.id)}
-        >
+    <>
+      <div className="flex w-full flex-col gap-1">
+        <div className="flex h-10 w-full items-center gap-10 px-2 py-1 text-secondary">
           {columns.map((col) => (
-            <TableCell key={col.key} width={col.width}>
-              {col.render(member)}
+            <TableCell key={col.key} width={col.width} className={col.headerClassName}>
+              {col.header}
             </TableCell>
           ))}
-          <RowActions member={member} onOpenDetails={onRowClick} onDeleted={onDeleted} />
+          {/* Spacer matching the row actions button, keeps columns aligned. */}
+          <div className="size-6 shrink-0" />
         </div>
-      ))}
-    </div>
+        {members.map((member) => (
+          <div
+            key={member.id}
+            className="table-row group/table-row"
+            data-active={selectedId === member.id || undefined}
+            onClick={() => onRowClick?.(member.id)}
+          >
+            {columns.map((col) => (
+              <TableCell key={col.key} width={col.width}>
+                {col.render(member)}
+              </TableCell>
+            ))}
+            <RowActions
+              member={member}
+              onOpenDetails={onRowClick}
+              onDeleted={onDeleted}
+              onRequestRetire={setRetireTarget}
+            />
+          </div>
+        ))}
+      </div>
+
+      <RetireMemberDialog
+        member={retireTarget}
+        open={retireTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRetireTarget(null);
+        }}
+      />
+    </>
   );
 }
 
