@@ -108,6 +108,10 @@
   --text-4xl: 2.75rem;
   --text-4xl--line-height: 1.3;
 
+  /* Font weights — lighter than CSS defaults so normal/medium/semibold stay airy */
+  --font-weight-normal: 300;
+  --font-weight-medium: 400;
+  --font-weight-semibold: 500;
 }
 
 :root {
