@@ -24,7 +24,7 @@ const bannerVariants = cva(
       placement: {
         inline: "",
         // Override base `w-full` so left+right define width (= page width).
-        page: "fixed top-3 right-3 left-[var(--sidebar-width)] z-40 w-auto max-w-none border-transparent smooth-shadow-ring-sm",
+        page: "fixed top-3 right-3 left-[var(--sidebar-width)] z-40 w-auto max-w-none border-transparent smooth-shadow-ring-sm transition-[left] duration-[var(--resize-dur)] ease-[var(--resize-ease)] motion-reduce:transition-none",
       },
     },
     defaultVariants: {

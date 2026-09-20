@@ -6,11 +6,13 @@ import { cn } from "@/lib/utils";
 
 const listItemVariants = cva(
   [
-    "group/list-item inline-flex w-full cursor-pointer items-center rounded-[4px] font-normal whitespace-nowrap transition-colors",
+    "group/list-item inline-flex w-full cursor-pointer items-center rounded-[4px] font-normal whitespace-nowrap",
     "outline-none select-none",
     "text-primary",
+    "transition-[color,background-color] duration-150 ease-out",
     "focus-visible:ring-3 focus-visible:ring-ring/50",
     "disabled:pointer-events-none disabled:text-disabled disabled:hover:bg-transparent",
+    "motion-reduce:transition-none",
     "[&_svg]:pointer-events-none [&_svg]:shrink-0",
   ].join(" "),
   {
@@ -30,7 +32,7 @@ const listItemVariants = cva(
           "hover:bg-bg-secondary data-[active=true]:bg-bg-tertiary data-[active=true]:text-primary data-[active=true]:hover:bg-bg-tertiary",
         tertiary:
           "hover:bg-bg-quaternary data-[active=true]:bg-bg-quinary data-[active=true]:text-primary data-[active=true]:hover:bg-bg-quinary",
-        /** Cool sidebar shell — hover +2 / active +3; radius matches members table rows. */
+        /** Sidebar shell — hover +2 / active +3; radius matches members rows. */
         sidebar:
           "rounded-md hover:bg-sidebar-hover data-[active=true]:bg-sidebar-active data-[active=true]:text-primary data-[active=true]:hover:bg-sidebar-active",
       },

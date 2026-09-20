@@ -181,9 +181,9 @@
 
   /* misc styles */
   --radius: 0.625rem;
-  --sidebar: oklch(0.98 0 0); /* cool shell — pre-warm bg-secondary; not on the warm bg scale */
-  --sidebar-hover: oklch(0.96 0 0); /* +2 from sidebar */
-  --sidebar-active: oklch(0.95 0 0); /* +3 from sidebar */
+  --sidebar: var(--bg-tertiary); /* warm shell — same L as cool predecessor, on the bg scale */
+  --sidebar-hover: var(--bg-quinary); /* +2 from sidebar */
+  --sidebar-active: var(--bg-senary); /* +3 from sidebar */
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--active);
   --sidebar-primary-foreground: var(--bg);
@@ -318,7 +318,7 @@
 
 @layer components {
   /* Outer shell beside the sidebar — Figma: pt 12 / pr 12 / pb 16.
-     pl-4 is the sidebar’s former right pad, so the page shadow has room to paint. */
+     pl-4 matches the sidebar’s left gutter so screen↔sidebar ≡ sidebar↔page. */
   .page-container {
     @apply bg-bg-tertiary flex h-full w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-3 pr-3 pb-4 pl-4;
   }
@@ -410,6 +410,62 @@
 
 @media (prefers-reduced-motion: reduce) {
   .t-resize {
+    transition: none !important;
+  }
+}
+
+/* Sidebar collapse — content widths animate; aside stays overflow-visible for tile shadow */
+.t-sidebar-inner {
+  transition: width var(--resize-dur) var(--resize-ease);
+  will-change: width;
+}
+
+.t-sidebar-brand {
+  transition:
+    width var(--resize-dur) var(--resize-ease),
+    transform 150ms ease-out;
+  will-change: width;
+}
+
+.t-sidebar .sidebar-label,
+.t-sidebar [data-slot="list-item-label"] {
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 1;
+  transition: opacity var(--resize-dur) var(--resize-ease);
+}
+
+/* Nav items: 12px left pad always (matches collapsed icon-centering; icons don’t shift) */
+.t-sidebar [data-slot="list-item"] {
+  width: 100%;
+  overflow: hidden;
+  padding-left: 12px;
+  gap: 10px; /* list-item md gap-2 (8px) + 2px — keep when collapsed so labels don’t slide */
+  transition:
+    width var(--resize-dur) var(--resize-ease),
+    color 150ms ease-out,
+    background-color 150ms ease-out;
+}
+
+.t-sidebar[data-collapsed="true"] [data-slot="list-item"] {
+  width: 40px; /* SIDEBAR_ICON_RAIL */
+}
+
+/* Opacity only — same fade both ways. Parents clip; don’t snap width/gap on the label. */
+.t-sidebar[data-collapsed="true"] .sidebar-label,
+.t-sidebar[data-collapsed="true"] [data-slot="list-item-label"] {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-sidebar-brand,
+  .t-sidebar-inner,
+  .t-sidebar [data-slot="list-item"] {
+    transition: none !important;
+  }
+
+  .t-sidebar .sidebar-label,
+  .t-sidebar [data-slot="list-item-label"] {
     transition: none !important;
   }
 }
