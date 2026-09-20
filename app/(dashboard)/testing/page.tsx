@@ -422,8 +422,7 @@ function DropdownsSection({
         <section className="space-y-3">
           <h2 className="text-lg font-medium">Radio (checked)</h2>
           <p className="text-secondary text-sm">
-            TRY: hover +2 (tertiary), active +3 (quinary)
-            (primary→secondary).
+            Rest on primary: hover +1 (secondary), active +2 (tertiary) (primary→secondary).
           </p>
           <DropdownMenu>
             <DropdownMenuTrigger render={<Button variant="outline" />}>

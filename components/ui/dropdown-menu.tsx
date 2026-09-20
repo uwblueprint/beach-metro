@@ -8,17 +8,17 @@ import { CheckboxIcon } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 /** Shared item surface — aligned with ListItem (4px radius, 8px padding).
- * TRY: hover +2 (tertiary), selected/open +3 (quinary via active-grey). */
+ * Rest on primary: hover +1 (secondary), selected/open +2 (tertiary). */
 const dropdownItemStyles = [
   "group/dropdown-menu-item relative flex w-full cursor-pointer items-center gap-2 rounded-[4px] p-2",
   "text-sm font-normal text-primary whitespace-nowrap transition-colors",
   "outline-none select-none",
-  "hover:bg-bg-tertiary",
-  "data-highlighted:bg-bg-tertiary data-highlighted:text-primary",
-  "data-checked:bg-active-grey data-checked:text-primary",
-  "data-checked:data-highlighted:bg-active-grey data-checked:hover:bg-active-grey",
-  "data-popup-open:bg-active-grey data-popup-open:text-primary data-popup-open:hover:bg-active-grey",
-  "data-open:bg-active-grey data-open:text-primary data-open:hover:bg-active-grey",
+  "hover:bg-bg-secondary",
+  "data-highlighted:bg-bg-secondary data-highlighted:text-primary",
+  "data-checked:bg-bg-tertiary data-checked:text-primary",
+  "data-checked:data-highlighted:bg-bg-tertiary data-checked:hover:bg-bg-tertiary",
+  "data-popup-open:bg-bg-tertiary data-popup-open:text-primary data-popup-open:hover:bg-bg-tertiary",
+  "data-open:bg-bg-tertiary data-open:text-primary data-open:hover:bg-bg-tertiary",
   "data-disabled:pointer-events-none data-disabled:text-disabled data-disabled:hover:bg-transparent",
   "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
 ].join(" ");
@@ -185,7 +185,7 @@ function DropdownMenuCheckboxItem({
       className={cn(
         dropdownItemStyles,
         // Multiselect: selection is the left checkbox only — no selected row fill.
-        "data-checked:bg-transparent data-checked:hover:bg-bg-tertiary data-checked:data-highlighted:bg-bg-tertiary",
+        "data-checked:bg-transparent data-checked:hover:bg-bg-secondary data-checked:data-highlighted:bg-bg-secondary",
         "data-inset:pl-7",
         className,
       )}

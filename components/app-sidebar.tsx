@@ -11,9 +11,11 @@ import {
   User,
   Users,
 } from "lucide-react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { ListItem } from "@/components/ui/list-item";
+import { cn } from "@/lib/utils";
 
 const NAV_ITEMS: { label: string; href: string; icon: LucideIcon }[] = [
   { label: "Overview", href: "/overview", icon: LayoutGrid },
@@ -39,10 +41,21 @@ export function AppSidebar({ userEmail }: { userEmail: string | null }) {
   return (
     <aside className="relative z-10 flex h-screen w-[200px] shrink-0 flex-col bg-transparent pl-4 pt-5 pb-4">
       {/* Brand notch */}
-      <div className="bg-bg mb-5 flex shrink-0 items-center gap-2 rounded-2xl px-2.5 py-3 smooth-shadow-ring-xs">
+      <Link
+        href="/overview"
+        className={cn(
+          "bg-bg relative mb-5 flex shrink-0 items-center gap-2 rounded-2xl px-2.5 py-3",
+          "smooth-shadow-ring-xs",
+          "before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:shadow-[var(--stroke-inner)] before:content-['']",
+          "cursor-pointer outline-none select-none",
+          "transition-transform duration-150 ease-out hover:scale-[0.97]",
+          "focus-visible:ring-3 focus-visible:ring-ring/50",
+          "motion-reduce:transition-none motion-reduce:hover:scale-100",
+        )}
+      >
         <Send aria-hidden className="size-4 shrink-0" strokeWidth={1.75} />
         <span className="text-md text-primary">Dispatch</span>
-      </div>
+      </Link>
 
       {/* Primary nav — grows so footer stays at the bottom */}
       <nav className="flex min-h-0 flex-1 flex-col gap-1">
@@ -54,7 +67,7 @@ export function AppSidebar({ userEmail }: { userEmail: string | null }) {
               href={href}
               size="md"
               type="leading-icon"
-              surface="tertiary"
+              surface="sidebar"
               active={active}
               icon={<Icon aria-hidden strokeWidth={1.75} />}
             >
@@ -70,7 +83,7 @@ export function AppSidebar({ userEmail }: { userEmail: string | null }) {
           href="/settings"
           size="md"
           type="leading-icon"
-          surface="tertiary"
+          surface="sidebar"
           active={pathname === "/settings" || pathname.startsWith("/settings/")}
           icon={<Settings aria-hidden strokeWidth={1.75} />}
           className="text-muted-foreground data-[active=true]:text-primary"
@@ -85,7 +98,7 @@ export function AppSidebar({ userEmail }: { userEmail: string | null }) {
             nativeType="submit"
             type="leading-icon"
             size="md"
-            surface="tertiary"
+            surface="sidebar"
             icon={<User aria-hidden strokeWidth={1.75} />}
             title={userEmail ? `Sign out (${userEmail})` : "Sign out"}
           >

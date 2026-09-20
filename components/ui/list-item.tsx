@@ -17,19 +17,22 @@ const listItemVariants = cva(
     variants: {
       size: {
         sm: "h-6 gap-2 p-2 text-sm [&_svg:not([class*='size-'])]:size-3",
-        md: "gap-2 px-2 py-[7px] text-md [&_svg:not([class*='size-'])]:size-4",
+        md: "h-10 gap-2 p-2 text-md [&_svg:not([class*='size-'])]:size-4",
       },
       type: {
         text: "",
         "leading-icon": "",
         "trailing-icon": "justify-between",
       },
-      /** Resting surface — hover +2 / active +3 on the bg scale. */
+      /** Resting surface — hover +1 / active +2 on the bg scale. */
       surface: {
         primary:
-          "hover:bg-bg-tertiary data-[active=true]:bg-bg-quinary data-[active=true]:text-primary data-[active=true]:hover:bg-bg-quinary",
+          "hover:bg-bg-secondary data-[active=true]:bg-bg-tertiary data-[active=true]:text-primary data-[active=true]:hover:bg-bg-tertiary",
         tertiary:
-          "hover:bg-bg-quinary data-[active=true]:bg-bg-senary data-[active=true]:text-primary data-[active=true]:hover:bg-bg-senary",
+          "hover:bg-bg-quaternary data-[active=true]:bg-bg-quinary data-[active=true]:text-primary data-[active=true]:hover:bg-bg-quinary",
+        /** Cool sidebar shell — hover +2 / active +3; radius matches members table rows. */
+        sidebar:
+          "rounded-md hover:bg-sidebar-hover data-[active=true]:bg-sidebar-active data-[active=true]:text-primary data-[active=true]:hover:bg-sidebar-active",
       },
     },
     defaultVariants: {

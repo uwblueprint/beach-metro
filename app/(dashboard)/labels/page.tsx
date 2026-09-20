@@ -376,7 +376,7 @@ export default function LabelsPage() {
 
                             return (
                               <div key={route.id} className="flex flex-col gap-1">
-                                <div className="group/row flex h-10 w-full cursor-pointer items-center rounded-md p-2 transition-colors hover:bg-bg-tertiary">
+                                <div className="group/row flex h-10 w-full cursor-pointer items-center rounded-md p-2 transition-colors hover:bg-bg-secondary">
                                   <div className="flex min-w-0 flex-1 items-center">
                                     <HoverCheckbox
                                       checked={selection.checked}
@@ -427,7 +427,7 @@ export default function LabelsPage() {
                                   ? route.bundles.map((bundle) => (
                                       <div
                                         key={bundle.id}
-                                        className="group/row flex h-10 w-full items-center rounded-md p-2 transition-colors hover:bg-bg-tertiary"
+                                        className="group/row flex h-10 w-full items-center rounded-md p-2 transition-colors hover:bg-bg-secondary"
                                       >
                                         <div className="flex min-w-0 flex-1 items-center">
                                           <span className="size-6 shrink-0" aria-hidden />
@@ -506,7 +506,7 @@ export default function LabelsPage() {
               <Button
                 type="button"
                 variant="text"
-                className="bg-active-grey hover:bg-bg-quinary"
+                className="bg-bg-tertiary hover:bg-bg-quaternary"
                 onClick={() => void markSelectedLabelled()}
                 disabled={busy}
               >

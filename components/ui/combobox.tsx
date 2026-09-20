@@ -169,7 +169,7 @@ function Combobox({
               id={optionId(index)}
               role="option"
               aria-selected={selected}
-              className={cn("rounded-[4px]", isActive && "bg-bg-tertiary")}
+              className={cn("rounded-[4px]", isActive && "bg-bg-secondary")}
             >
               <button
                 type="button"
@@ -177,8 +177,8 @@ function Combobox({
                 disabled={option.disabled}
                 className={cn(
                   "flex w-full cursor-pointer items-center gap-2 rounded-[4px] p-2 text-left text-sm text-primary outline-none transition-colors",
-                  "hover:bg-bg-tertiary",
-                  selected && "bg-active-grey hover:bg-active-grey",
+                  "hover:bg-bg-secondary",
+                  selected && "bg-bg-tertiary hover:bg-bg-tertiary",
                   option.disabled && "pointer-events-none text-disabled",
                 )}
                 onMouseDown={(e) => e.preventDefault()}

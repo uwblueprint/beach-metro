@@ -16,9 +16,9 @@ const buttonVariants = cva(
           "bg-secondary-fill text-primary hover:bg-secondary-fill-hover disabled:bg-secondary-fill disabled:text-disabled disabled:opacity-50",
         primary: "bg-active text-bg hover:bg-active-hover disabled:bg-active/50",
         outline:
-          "border-hairline text-primary hover:border-transparent hover:bg-bg-tertiary disabled:text-disabled",
+          "border-hairline text-primary hover:border-transparent hover:bg-bg-secondary disabled:text-disabled",
         danger: "bg-destructive text-bg hover:bg-destructive-hover disabled:bg-destructive/50",
-        text: "text-primary hover:bg-bg-tertiary disabled:text-disabled",
+        text: "text-primary hover:bg-bg-secondary disabled:text-disabled",
         link: "text-active underline-offset-4 shadow-none hover:underline",
         /** Circular icon for toolbars (map chrome, filter toggles). Pair with size=toolbar shape=rounded. */
         toolbar: toolbarIconButtonClass,

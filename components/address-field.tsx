@@ -109,7 +109,7 @@ export function AddressField(props: {
                 type="button"
                 className={cn(
                   "block w-full px-2 py-1.5 text-left text-sm",
-                  i === highlight ? "bg-bg-tertiary" : "hover:bg-bg-tertiary",
+                  i === highlight ? "bg-bg-secondary" : "hover:bg-bg-secondary",
                 )}
                 onMouseEnter={() => setHighlight(i)}
                 onClick={() => pick(s)}

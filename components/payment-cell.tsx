@@ -127,7 +127,7 @@ function PopoverComment({
               <button
                 type="button"
                 aria-label={isEmpty ? "Add comment" : "Edit comment"}
-                className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[4px] border-0 bg-transparent text-muted-foreground outline-none transition-colors hover:bg-bg-tertiary focus:outline-none focus-visible:outline-none [&_svg]:block [&_svg]:fill-none [&_svg]:stroke-current"
+                className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[4px] border-0 bg-transparent text-muted-foreground outline-none transition-colors hover:bg-bg-secondary focus:outline-none focus-visible:outline-none [&_svg]:block [&_svg]:fill-none [&_svg]:stroke-current"
                 onClick={(event) => {
                   event.stopPropagation();
                   startEditing();
@@ -374,7 +374,7 @@ function PaymentAmountPopover({
 type CellMenuView = "actions" | "substitute";
 
 const cellMenuItemClassName =
-  "flex w-full rounded-md px-3 py-1.5 text-left text-sm text-primary hover:bg-bg-tertiary active:bg-bg-quinary";
+  "flex w-full rounded-md px-3 py-1.5 text-left text-sm text-primary hover:bg-bg-secondary active:bg-bg-tertiary";
 
 function SubstituteCaptainPicker({
   selectedCaptain,
@@ -398,7 +398,7 @@ function SubstituteCaptainPicker({
               type="button"
               onClick={() => onSelect(captain)}
               className={cn(
-                "flex w-full items-center justify-between rounded-md px-3 py-2.5 text-md text-primary transition-colors hover:bg-bg-tertiary",
+                "flex w-full items-center justify-between rounded-md px-3 py-2.5 text-md text-primary transition-colors hover:bg-bg-secondary",
                 isSelected && "font-medium",
               )}
             >
@@ -460,7 +460,7 @@ function CellActionsMenu({
             className={cn(
               "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[opacity,background-color,color] duration-300 ease-out",
               "pointer-events-none group-hover/cell:pointer-events-auto group-hover/cell:bg-muted group-hover/cell:text-primary group-hover/cell:opacity-100",
-              "data-popup-open:pointer-events-auto data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:opacity-100 data-popup-open:hover:bg-bg-tertiary data-popup-open:hover:text-primary",
+              "data-popup-open:pointer-events-auto data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:opacity-100 data-popup-open:hover:bg-bg-secondary data-popup-open:hover:text-primary",
             )}
             onClick={(event) => event.stopPropagation()}
           >
@@ -571,7 +571,7 @@ export function PaymentCell({
     <div
       className={cn(
         "group/cell relative flex h-12 w-full min-w-0 items-center gap-1 px-3 outline-none transition-colors focus:outline-none focus-visible:outline-none",
-        !readOnly && "hover:bg-bg-tertiary",
+        !readOnly && "hover:bg-bg-secondary",
         flashTrigger > 0 && "payment-cell-flash",
         className,
       )}
