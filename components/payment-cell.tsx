@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -373,9 +374,6 @@ function PaymentAmountPopover({
 
 type CellMenuView = "actions" | "substitute";
 
-const cellMenuItemClassName =
-  "flex w-full rounded-md px-3 py-1.5 text-left text-sm text-primary hover:bg-bg-secondary active:bg-bg-tertiary";
-
 function SubstituteCaptainPicker({
   selectedCaptain,
   onSelect,
@@ -458,7 +456,7 @@ function CellActionsMenu({
             type="button"
             aria-label="Cell actions"
             className={cn(
-              "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[opacity,background-color,color] duration-300 ease-out",
+              "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[opacity,background-color,color] duration-300 ease-out",
               "pointer-events-none group-hover/cell:pointer-events-auto group-hover/cell:bg-muted group-hover/cell:text-primary group-hover/cell:opacity-100",
               "data-popup-open:pointer-events-auto data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:opacity-100 data-popup-open:hover:bg-bg-secondary data-popup-open:hover:text-primary",
             )}
@@ -472,29 +470,20 @@ function CellActionsMenu({
         align="end"
         side="bottom"
         sideOffset={4}
-        className={cn(
-          "min-w-0",
-          menuView === "substitute" ? "w-[312px] rounded-lg p-3" : "w-auto rounded-xl px-1 py-1",
-        )}
+        className={cn(menuView === "substitute" && "w-[312px] rounded-lg p-3")}
       >
         {menuView === "actions" ? (
           <>
-            <button
-              type="button"
-              className={cellMenuItemClassName}
-              onMouseDown={(event) => event.preventDefault()}
+            <DropdownMenuItem
+              // Keep menu open so we can swap into the substitute picker view.
+              closeOnClick={false}
               onClick={openSubstituteView}
             >
               Assign substitute captain
-            </button>
-            <button
-              type="button"
-              className={cellMenuItemClassName}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={handleCommentAction}
-            >
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleCommentAction}>
               {hasComment ? "Edit comment" : "Add comment"}
-            </button>
+            </DropdownMenuItem>
           </>
         ) : (
           <SubstituteCaptainPicker

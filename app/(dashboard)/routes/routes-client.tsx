@@ -9,7 +9,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { AddressField } from "@/components/address-field";
 import { BundlePapersTable } from "@/components/bundle-papers-table";
 import { SidePanelField } from "@/components/side-panel-field";
-import { SidePanelRow } from "@/components/side-panel-row";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -546,7 +545,7 @@ export function RoutesClient() {
             ) : (
               <>
                 <div className="page-header-container">
-                  <span className="text-md font-semibold text-primary">Deliveries</span>
+                  <span className="text-md font-semibold text-primary">Routes</span>
                 </div>
                 {filterPlacement === "sidepanel" && (
                   <DeliveriesFilterSection
@@ -563,7 +562,7 @@ export function RoutesClient() {
                     captainOptions={captainOptions}
                   />
                 )}
-                <div className="flex-1 overflow-y-auto px-4 py-4">
+                <div className="flex-1 overflow-y-auto px-2 py-2">
                   <RouteList
                     routes={listRoutes}
                     loading={routes.isLoading}
@@ -603,38 +602,51 @@ function RouteList(props: {
   if (props.routes.length === 0) return <p className="text-md text-secondary">No routes match.</p>;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       {props.routes.map((r) => {
         const isVacant = r.lifecycle === "vacant";
-        const volunteerName = r.assignedVolunteer
-          ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
-          : "vacant";
+        const captainName = r.captain?.name ?? "No captain";
         const state = routeState(r);
 
         return (
-          // TODO: Harmonize SidePanelRow height with members (h-8 vs h-10 here).
-          <SidePanelRow
+          <div
             key={r.id}
-            className="h-10 px-2 py-2"
-            meta={
-              <div className="flex shrink-0 items-center gap-2">
-                {state && <RouteStateTag state={state} />}
-                <span className="text-md text-secondary">{volunteerName}</span>
-                <RouteActionsMenu
-                  routeId={r.id}
-                  hasVolunteer={Boolean(r.assignedVolunteer)}
-                  onOpenDetails={() => props.onSelect(r.id)}
-                  onChanged={props.onRoutesChanged}
-                  onRetired={() => {
-                    if (props.selectedId === r.id) props.onClearSelection();
-                  }}
-                />
-              </div>
-            }
+            role="button"
+            tabIndex={0}
             onClick={() => props.onSelect(r.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                props.onSelect(r.id);
+              }
+            }}
+            className={cn(
+              "group/row flex w-full cursor-pointer items-start gap-2 rounded-md px-2 py-2 text-left outline-none",
+              "transition-colors hover:bg-bg-secondary focus-visible:ring-3 focus-visible:ring-ring/50",
+            )}
           >
-            <RouteTag label={routeLabel(r)} vacant={isVacant} />
-          </SidePanelRow>
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <div className="flex min-w-0 items-center">
+                <RouteTag label={routeLabel(r)} vacant={isVacant} />
+              </div>
+              <span className="truncate pl-2 text-md font-normal text-secondary">
+                {captainName}
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2 self-start">
+              {state && <RouteStateTag state={state} />}
+              <RouteActionsMenu
+                routeId={r.id}
+                hasVolunteer={Boolean(r.assignedVolunteer)}
+                revealOnRowHover
+                onOpenDetails={() => props.onSelect(r.id)}
+                onChanged={props.onRoutesChanged}
+                onRetired={() => {
+                  if (props.selectedId === r.id) props.onClearSelection();
+                }}
+              />
+            </div>
+          </div>
         );
       })}
     </div>
@@ -686,6 +698,8 @@ function RouteActionsMenu(props: {
   onRetired: () => void;
   /** Hide when already viewing route detail (header menu). */
   showRouteDetails?: boolean;
+  /** Show the trigger only while the parent `.group/row` is hovered / focused. */
+  revealOnRowHover?: boolean;
 }) {
   const qc = useQueryClient();
   const showRouteDetails = props.showRouteDetails ?? true;
@@ -717,14 +731,18 @@ function RouteActionsMenu(props: {
         aria-label="Route actions"
         render={
           <Button
-            variant="text"
-            size="icon-sm"
-            className="shrink-0 text-secondary"
+            variant="default"
+            size="icon"
+            className={cn(
+              "shrink-0 bg-transparent text-secondary hover:bg-bg-quaternary data-popup-open:bg-bg-quaternary",
+              props.revealOnRowHover &&
+                "opacity-0 transition-[opacity,background-color,transform,color] group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100",
+            )}
             onClick={stopRowClick}
           />
         }
       >
-        <MoreHorizontal className="size-4" />
+        <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {showRouteDetails ? (
@@ -824,7 +842,7 @@ function DetailBreadcrumb(props: { title: string; onBack: () => void; actions?: 
           className="shrink-0 cursor-pointer text-secondary hover:text-primary"
           onClick={props.onBack}
         >
-          Deliveries
+          Routes
         </button>
         <span className="text-secondary">&gt;</span>
         <span className="truncate text-primary">{props.title}</span>

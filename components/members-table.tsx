@@ -132,7 +132,7 @@ function RowActions({
         render={
           <Button
             variant="text"
-            size="icon-sm"
+            size="icon"
             className="text-secondary"
             onClick={(e) => e.stopPropagation()}
           />

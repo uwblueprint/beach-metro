@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -248,7 +249,6 @@ export default function FinancesPage() {
   const [draftFilters, setDraftFilters] =
     React.useState<FinancesFilterState>(DEFAULT_FINANCES_FILTERS);
   const [filtersOpen, setFiltersOpen] = React.useState(false);
-  const [overflowOpen, setOverflowOpen] = React.useState(false);
   const [createTableOpen, setCreateTableOpen] = React.useState(false);
   const [newTableName, setNewTableName] = React.useState("");
   const [showArchiveBanner, setShowArchiveBanner] = React.useState(false);
@@ -361,12 +361,10 @@ export default function FinancesPage() {
 
   function handleArchiveTable() {
     if (!activeYearId || isArchivedYear) return;
-    setOverflowOpen(false);
     archiveYear.mutate(activeYearId, { onSuccess: () => setShowArchiveBanner(true) });
   }
 
   function openCreateTableDialog() {
-    setOverflowOpen(false);
     setNewTableName("");
     setCreateTableOpen(true);
   }
@@ -679,43 +677,31 @@ export default function FinancesPage() {
                 <Button variant="default" size="sm" onClick={handleExportCsv}>
                   Export as CSV
                 </Button>
-                <Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
-                  <PopoverTrigger
+                <DropdownMenu>
+                  <DropdownMenuTrigger
                     render={
                       <Button
                         type="button"
                         variant="text"
-                        size="icon-sm"
+                        size="icon"
                         aria-label="More actions"
+                        className="text-secondary"
                       />
                     }
                   >
-                    <MoreHorizontal className="size-4 text-muted-foreground" />
-                  </PopoverTrigger>
-                  <PopoverContent
-                    align="end"
-                    side="bottom"
-                    sideOffset={4}
-                    className="w-auto min-w-0 gap-0 rounded-lg p-1"
-                  >
+                    <MoreHorizontal className="size-4" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
                     {!isArchivedYear && (
-                      <button
-                        type="button"
-                        onClick={handleArchiveTable}
-                        className="flex w-full rounded-md px-3 py-1.5 text-left text-sm text-primary hover:bg-bg-secondary active:bg-bg-tertiary"
-                      >
+                      <DropdownMenuItem onClick={handleArchiveTable}>
                         Archive table
-                      </button>
+                      </DropdownMenuItem>
                     )}
-                    <button
-                      type="button"
-                      onClick={openCreateTableDialog}
-                      className="flex w-full rounded-md px-3 py-1.5 text-left text-sm text-primary hover:bg-bg-secondary active:bg-bg-tertiary"
-                    >
+                    <DropdownMenuItem onClick={openCreateTableDialog}>
                       Create new table
-                    </button>
-                  </PopoverContent>
-                </Popover>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </>
             }
           />

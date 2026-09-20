@@ -7,11 +7,13 @@ import { ChevronRightIcon } from "lucide-react";
 import { CheckboxIcon } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
-/** Shared item surface — aligned with ListItem (4px radius, 8px padding).
- * Rest on primary: hover +1 (secondary), selected/open +2 (tertiary). */
+/** Compact action-menu surface (⋯ menus, selects, simple lists).
+ * Panel: rounded-[8px], p-1, min-w-32, smooth-shadow-ring-md.
+ * Item: p-2, rounded-[4px], text-md — aligned with ListItem.
+ * Prefer this over Popover for short action lists; use Popover for form/filter panels. */
 const dropdownItemStyles = [
   "group/dropdown-menu-item relative flex w-full cursor-pointer items-center gap-2 rounded-[4px] p-2",
-  "text-sm font-normal text-primary whitespace-nowrap transition-colors",
+  "text-md font-normal text-primary whitespace-nowrap transition-colors",
   "outline-none select-none",
   "hover:bg-bg-secondary",
   "data-highlighted:bg-bg-secondary data-highlighted:text-primary",

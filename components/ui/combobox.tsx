@@ -176,7 +176,7 @@ function Combobox({
                 tabIndex={-1}
                 disabled={option.disabled}
                 className={cn(
-                  "flex w-full cursor-pointer items-center gap-2 rounded-[4px] p-2 text-left text-sm text-primary outline-none transition-colors",
+                  "flex w-full cursor-pointer items-center gap-2 rounded-[4px] p-2 text-left text-md text-primary outline-none transition-colors",
                   "hover:bg-bg-secondary",
                   selected && "bg-bg-tertiary hover:bg-bg-tertiary",
                   option.disabled && "pointer-events-none text-disabled",

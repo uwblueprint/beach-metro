@@ -1,7 +1,11 @@
 import { cn } from "@/lib/utils";
 
-/** Shared chip shape so the label and state chips sit on the same baseline. */
-const chipClass = "inline-flex max-w-full items-center truncate rounded-lg px-2 py-1 text-md";
+/**
+ * Shared chip shell. Padding lives on the outer; truncate on the inner label so
+ * a max-width clamp keeps px-2 on both sides and ellipsizes the text (…).
+ */
+const chipClass =
+  "inline-flex max-w-full min-w-0 items-center overflow-hidden rounded-lg px-2 py-1 text-md";
 
 /** Route label chip — shared by deliveries list and map hover preview. */
 export function RouteTag({
@@ -21,7 +25,7 @@ export function RouteTag({
         className,
       )}
     >
-      {label}
+      <span className="min-w-0 truncate">{label}</span>
     </span>
   );
 }
@@ -55,7 +59,7 @@ export function RouteStateTag({
         className,
       )}
     >
-      {attention ? "Needs attention" : "Suspended"}
+      <span className="min-w-0 truncate">{attention ? "Needs attention" : "Suspended"}</span>
     </span>
   );
 }

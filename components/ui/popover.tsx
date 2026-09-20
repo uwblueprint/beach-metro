@@ -13,6 +13,11 @@ function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />;
 }
 
+/**
+ * Floating panel (filters, date pickers, detail cards) — not for compact ⋯ action lists.
+ * Default: w-72, rounded-lg, p-2.5, text-sm, smooth-shadow-ring-md.
+ * Prefer DropdownMenu for short action menus (recipe A in dropdown-menu.tsx).
+ */
 function PopoverContent({
   className,
   align = "center",
