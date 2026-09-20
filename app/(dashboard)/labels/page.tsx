@@ -501,7 +501,7 @@ export default function LabelsPage() {
 
         {selectedCount > 0 ? (
           <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
-            <div className="pointer-events-auto flex items-center gap-4 rounded-xl bg-bg px-5 py-2.5 shadow-[0_2px_3px_rgba(0,0,0,0.1)]">
+            <div className="pointer-events-auto flex items-center gap-4 rounded-xl bg-bg px-5 py-2.5 smooth-shadow-ring-sm">
               <p className="text-md text-primary">{selectedCount} selected</p>
               <Button
                 type="button"

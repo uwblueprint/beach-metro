@@ -102,7 +102,7 @@ export function AddressField(props: {
         }}
       />
       {open && visible.length > 0 ? (
-        <ul className="bg-bg absolute top-full z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border shadow-md">
+        <ul className="bg-bg absolute top-full z-20 mt-1 max-h-56 w-full overflow-auto rounded-md smooth-shadow-ring-md">
           {visible.map((s, i) => (
             <li key={s.placeId}>
               <button

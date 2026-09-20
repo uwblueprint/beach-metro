@@ -218,7 +218,7 @@ function DatePicker({
           align: "shift",
           fallbackAxisSide: "end",
         }}
-        className="w-auto min-w-[280px] gap-0 rounded-xl border border-border bg-bg p-3 shadow-sm ring-0"
+        className="w-auto min-w-[280px] gap-0 rounded-xl bg-bg p-3 smooth-shadow-ring-sm!"
       >
         <DatePickerCalendar
           selected={value}

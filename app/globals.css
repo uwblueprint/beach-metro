@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "shadow-plugin";
 
 @theme inline {
   --color-bg: var(--bg);
@@ -78,14 +79,6 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
-
-  /* Elevation — utilities: shadow-xs / shadow-sm / shadow-md / shadow-ring-* */
-  --shadow-xs: var(--shadow-xs);
-  --shadow-sm: var(--shadow-sm);
-  --shadow-md: var(--shadow-md);
-  --shadow-ring-xs: var(--shadow-ring-xs);
-  --shadow-ring-sm: var(--shadow-ring-sm);
-  --shadow-ring-md: var(--shadow-ring-md);
 
   /* Body type scale (Figma: size px / line-height %, 16px root → rem) */
   --text-xs: 0.625rem;
@@ -172,28 +165,6 @@
   --tag-active-hover: oklch(0.964 0.06 220.6);
   --tag-warning: oklch(0.988 0.018 92.7);
   --tag-destructive: oklch(0.974 0.014 50.8);
-
-  /*
-   * Elevation (box-shadow stacks).
-   * xs — panels, lists/chart cards, pills
-   * sm — popovers
-   * md — mid elevation
-   * *-ring — same stack + 1px hairline
-   */
-  --shadow-xs:
-    0 2px 4px 0 rgba(0, 0, 0, 0.04), 0 1px 1px 0 rgba(0, 0, 0, 0.02), 0 0 4px 0 rgba(0, 0, 0, 0.04);
-  --shadow-sm:
-    0 18px 47px 0 rgba(0, 0, 0, 0.03), 0 7.5px 19px 0 rgba(0, 0, 0, 0.02),
-    0 4px 10.5px 0 rgba(0, 0, 0, 0.02), 0 2.5px 6px 0 rgba(0, 0, 0, 0.01),
-    0 1.2px 3px 0 rgba(0, 0, 0, 0.01), 0 0.5px 1px 0 rgba(0, 0, 0, 0.01);
-  --shadow-md:
-    0 18px 23px 0 rgba(0, 0, 0, 0.04), 0 9px 12px 0 rgba(0, 0, 0, 0.03),
-    0 5px 7px 0 rgba(0, 0, 0, 0.02), 0 3px 4px 0 rgba(0, 0, 0, 0.01),
-    0 1px 2px 0 rgba(0, 0, 0, 0.01);
-  --shadow-hairline: rgba(0, 0, 0, 0.05);
-  --shadow-ring-xs: var(--shadow-xs), 0 0 0 1px var(--shadow-hairline);
-  --shadow-ring-sm: var(--shadow-sm), 0 0 0 1px var(--shadow-hairline);
-  --shadow-ring-md: var(--shadow-md), 0 0 0 1px var(--shadow-hairline);
 
   /* Inner highlight stroke — buttons, pills */
   --stroke-inner: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
@@ -349,7 +320,7 @@
 
   /* White content panel that fills the container */
   .page {
-    @apply bg-bg min-h-0 flex-1 overflow-y-auto rounded-[16px] shadow-ring-md;
+    @apply bg-bg min-h-0 flex-1 overflow-y-auto rounded-[16px] smooth-shadow-ring-md;
   }
 
   .page-header-container {

@@ -47,6 +47,9 @@ importers:
       shadcn:
         specifier: ^4.11.0
         version: 4.16.0(typescript@5.9.3)
+      shadow-plugin:
+        specifier: ^2.1.1
+        version: 2.1.1
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
@@ -3191,6 +3194,9 @@ packages:
     resolution: {integrity: sha512-kPr4RrQmbbZeAjwBYeBSpFvAHV8rkTlNPUluIxkRriq5TpevfFelVO5xvcF6oguHPVn0R6wPuVer4HudfcLy/A==}
     engines: {node: '>=20.18.1'}
     hasBin: true
+
+  shadow-plugin@2.1.1:
+    resolution: {integrity: sha512-V4MwWPNzna/Zq6lIjT7vWAHf5uSCVDPkFG5m1cXs9WTtLGeLA3/NAtjJxxY3lYwBiA9O8+g/yLfC+c+P4qk4yw==}
 
   sharp@0.34.5:
     resolution: {integrity: sha512-Ou9I5Ft9WNcCbXrU9cMgPBcCK8LiwLqcbywW3t4oDV37n1pzpuNLsYiAV8eODnjbtQlSDwZ2cUEeQz4E54Hltg==}
@@ -6932,6 +6938,8 @@ snapshots:
       - babel-plugin-macros
       - supports-color
       - typescript
+
+  shadow-plugin@2.1.1: {}
 
   sharp@0.34.5:
     dependencies:

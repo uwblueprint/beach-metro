@@ -154,7 +154,7 @@ function Combobox({
         className={cn(
           // Above dialog overlay/content (z-50); ~200px content cap.
           "z-[60] max-h-[200px] overflow-y-auto rounded-[8px] bg-bg p-1",
-          "shadow-[0px_4px_8px_rgba(0,0,0,0.25)] outline-none",
+          "smooth-shadow-ring-md outline-none",
         )}
       >
         {options.length === 0 && !footer ? (

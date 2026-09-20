@@ -306,7 +306,7 @@ function PaymentAmountPopover({
           align: "shift",
           fallbackAxisSide: "end",
         }}
-        className="box-border w-max min-w-[200px] max-w-[400px] gap-3 overflow-visible rounded-lg border-[0.5px] border-border bg-bg p-3 text-md shadow-[0px_1px_2.5px_rgba(0,0,0,0.1)]"
+        className="box-border w-max min-w-[200px] max-w-[400px] gap-3 overflow-visible rounded-lg bg-bg p-3 text-md smooth-shadow-ring-sm!"
         onMouseEnter={handleHoverEnter}
         onMouseLeave={handleHoverLeave}
       >
@@ -473,7 +473,7 @@ function CellActionsMenu({
         side="bottom"
         sideOffset={4}
         className={cn(
-          "min-w-0 shadow-md ring-1 ring-foreground/10",
+          "min-w-0",
           menuView === "substitute" ? "w-[312px] rounded-lg p-3" : "w-auto rounded-xl px-1 py-1",
         )}
       >

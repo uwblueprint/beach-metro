@@ -18,8 +18,8 @@ folder.
   counts, etc.):
   - `beach-metro-design-logic` — house UI expectations (motion first; more later)
 - **Other bundled skills**
-  - `smooth-shadow-ring` — elevated surfaces via `smooth-shadow-ring-*` (requires
-    shadow-plugin); never pair `border`/`ring` with `shadow`
+  - `smooth-shadow-ring` — elevated surfaces via `smooth-shadow-ring-*`; never
+    pair `border`/`ring` with `shadow` (uses `shadow-plugin`)
 
 ## Reusing across projects
 - **Today:** `cp -r .claude/skills/blueprint-* <new-repo>/.claude/skills/`

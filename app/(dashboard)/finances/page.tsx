@@ -686,7 +686,7 @@ export default function FinancesPage() {
                     align="end"
                     side="bottom"
                     sideOffset={4}
-                    className="w-auto min-w-0 gap-0 rounded-lg p-1 shadow-md ring-1 ring-foreground/10"
+                    className="w-auto min-w-0 gap-0 rounded-lg p-1"
                   >
                     {!isArchivedYear && (
                       <button
@@ -748,7 +748,7 @@ export default function FinancesPage() {
                   align="end"
                   side="bottom"
                   sideOffset={4}
-                  className="w-[280px] gap-2.5 rounded-lg bg-bg p-3 text-md text-primary shadow-md ring-1 ring-foreground/10"
+                  className="w-[280px] gap-2.5 rounded-lg bg-bg p-3 text-md text-primary"
                 >
                   <div className="flex flex-col gap-2">
                     <p className="text-sm font-medium text-primary">Filters</p>
