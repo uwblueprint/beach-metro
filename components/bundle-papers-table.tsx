@@ -5,8 +5,13 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { inputFieldClassName } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+
+/** Ghost papers field: hairline outline, no fill/pad so value stays flush with the Papers header. */
+const papersFieldClassName = cn(
+  "flex h-8 w-full items-center rounded-[4px] bg-transparent px-0 py-1 text-md tabular-nums",
+  "outline outline-1 -outline-offset-1 outline-border",
+);
 
 interface BundlePapersTableProps {
   /** Papers per bundle row. Use `0` for an empty/draft cell. */
@@ -135,7 +140,10 @@ function BundlePapersTable({
       </div>
 
       {value.map((papers, index) => (
-        <div key={index} className="group/bundle flex h-10 items-center px-2 py-1">
+        <div
+          key={index}
+          className="group/bundle flex h-10 items-center rounded-md px-2 py-1 transition-colors hover:bg-bg-secondary"
+        >
           <div className="flex w-fit shrink-0 items-center pr-2">
             <Checkbox
               checked={flags[index] === true}
@@ -166,15 +174,17 @@ function BundlePapersTable({
                     setEditingIndex(null);
                   }
                 }}
-                className={cn(inputFieldClassName, "h-8 rounded-[4px] px-0 py-1")}
+                className={cn(papersFieldClassName, "text-primary outline-active")}
               />
             ) : (
               <button
                 type="button"
-                className="flex h-8 w-full cursor-text items-center rounded-[4px] px-0 text-left text-md tabular-nums text-secondary outline-none focus-visible:ring-2 focus-visible:ring-active/40"
-                onDoubleClick={() => startEdit(index)}
-                // Keyboard parity with the double-click: the cell is focusable,
-                // so it has to be openable without a pointer.
+                className={cn(
+                  papersFieldClassName,
+                  "cursor-text text-left text-secondary outline-none",
+                  "focus-visible:outline-active focus-visible:ring-2 focus-visible:ring-active/40",
+                )}
+                onClick={() => startEdit(index)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
