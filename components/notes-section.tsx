@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { NoteEditor } from "@/components/note-editor";
+import { SidePanelCollapsibleList, SidePanelHeightReveal } from "@/components/side-panel-collapse";
 import { SidePanelRow } from "@/components/side-panel-row";
 import { SidePanelSection } from "@/components/side-panel-section";
 import {
@@ -77,7 +78,7 @@ function NotesSection({ role, memberId }: NotesSectionProps) {
 
   return (
     <SidePanelSection title="Notes" onAdd={() => setEditingId(NEW_NOTE_ID)}>
-      {isAdding && (
+      <SidePanelHeightReveal open={isAdding}>
         <NoteEditor
           onSave={(text) => {
             createNote.mutate(text);
@@ -86,41 +87,44 @@ function NotesSection({ role, memberId }: NotesSectionProps) {
           onDelete={stopEditing}
           onCancel={stopEditing}
         />
-      )}
+      </SidePanelHeightReveal>
       {isError ? (
-        <SidePanelRow className="text-secondary">Could not load notes</SidePanelRow>
+        <SidePanelRow className="text-tertiary">Could not load notes</SidePanelRow>
       ) : isPending ? (
-        <SidePanelRow className="text-secondary">Loading notes…</SidePanelRow>
+        <SidePanelRow className="text-tertiary">Loading notes…</SidePanelRow>
       ) : rows.length === 0 && !isAdding ? (
-        <SidePanelRow className="text-secondary">No notes</SidePanelRow>
-      ) : (
-        rows.map((note) =>
-          editingId === note.id ? (
-            <NoteEditor
-              key={note.id}
-              initialText={note.text}
-              onSave={(text) => {
-                updateNote.mutate({ id: note.id, text });
-                stopEditing();
-              }}
-              onDelete={() => {
-                deleteNote.mutate(note.id);
-                stopEditing();
-              }}
-              onCancel={stopEditing}
-            />
-          ) : (
-            <SidePanelRow
-              key={note.id}
-              meta={formatTimestamp(note.createdAt)}
-              // An optimistic row has no server id yet, so editing it would 404.
-              onEdit={note.id.startsWith("optimistic-") ? undefined : () => setEditingId(note.id)}
-            >
-              <span className="text-primary">{note.text}</span>
-            </SidePanelRow>
-          ),
-        )
-      )}
+        <SidePanelRow className="text-tertiary">No notes</SidePanelRow>
+      ) : rows.length > 0 ? (
+        <SidePanelCollapsibleList
+          items={rows}
+          renderItem={(note) =>
+            editingId === note.id ? (
+              <NoteEditor
+                key={note.id}
+                initialText={note.text}
+                onSave={(text) => {
+                  updateNote.mutate({ id: note.id, text });
+                  stopEditing();
+                }}
+                onDelete={() => {
+                  deleteNote.mutate(note.id);
+                  stopEditing();
+                }}
+                onCancel={stopEditing}
+              />
+            ) : (
+              <SidePanelRow
+                key={note.id}
+                meta={formatTimestamp(note.createdAt)}
+                // An optimistic row has no server id yet, so editing it would 404.
+                onEdit={note.id.startsWith("optimistic-") ? undefined : () => setEditingId(note.id)}
+              >
+                <span className="text-secondary">{note.text}</span>
+              </SidePanelRow>
+            )
+          }
+        />
+      ) : null}
     </SidePanelSection>
   );
 }
