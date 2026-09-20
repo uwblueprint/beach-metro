@@ -707,7 +707,8 @@ function MapControls(props: {
                   options={[...DELIVERY_TYPE_OPTIONS]}
                   value={props.deliveryType}
                   onChange={(value) => {
-                    if (value != null) props.onDeliveryTypeChange(value as LegacyDeliveryTypeFilter);
+                    if (value != null)
+                      props.onDeliveryTypeChange(value as LegacyDeliveryTypeFilter);
                   }}
                 />
               </div>
