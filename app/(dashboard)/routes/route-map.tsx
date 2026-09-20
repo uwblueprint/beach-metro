@@ -46,8 +46,14 @@ export interface MapHome {
   home: { latitude: number; longitude: number } | null;
 }
 
-export type VacancyFilter = "all" | "vacant" | "assigned";
-export type DeliveryTypeFilter = "all" | "routes" | "drops";
+export type VacancyFilter = "vacant" | "assigned";
+export type DeliveryTypeFilter = "routes" | "drops";
+/** Includes "all" for map / legacy exclusive pill UIs. */
+export type LegacyVacancyFilter = "all" | VacancyFilter;
+export type LegacyDeliveryTypeFilter = "all" | DeliveryTypeFilter;
+export type CaptainFilterOption = { value: string; label: string };
+/** pills = new sidebar default; legacy = prior sidebar; map = overlay on map. */
+export type FilterPlacement = "pills" | "legacy" | "map";
 
 // Basemap + overlays use hex snapshots of app tokens (Maps JS can't read CSS vars).
 // Source: app/globals.css :root — re-convert if tokens change.
@@ -408,17 +414,13 @@ const DELIVERY_TYPE_OPTIONS = [
   { value: "drops", label: "Drops" },
 ] as const;
 
-function deliveryTypeLabel(value: DeliveryTypeFilter): string {
+function deliveryTypeLabel(value: LegacyDeliveryTypeFilter): string {
   return DELIVERY_TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value;
 }
 
-function vacancyLabel(value: VacancyFilter): string {
+function vacancyLabel(value: LegacyVacancyFilter): string {
   return ASSIGNED_OPTIONS.find((o) => o.value === value)?.label ?? value;
 }
-
-export type CaptainFilterOption = { value: string; label: string };
-
-export type FilterPlacement = "map" | "sidepanel";
 
 /** Custom map controls overlay: filter, search, zoom ±, recenter, fullscreen. */
 function MapControls(props: {
@@ -426,10 +428,10 @@ function MapControls(props: {
   onSearchChange: (value: string) => void;
   filterOpen: boolean;
   onFilterToggle: () => void;
-  vacancy: VacancyFilter;
-  onVacancyChange: (value: VacancyFilter) => void;
-  deliveryType: DeliveryTypeFilter;
-  onDeliveryTypeChange: (value: DeliveryTypeFilter) => void;
+  vacancy: LegacyVacancyFilter;
+  onVacancyChange: (value: LegacyVacancyFilter) => void;
+  deliveryType: LegacyDeliveryTypeFilter;
+  onDeliveryTypeChange: (value: LegacyDeliveryTypeFilter) => void;
   defaultBoundsRef: React.RefObject<google.maps.LatLngBounds | null>;
   captainId: string;
   onCaptainChange: (value: string) => void;
@@ -705,7 +707,7 @@ function MapControls(props: {
                   options={[...DELIVERY_TYPE_OPTIONS]}
                   value={props.deliveryType}
                   onChange={(value) => {
-                    if (value != null) props.onDeliveryTypeChange(value as DeliveryTypeFilter);
+                    if (value != null) props.onDeliveryTypeChange(value as LegacyDeliveryTypeFilter);
                   }}
                 />
               </div>
@@ -716,7 +718,7 @@ function MapControls(props: {
                   options={[...ASSIGNED_OPTIONS]}
                   value={props.vacancy}
                   onChange={(value) => {
-                    if (value != null) props.onVacancyChange(value as VacancyFilter);
+                    if (value != null) props.onVacancyChange(value as LegacyVacancyFilter);
                   }}
                 />
               </div>
@@ -854,10 +856,10 @@ export function RouteMap(props: {
   onSearchChange: (value: string) => void;
   filterOpen: boolean;
   onFilterToggle: () => void;
-  vacancy: VacancyFilter;
-  onVacancyChange: (value: VacancyFilter) => void;
-  deliveryType: DeliveryTypeFilter;
-  onDeliveryTypeChange: (value: DeliveryTypeFilter) => void;
+  vacancy: LegacyVacancyFilter;
+  onVacancyChange: (value: LegacyVacancyFilter) => void;
+  deliveryType: LegacyDeliveryTypeFilter;
+  onDeliveryTypeChange: (value: LegacyDeliveryTypeFilter) => void;
   captainId: string;
   onCaptainChange: (value: string) => void;
   captainOptions: CaptainFilterOption[];
