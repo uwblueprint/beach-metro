@@ -21,6 +21,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PageBreadcrumb } from "@/components/ui/page-breadcrumb";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useOverview, useYears, type Overview } from "@/features/finances/api";
 import { cn } from "@/lib/utils";
@@ -243,29 +244,26 @@ export default function OverviewPage() {
   return (
     <div className="page-container">
       <div className="page">
-        <div className="flex flex-col gap-4 p-6">
-          {/* Page header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              {/* The breadcrumb's first segment is the page's only title, so it
-                  carries the h1. Same classes, so it renders identically. */}
-              <h1 className="text-md text-muted-foreground">Overview</h1>
-              <span className="text-md text-muted-foreground">/</span>
+        <div className="flex h-full min-h-0 flex-col">
+          <PageBreadcrumb
+            className="pr-[18px]"
+            root="Overview"
+            current={
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={
-                    <button
+                    <Button
                       type="button"
+                      variant="text"
+                      size="sm"
                       aria-label="Switch year"
-                      className="inline-flex items-center gap-1"
-                    >
-                      <span className="text-md font-medium text-primary">
-                        {selectedYearOption?.name ?? "…"}
-                      </span>
-                      <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
-                    </button>
+                      className="-ml-1 gap-1 px-1.5 font-medium"
+                    />
                   }
-                />
+                >
+                  <span className="text-md">{selectedYearOption?.name ?? "…"}</span>
+                  <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
+                </DropdownMenuTrigger>
                 <DropdownMenuContent
                   align="start"
                   side="bottom"
@@ -295,250 +293,261 @@ export default function OverviewPage() {
                   </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-          </div>
+            }
+          />
 
-          {showArchiveBanner && selectedYearOption?.archived && (
-            <ArchiveBanner
-              dateRange={yearDateRange(selectedYearOption.startDate)}
-              onDismiss={() => setShowArchiveBanner(false)}
-            />
-          )}
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6">
+            {showArchiveBanner && selectedYearOption?.archived && (
+              <ArchiveBanner
+                dateRange={yearDateRange(selectedYearOption.startDate)}
+                onDismiss={() => setShowArchiveBanner(false)}
+              />
+            )}
 
-          {isError ? (
-            <p className="p-2 text-md text-secondary">
-              {error instanceof Error ? error.message : "Could not load the overview."}
-            </p>
-          ) : isPending || !overview ? (
-            <p className="p-2 text-md text-secondary">Loading overview…</p>
-          ) : (
-            <>
-              {/* Stats row */}
-              <div className="grid grid-cols-4 gap-3">
-                <StatCard
-                  label="Papers for next issue"
-                  value={formatCount(overview.stats.nextIssue?.papers ?? 0)}
-                  sub={
-                    overview.stats.nextIssue
-                      ? `${overview.stats.nextIssue.name} • ${formatIssueDate(overview.stats.nextIssue.date)}`
-                      : "No issue scheduled"
-                  }
-                />
-                <StatCard
-                  label="Active volunteers"
-                  value={String(overview.stats.activeVolunteers)}
-                  sub={`of ${overview.stats.totalVolunteers} total`}
-                />
-                <StatCard
-                  label="Routes missing a carrier"
-                  value={String(overview.stats.routesMissingCarrier)}
-                  sub={
-                    <Link
-                      href="/routes"
-                      className="inline-flex items-center gap-0.5 text-muted-foreground hover:text-primary"
-                    >
-                      View routes
-                      <ArrowUpRight className="size-3.5" strokeWidth={2} />
-                    </Link>
-                  }
-                />
-                <StatCard
-                  label="YTD captain costs"
-                  value={formatCurrency(overview.stats.captainCosts).replace(".00", "")}
-                  sub={`${overview.stats.issueCount} ${overview.stats.issueCount === 1 ? "issue" : "issues"}`}
-                />
-              </div>
-
-              {/* YTD Running Cost chart */}
-              <div className="rounded-lg border border-border bg-bg px-6 py-5">
-                <div className="mb-6 flex items-center justify-between gap-4">
-                  <h2 className="text-md font-semibold text-primary">YTD Running Cost</h2>
-                  <p className="text-md text-muted-foreground transition-opacity duration-300">
-                    {hoveredChartIndex !== null ? (
-                      <>
-                        {monthYearLabel(overview.monthlyCosts[hoveredChartIndex].month)}{" "}
-                        <span className="font-semibold text-primary">
-                          {formatCurrency(overview.monthlyCosts[hoveredChartIndex].amount)}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        {overview.year.name} total{" "}
-                        <span className="font-semibold text-primary">
-                          {formatCurrency(overview.monthlyCosts.reduce((s, m) => s + m.amount, 0))}
-                        </span>
-                      </>
-                    )}
-                  </p>
+            {isError ? (
+              <p className="p-2 text-md text-secondary">
+                {error instanceof Error ? error.message : "Could not load the overview."}
+              </p>
+            ) : isPending || !overview ? (
+              <p className="p-2 text-md text-secondary">Loading overview…</p>
+            ) : (
+              <>
+                {/* Stats row */}
+                <div className="grid grid-cols-4 gap-3">
+                  <StatCard
+                    label="Papers for next issue"
+                    value={formatCount(overview.stats.nextIssue?.papers ?? 0)}
+                    sub={
+                      overview.stats.nextIssue
+                        ? `${overview.stats.nextIssue.name} • ${formatIssueDate(overview.stats.nextIssue.date)}`
+                        : "No issue scheduled"
+                    }
+                  />
+                  <StatCard
+                    label="Active volunteers"
+                    value={String(overview.stats.activeVolunteers)}
+                    sub={`of ${overview.stats.totalVolunteers} total`}
+                  />
+                  <StatCard
+                    label="Routes missing a carrier"
+                    value={String(overview.stats.routesMissingCarrier)}
+                    sub={
+                      <Link
+                        href="/routes"
+                        className="inline-flex items-center gap-0.5 text-muted-foreground hover:text-primary"
+                      >
+                        View routes
+                        <ArrowUpRight className="size-3.5" strokeWidth={2} />
+                      </Link>
+                    }
+                  />
+                  <StatCard
+                    label="YTD captain costs"
+                    value={formatCurrency(overview.stats.captainCosts).replace(".00", "")}
+                    sub={`${overview.stats.issueCount} ${overview.stats.issueCount === 1 ? "issue" : "issues"}`}
+                  />
                 </div>
 
-                <YtdRunningCostChart
-                  months={overview.monthlyCosts}
-                  onHover={setHoveredChartIndex}
-                />
-              </div>
+                {/* YTD Running Cost chart */}
+                <div className="rounded-lg border border-border bg-bg px-6 py-5">
+                  <div className="mb-6 flex items-center justify-between gap-4">
+                    <h2 className="text-md font-semibold text-primary">YTD Running Cost</h2>
+                    <p className="text-md text-muted-foreground transition-opacity duration-300">
+                      {hoveredChartIndex !== null ? (
+                        <>
+                          {monthYearLabel(overview.monthlyCosts[hoveredChartIndex].month)}{" "}
+                          <span className="font-semibold text-primary">
+                            {formatCurrency(overview.monthlyCosts[hoveredChartIndex].amount)}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          {overview.year.name} total{" "}
+                          <span className="font-semibold text-primary">
+                            {formatCurrency(
+                              overview.monthlyCosts.reduce((s, m) => s + m.amount, 0),
+                            )}
+                          </span>
+                        </>
+                      )}
+                    </p>
+                  </div>
 
-              {/* Captain Payments */}
-              <div className="rounded-lg border border-border bg-bg px-6 py-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-md font-semibold text-primary">Captain Payments</h2>
-                    {captainOverview && (
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {formatIssueDate(captainOverview.range.from)} –{" "}
-                        {formatIssueDate(captainOverview.range.to)}
+                  <YtdRunningCostChart
+                    months={overview.monthlyCosts}
+                    onHover={setHoveredChartIndex}
+                  />
+                </div>
+
+                {/* Captain Payments */}
+                <div className="rounded-lg border border-border bg-bg px-6 py-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h2 className="text-md font-semibold text-primary">Captain Payments</h2>
+                      {captainOverview && (
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {formatIssueDate(captainOverview.range.from)} –{" "}
+                          {formatIssueDate(captainOverview.range.to)}
+                        </p>
+                      )}
+                    </div>
+
+                    <Popover open={periodOpen} onOpenChange={handlePeriodOpenChange}>
+                      <PopoverTrigger
+                        render={
+                          <button
+                            type="button"
+                            className={cn(
+                              buttonVariants({ variant: "outline", size: "sm" }),
+                              "gap-1.5 font-medium",
+                            )}
+                          >
+                            {periodLabel}
+                            <ChevronDown
+                              className="size-3.5 text-muted-foreground"
+                              strokeWidth={2}
+                            />
+                          </button>
+                        }
+                      />
+                      <PopoverContent
+                        align="end"
+                        side="bottom"
+                        sideOffset={4}
+                        className="w-[280px] gap-0 p-1"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCaptainMode("ytd");
+                            setPeriodOpen(false);
+                          }}
+                          className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-bg-secondary"
+                        >
+                          <span className={cn(captainMode === "ytd" && "font-medium")}>YTD</span>
+                          {captainMode === "ytd" && (
+                            <Check className="size-3.5 text-active" strokeWidth={2.5} />
+                          )}
+                        </button>
+
+                        <div className="my-1 h-px bg-hairline" />
+
+                        <div className="flex flex-col gap-2 px-1.5 pt-1 pb-1.5">
+                          <p className="text-xs font-medium text-muted-foreground">Custom range</p>
+                          <div className="flex items-center gap-2">
+                            <div className="min-w-0 flex-1">
+                              <DatePicker
+                                label="Start Date"
+                                value={draftStart}
+                                onChange={setDraftStart}
+                              />
+                            </div>
+                            <span aria-hidden className="shrink-0 text-sm text-muted-foreground">
+                              →
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <DatePicker
+                                label="End Date"
+                                value={draftEnd}
+                                onChange={setDraftEnd}
+                              />
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="primary"
+                            size="sm"
+                            disabled={!canApplyCustomRange}
+                            onClick={applyCustomRange}
+                          >
+                            Apply
+                          </Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <div className="mt-4">
+                    {(captainOverview?.captainPayments.length ?? 0) === 0 ? (
+                      <p className="py-3.5 text-md text-muted-foreground">
+                        No captain payments in this period.
                       </p>
+                    ) : (
+                      captainOverview!.captainPayments.map((captain) => (
+                        <PaymentRow
+                          key={captain.captainId}
+                          name={captain.captainName}
+                          meta={`${captain.payType} • ${captain.payCadence}`}
+                          amount={formatCurrency(captain.amount)}
+                        />
+                      ))
                     )}
                   </div>
 
-                  <Popover open={periodOpen} onOpenChange={handlePeriodOpenChange}>
-                    <PopoverTrigger
-                      render={
-                        <button
-                          type="button"
-                          className={cn(
-                            buttonVariants({ variant: "outline", size: "sm" }),
-                            "gap-1.5 font-medium",
-                          )}
+                  {(captainOverview?.substitutePayments.length ?? 0) > 0 && (
+                    <>
+                      <p className="mt-6 mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                        Substitute Payments
+                      </p>
+                      {captainOverview!.substitutePayments.map((sub) => (
+                        <PaymentRow
+                          key={sub.captainId}
+                          name={sub.captainName}
+                          // One person may cover several captains, so list them
+                          // all rather than silently dropping any past the first.
+                          meta={`Covered ${sub.coveredFor.map((c) => c.captainName).join(", ")} • ${sub.issueCount} ${sub.issueCount === 1 ? "issue" : "issues"}`}
+                          amount={formatCurrency(sub.amount)}
+                        />
+                      ))}
+                    </>
+                  )}
+                </div>
+
+                {/* Papers Per Issue */}
+                <div className="rounded-lg border border-border bg-bg px-6 py-5">
+                  <h2 className="text-md font-semibold text-primary">Papers Per Issue</h2>
+
+                  <div className="mt-4">
+                    {papersPerIssue.length === 0 ? (
+                      <p className="py-3.5 text-md text-muted-foreground">
+                        No issues in this period yet.
+                      </p>
+                    ) : (
+                      papersPerIssue.slice(0, PAPERS_PREVIEW_COUNT).map((issue) => (
+                        <div
+                          key={issue.issueId}
+                          className="flex items-center justify-between gap-4 py-3.5"
                         >
-                          {periodLabel}
-                          <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
-                        </button>
-                      }
-                    />
-                    <PopoverContent
-                      align="end"
-                      side="bottom"
-                      sideOffset={4}
-                      className="w-[280px] gap-0 p-1"
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-md font-semibold text-primary">
+                              {issue.name.split(",")[0]}
+                            </span>
+                            <span className="text-sm text-muted-foreground">
+                              {formatIssueDate(issue.date)}
+                            </span>
+                          </div>
+                          <span className="text-md font-medium tabular-nums text-primary">
+                            {formatCount(issue.papers)}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {papersPerIssue.length > PAPERS_PREVIEW_COUNT && (
+                    <button
+                      type="button"
+                      onClick={() => setPapersDialogOpen(true)}
+                      className="mt-3 inline-flex items-center gap-0.5 text-sm text-active hover:text-active-hover"
                     >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCaptainMode("ytd");
-                          setPeriodOpen(false);
-                        }}
-                        className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-muted"
-                      >
-                        <span className={cn(captainMode === "ytd" && "font-medium")}>YTD</span>
-                        {captainMode === "ytd" && (
-                          <Check className="size-3.5 text-active" strokeWidth={2.5} />
-                        )}
-                      </button>
-
-                      <div className="my-1 h-px bg-hairline" />
-
-                      <div className="flex flex-col gap-2 px-1.5 pt-1 pb-1.5">
-                        <p className="text-xs font-medium text-muted-foreground">Custom range</p>
-                        <div className="flex items-center gap-2">
-                          <div className="min-w-0 flex-1">
-                            <DatePicker
-                              label="Start Date"
-                              value={draftStart}
-                              onChange={setDraftStart}
-                            />
-                          </div>
-                          <span aria-hidden className="shrink-0 text-sm text-muted-foreground">
-                            →
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <DatePicker label="End Date" value={draftEnd} onChange={setDraftEnd} />
-                          </div>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="primary"
-                          size="sm"
-                          disabled={!canApplyCustomRange}
-                          onClick={applyCustomRange}
-                        >
-                          Apply
-                        </Button>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="mt-4">
-                  {(captainOverview?.captainPayments.length ?? 0) === 0 ? (
-                    <p className="py-3.5 text-md text-muted-foreground">
-                      No captain payments in this period.
-                    </p>
-                  ) : (
-                    captainOverview!.captainPayments.map((captain) => (
-                      <PaymentRow
-                        key={captain.captainId}
-                        name={captain.captainName}
-                        meta={`${captain.payType} • ${captain.payCadence}`}
-                        amount={formatCurrency(captain.amount)}
-                      />
-                    ))
+                      View all {papersPerIssue.length} issues
+                      <ArrowUpRight className="size-3.5" strokeWidth={2} />
+                    </button>
                   )}
                 </div>
-
-                {(captainOverview?.substitutePayments.length ?? 0) > 0 && (
-                  <>
-                    <p className="mt-6 mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                      Substitute Payments
-                    </p>
-                    {captainOverview!.substitutePayments.map((sub) => (
-                      <PaymentRow
-                        key={sub.captainId}
-                        name={sub.captainName}
-                        // One person may cover several captains, so list them
-                        // all rather than silently dropping any past the first.
-                        meta={`Covered ${sub.coveredFor.map((c) => c.captainName).join(", ")} • ${sub.issueCount} ${sub.issueCount === 1 ? "issue" : "issues"}`}
-                        amount={formatCurrency(sub.amount)}
-                      />
-                    ))}
-                  </>
-                )}
-              </div>
-
-              {/* Papers Per Issue */}
-              <div className="rounded-lg border border-border bg-bg px-6 py-5">
-                <h2 className="text-md font-semibold text-primary">Papers Per Issue</h2>
-
-                <div className="mt-4">
-                  {papersPerIssue.length === 0 ? (
-                    <p className="py-3.5 text-md text-muted-foreground">
-                      No issues in this period yet.
-                    </p>
-                  ) : (
-                    papersPerIssue.slice(0, PAPERS_PREVIEW_COUNT).map((issue) => (
-                      <div
-                        key={issue.issueId}
-                        className="flex items-center justify-between gap-4 py-3.5"
-                      >
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-md font-semibold text-primary">
-                            {issue.name.split(",")[0]}
-                          </span>
-                          <span className="text-sm text-muted-foreground">
-                            {formatIssueDate(issue.date)}
-                          </span>
-                        </div>
-                        <span className="text-md font-medium tabular-nums text-primary">
-                          {formatCount(issue.papers)}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {papersPerIssue.length > PAPERS_PREVIEW_COUNT && (
-                  <button
-                    type="button"
-                    onClick={() => setPapersDialogOpen(true)}
-                    className="mt-3 inline-flex items-center gap-0.5 text-sm text-active hover:text-active-hover"
-                  >
-                    View all {papersPerIssue.length} issues
-                    <ArrowUpRight className="size-3.5" strokeWidth={2} />
-                  </button>
-                )}
-              </div>
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 

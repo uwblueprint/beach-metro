@@ -46,47 +46,94 @@ export interface MapHome {
   home: { latitude: number; longitude: number } | null;
 }
 
-export type VacancyFilter = "all" | "vacant" | "assigned";
-export type DeliveryTypeFilter = "all" | "routes" | "drops";
+export type VacancyFilter = "vacant" | "assigned";
+export type DeliveryTypeFilter = "routes" | "drops";
+/** Includes "all" for map / legacy exclusive pill UIs. */
+export type LegacyVacancyFilter = "all" | VacancyFilter;
+export type LegacyDeliveryTypeFilter = "all" | DeliveryTypeFilter;
+export type CaptainFilterOption = { value: string; label: string };
+/** pills = new sidebar default; legacy = prior sidebar; map = overlay on map. */
+export type FilterPlacement = "pills" | "legacy" | "map";
 
-// Desaturated / monochrome base map: light-gray land, white roads, gray water,
-// no POI or transit clutter — so the colored route lines are the only signal.
+// Basemap + overlays use hex snapshots of app tokens (Maps JS can't read CSS vars).
+// Source: app/globals.css :root — re-convert if tokens change.
+const MAP_HEX = {
+  bg: "#ffffff", // --bg
+  bgSecondary: "#fdfbf9", // --bg-secondary
+  bgTertiary: "#faf8f5", // --bg-tertiary
+  bgQuaternary: "#f6f5f2", // --bg-quaternary
+  bgSenary: "#f0eeeb", // --bg-senary
+  border: "#e6e6e6", // --border
+  hairline: "#f2f2f2", // --hairline
+  secondary: "#6b6b6b", // --secondary (text)
+  disabled: "#cccccc", // --disabled
+  // Road hierarchy — prominent but not harsh on warm land
+  roadLocal: "#c9c9c9",
+  roadArterial: "#c9c9c9",
+  roadHighway: "#c9c9c9",
+  roadStroke: "##c9c9c9",
+  tagSuccess: "#f1ffee", // --tag-success (parks)
+  water: "#e3edf2", // cool wash toward --active hue
+  waterLabel: "#a2b1b8",
+  active: "#0cb1f2", // --active
+  activeHover: "#00abeb", // --active-hover
+  activeSelected: "#0099db",
+  destructive: "#ff4828", // --destructive
+  destructiveHover: "#f8401f", // --destructive-hover
+  destructiveSelected: "#e21a00",
+} as const;
+
+// Warm land; roads are the dominant basemap signal. POI/transit off.
 // (Legacy JSON styling; works because we don't set a cloud `mapId`.)
 const MAP_STYLE: google.maps.MapTypeStyle[] = [
-  // Near-white land with visibly darker gray roads (contrast is what was missing),
-  // muted labels kept ON, POI/transit clutter off.
-  { elementType: "geometry", stylers: [{ color: "#fafafa" }] },
+  { elementType: "geometry", stylers: [{ color: MAP_HEX.bgSecondary }] },
   { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#8a8f98" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#ffffff" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: MAP_HEX.secondary }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: MAP_HEX.bg }] },
   { featureType: "administrative", elementType: "geometry", stylers: [{ visibility: "off" }] },
   { featureType: "poi", stylers: [{ visibility: "off" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#edf0ec" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#e6e9ee" }] },
-  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#dbdfe6" }] },
-  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#ced3db" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: MAP_HEX.tagSuccess }] },
+  { featureType: "poi.park", elementType: "labels", stylers: [{ visibility: "off" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: MAP_HEX.roadLocal }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: MAP_HEX.roadStroke }] },
+  {
+    featureType: "road.arterial",
+    elementType: "geometry",
+    stylers: [{ color: MAP_HEX.roadArterial }],
+  },
+  {
+    featureType: "road.highway",
+    elementType: "geometry",
+    stylers: [{ color: MAP_HEX.roadHighway }],
+  },
+  {
+    featureType: "road.highway",
+    elementType: "geometry.stroke",
+    stylers: [{ color: MAP_HEX.roadStroke }],
+  },
+  { featureType: "road.local", elementType: "geometry", stylers: [{ color: MAP_HEX.roadLocal }] },
   { featureType: "road.local", elementType: "labels", stylers: [{ visibility: "on" }] },
   { featureType: "transit", stylers: [{ visibility: "off" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#d5dbe1" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#aab1ba" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: MAP_HEX.water }] },
+  {
+    featureType: "water",
+    elementType: "labels.text.fill",
+    stylers: [{ color: MAP_HEX.waterLabel }],
+  },
+  { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: MAP_HEX.bg }] },
 ];
 
-/**
- * Raw hex for Maps overlays (can't use CSS variables).
- *
- * TODO: Duplicates design tokens as hand-maintained hex and will drift from
- * globals.css. Prefer a shared token→hex pipeline or reading computed styles once.
- */
+/** Route overlays — vacant = destructive, assigned = active (hover/selected steps). */
 const ROUTE_COLORS = {
   vacant: {
-    base: "#ff4828", // --destructive (tag-destructive pair)
-    hover: "#ce0000",
-    selected: "#b60000",
+    base: MAP_HEX.destructive,
+    hover: MAP_HEX.destructiveHover,
+    selected: MAP_HEX.destructiveSelected,
   },
   assigned: {
-    base: "#0cb1f2", // --active
-    hover: "#0084c2",
-    selected: "#006eab",
+    base: MAP_HEX.active,
+    hover: MAP_HEX.activeHover,
+    selected: MAP_HEX.activeSelected,
   },
 } as const;
 
@@ -188,7 +235,7 @@ function RouteOverlay(props: {
           scale: 3.5,
           fillColor: color,
           fillOpacity: 1,
-          strokeColor: "#ffffff",
+          strokeColor: MAP_HEX.bg,
           strokeWeight: 1.5,
         },
         zIndex: 3,
@@ -253,7 +300,7 @@ function RouteOverlay(props: {
           scale,
           fillColor: color,
           fillOpacity: 1,
-          strokeColor: "#ffffff",
+          strokeColor: MAP_HEX.bg,
           strokeWeight: 1.5,
         },
       });
@@ -275,9 +322,9 @@ function HomeMarker({ home }: { home: MapHome }) {
       icon: {
         path: google.maps.SymbolPath.CIRCLE,
         scale: 5,
-        fillColor: "#ffffff",
+        fillColor: MAP_HEX.bg,
         fillOpacity: 1,
-        strokeColor: "#7c3aed",
+        strokeColor: MAP_HEX.active,
         strokeWeight: 2,
       },
       zIndex: 1,
@@ -367,17 +414,13 @@ const DELIVERY_TYPE_OPTIONS = [
   { value: "drops", label: "Drops" },
 ] as const;
 
-function deliveryTypeLabel(value: DeliveryTypeFilter): string {
+function deliveryTypeLabel(value: LegacyDeliveryTypeFilter): string {
   return DELIVERY_TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value;
 }
 
-function vacancyLabel(value: VacancyFilter): string {
+function vacancyLabel(value: LegacyVacancyFilter): string {
   return ASSIGNED_OPTIONS.find((o) => o.value === value)?.label ?? value;
 }
-
-export type CaptainFilterOption = { value: string; label: string };
-
-export type FilterPlacement = "map" | "sidepanel";
 
 /** Custom map controls overlay: filter, search, zoom ±, recenter, fullscreen. */
 function MapControls(props: {
@@ -385,10 +428,10 @@ function MapControls(props: {
   onSearchChange: (value: string) => void;
   filterOpen: boolean;
   onFilterToggle: () => void;
-  vacancy: VacancyFilter;
-  onVacancyChange: (value: VacancyFilter) => void;
-  deliveryType: DeliveryTypeFilter;
-  onDeliveryTypeChange: (value: DeliveryTypeFilter) => void;
+  vacancy: LegacyVacancyFilter;
+  onVacancyChange: (value: LegacyVacancyFilter) => void;
+  deliveryType: LegacyDeliveryTypeFilter;
+  onDeliveryTypeChange: (value: LegacyDeliveryTypeFilter) => void;
   defaultBoundsRef: React.RefObject<google.maps.LatLngBounds | null>;
   captainId: string;
   onCaptainChange: (value: string) => void;
@@ -554,11 +597,6 @@ function MapControls(props: {
         } as CSSProperties
       }
     >
-      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-white to-transparent" />
-        <div className="map-ui-blur-fill absolute inset-0" />
-      </div>
-
       <div className="pointer-events-auto relative z-10 flex flex-col px-4">
         <div className="flex items-center gap-2">
           <Button
@@ -669,7 +707,8 @@ function MapControls(props: {
                   options={[...DELIVERY_TYPE_OPTIONS]}
                   value={props.deliveryType}
                   onChange={(value) => {
-                    if (value != null) props.onDeliveryTypeChange(value as DeliveryTypeFilter);
+                    if (value != null)
+                      props.onDeliveryTypeChange(value as LegacyDeliveryTypeFilter);
                   }}
                 />
               </div>
@@ -680,7 +719,7 @@ function MapControls(props: {
                   options={[...ASSIGNED_OPTIONS]}
                   value={props.vacancy}
                   onChange={(value) => {
-                    if (value != null) props.onVacancyChange(value as VacancyFilter);
+                    if (value != null) props.onVacancyChange(value as LegacyVacancyFilter);
                   }}
                 />
               </div>
@@ -818,10 +857,10 @@ export function RouteMap(props: {
   onSearchChange: (value: string) => void;
   filterOpen: boolean;
   onFilterToggle: () => void;
-  vacancy: VacancyFilter;
-  onVacancyChange: (value: VacancyFilter) => void;
-  deliveryType: DeliveryTypeFilter;
-  onDeliveryTypeChange: (value: DeliveryTypeFilter) => void;
+  vacancy: LegacyVacancyFilter;
+  onVacancyChange: (value: LegacyVacancyFilter) => void;
+  deliveryType: LegacyDeliveryTypeFilter;
+  onDeliveryTypeChange: (value: LegacyDeliveryTypeFilter) => void;
   captainId: string;
   onCaptainChange: (value: string) => void;
   captainOptions: CaptainFilterOption[];
@@ -866,6 +905,12 @@ export function RouteMap(props: {
           disableDefaultUI={true}
           zoomControl={false}
           fullscreenControl={false}
+          mapTypeControl={false}
+          streetViewControl={false}
+          scaleControl={false}
+          rotateControl={false}
+          keyboardShortcuts={false}
+          clickableIcons={false}
           styles={MAP_STYLE}
           className="h-full w-full"
         >

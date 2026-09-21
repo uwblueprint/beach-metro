@@ -10,6 +10,11 @@ import { Button } from "@/components/ui/button";
 import { NewTerritoryDropDialog, type DropSelection } from "@/components/new-territory-drop-dialog";
 import { NotesSection } from "@/components/notes-section";
 import { RouteDetailsDialog } from "@/components/route-details-dialog";
+import {
+  SidePanelCollapsibleList,
+  SidePanelHeightReveal,
+  SidePanelShowMoreRow,
+} from "@/components/side-panel-collapse";
 import { SidePanelField } from "@/components/side-panel-field";
 import { SidePanelRow } from "@/components/side-panel-row";
 import { SidePanelSection } from "@/components/side-panel-section";
@@ -17,7 +22,6 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { ApiError } from "@/lib/api/client";
 import { RoleTag } from "@/components/role-tag";
-import { cn } from "@/lib/utils";
 import {
   memberKeys,
   useCaptain,
@@ -97,12 +101,6 @@ function formatDate(iso: string | null): string {
   return `${MONTHS[month - 1]} ${day}, ${year}`;
 }
 
-const PAY_TYPE_LABEL: Record<string, string> = {
-  bundle: "by bundle",
-  paper: "by paper",
-  drop: "by drop",
-};
-
 const CADENCE_LABEL: Record<string, string> = {
   biweekly: "Bi-Weekly",
   monthly: "Monthly",
@@ -116,6 +114,7 @@ function VolunteerContent({ id }: { id: string }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -126,13 +125,13 @@ function VolunteerContent({ id }: { id: string }) {
 
   if (isError) {
     return (
-      <p className="text-md text-secondary">
+      <p className="text-md text-tertiary">
         {error instanceof Error ? error.message : "Could not load this volunteer."}
       </p>
     );
   }
   if (isPending || !volunteer) {
-    return <p className="text-md text-secondary">Loading…</p>;
+    return <p className="text-md text-tertiary">Loading…</p>;
   }
 
   const totalBundles = volunteer.routesCarried.reduce((s, r) => s + r.bundleCount, 0);
@@ -222,128 +221,140 @@ function VolunteerContent({ id }: { id: string }) {
 
   return (
     <>
-      <div className={cn("flex flex-col pb-6 pt-1", editing ? "gap-6" : "gap-1")}>
+      <SidePanelSection title="Personal Details" onEdit={editing ? undefined : startEditing}>
         {editing ? (
           <>
-            <SidePanelField label="Email" htmlFor={`volunteer-email-${id}`}>
-              <Input
-                id={`volunteer-email-${id}`}
-                name="email"
-                type="email"
-                autoComplete="email"
-                spellCheck={false}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </SidePanelField>
-            <SidePanelField label="Phone" htmlFor={`volunteer-phone-${id}`}>
-              <Input
-                id={`volunteer-phone-${id}`}
-                name="phone"
-                type="tel"
-                autoComplete="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </SidePanelField>
-            <SidePanelField label="Address" htmlFor={`volunteer-address-${id}`}>
-              <AddressField
-                id={`volunteer-address-${id}`}
-                label=""
-                placeholder="1900 Queen St E"
-                value={address}
-                onChange={(text) => {
-                  setAddress(text);
-                  setAddressPlaceId(null);
-                }}
-                onPick={(placeId, text) => {
-                  setAddressPlaceId(placeId);
-                  setAddress(text);
-                }}
-              />
-            </SidePanelField>
-            <SidePanelField label="Start Date" htmlFor={`volunteer-start-${id}`}>
-              <Input
-                id={`volunteer-start-${id}`}
-                name="startDate"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </SidePanelField>
-            <SidePanelField label="Captain" htmlFor={`volunteer-captain-${id}`}>
-              <Select
-                id={`volunteer-captain-${id}`}
-                value={captainTerritoryId}
-                onChange={setCaptainTerritoryId}
-                options={[
-                  { value: "", label: "No captain" },
-                  ...captainTerritoryOptions(territories),
-                ]}
-              />
-            </SidePanelField>
+            <div className="flex flex-col gap-6 pl-2">
+              <SidePanelField label="Email" htmlFor={`volunteer-email-${id}`}>
+                <Input
+                  id={`volunteer-email-${id}`}
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  spellCheck={false}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </SidePanelField>
+              <SidePanelField label="Phone" htmlFor={`volunteer-phone-${id}`}>
+                <Input
+                  id={`volunteer-phone-${id}`}
+                  name="phone"
+                  type="tel"
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </SidePanelField>
+              <SidePanelField label="Address" htmlFor={`volunteer-address-${id}`}>
+                <AddressField
+                  id={`volunteer-address-${id}`}
+                  label=""
+                  placeholder="1900 Queen St E"
+                  value={address}
+                  onChange={(text) => {
+                    setAddress(text);
+                    setAddressPlaceId(null);
+                  }}
+                  onPick={(placeId, text) => {
+                    setAddressPlaceId(placeId);
+                    setAddress(text);
+                  }}
+                />
+              </SidePanelField>
+              <SidePanelField label="Start Date" htmlFor={`volunteer-start-${id}`}>
+                <Input
+                  id={`volunteer-start-${id}`}
+                  name="startDate"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </SidePanelField>
+              <SidePanelField label="Captain" htmlFor={`volunteer-captain-${id}`}>
+                <Select
+                  id={`volunteer-captain-${id}`}
+                  value={captainTerritoryId}
+                  onChange={setCaptainTerritoryId}
+                  options={[
+                    { value: "", label: "No captain" },
+                    ...captainTerritoryOptions(territories),
+                  ]}
+                />
+              </SidePanelField>
+              {saveError ? (
+                <p className="text-md text-destructive" role="alert" aria-live="polite">
+                  {saveError}
+                </p>
+              ) : null}
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <Button
+                  variant="default"
+                  onClick={cancelEditing}
+                  disabled={updateVolunteer.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => void saveInfo()}
+                  disabled={updateVolunteer.isPending}
+                  className="active:scale-[0.96]"
+                >
+                  {updateVolunteer.isPending ? "Saving…" : "Save"}
+                </Button>
+              </div>
+            </div>
+            <Attribute
+              label="Status"
+              value={
+                volunteer.status === "on-vacation"
+                  ? `On vacation until ${formatDate(volunteer.vacationEnd)}`
+                  : volunteer.status === "retired"
+                    ? `Retired ${formatDate(volunteer.retiredAt)}`
+                    : volunteer.needsAttention
+                      ? "Active (end date passed)"
+                      : "Active"
+              }
+            />
           </>
         ) : (
           <>
-            <Attribute label="Email" value={volunteer.email} />
-            <Attribute label="Phone" value={volunteer.phone} />
+            <Attribute label="Email" value={volunteer.email} copyable />
+            <Attribute label="Phone" value={volunteer.phone} copyable />
             <Attribute
               label="Address"
               value={volunteer.address.formattedAddress ?? "Not geocoded yet"}
             />
-            <Attribute label="Start Date" value={formatDate(volunteer.startDate)} />
             <Attribute label="Captain" value={volunteer.territory?.captainName ?? "No captain"} />
+            <SidePanelHeightReveal open={detailsExpanded}>
+              <Attribute label="Start Date" value={formatDate(volunteer.startDate)} />
+              <Attribute
+                label="Status"
+                value={
+                  volunteer.status === "on-vacation"
+                    ? `On vacation until ${formatDate(volunteer.vacationEnd)}`
+                    : volunteer.status === "retired"
+                      ? `Retired ${formatDate(volunteer.retiredAt)}`
+                      : volunteer.needsAttention
+                        ? "Active (end date passed)"
+                        : "Active"
+                }
+              />
+            </SidePanelHeightReveal>
+            <SidePanelShowMoreRow
+              expanded={detailsExpanded}
+              onToggle={() => setDetailsExpanded((v) => !v)}
+            />
           </>
         )}
-        <Attribute
-          label="Status"
-          value={
-            volunteer.status === "on-vacation"
-              ? `On vacation until ${formatDate(volunteer.vacationEnd)}`
-              : volunteer.status === "retired"
-                ? `Retired ${formatDate(volunteer.retiredAt)}`
-                : volunteer.needsAttention
-                  ? "Active (end date passed)"
-                  : "Active"
-          }
-        />
-        {saveError ? (
-          <p className="text-md text-destructive" role="alert" aria-live="polite">
-            {saveError}
-          </p>
-        ) : null}
-        <div className="flex items-center justify-end gap-2 pt-1">
-          {editing ? (
-            <>
-              <Button
-                variant="default"
-                onClick={cancelEditing}
-                disabled={updateVolunteer.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => void saveInfo()}
-                disabled={updateVolunteer.isPending}
-                className="active:scale-[0.96]"
-              >
-                {updateVolunteer.isPending ? "Saving…" : "Save"}
-              </Button>
-            </>
-          ) : (
-            <Button variant="outline" onClick={startEditing} className="active:scale-[0.96]">
-              Edit info
-            </Button>
-          )}
-        </div>
-      </div>
+      </SidePanelSection>
 
       <NotesSection role="volunteer" memberId={id} />
 
       <SidePanelSection title="Route Info" onAdd={openCreate}>
         {volunteer.routesCarried.length === 0 ? (
-          <SidePanelRow className="text-secondary">No routes</SidePanelRow>
+          <SidePanelRow className="text-tertiary">No routes</SidePanelRow>
         ) : (
           <>
             {volunteer.routesCarried.map((route) => (
@@ -353,13 +364,13 @@ function VolunteerContent({ id }: { id: string }) {
                 onClick={() => openEdit(route.id)}
                 onEdit={() => openEdit(route.id)}
               >
-                <span className="inline-flex items-center rounded-lg bg-secondary-fill px-2 py-1 text-md text-primary">
+                <span className="inline-flex items-center rounded-lg bg-secondary-fill px-2 py-1 text-md text-secondary">
                   {route.label}
                 </span>
               </SidePanelRow>
             ))}
             <SidePanelRow
-              className="text-secondary"
+              className="text-tertiary"
               meta={`${totalBundles} Bundles, ${totalPapers} Papers`}
             >
               Totals
@@ -392,6 +403,7 @@ function CaptainContent({ id }: { id: string }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [initialDrop, setInitialDrop] = useState<DropSelection | null>(null);
   const [editing, setEditing] = useState(false);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [payRate, setPayRate] = useState("");
@@ -402,19 +414,24 @@ function CaptainContent({ id }: { id: string }) {
 
   if (isError) {
     return (
-      <p className="text-md text-secondary">
+      <p className="text-md text-tertiary">
         {error instanceof Error ? error.message : "Could not load this captain."}
       </p>
     );
   }
   if (isPending || !captain) {
-    return <p className="text-md text-secondary">Loading…</p>;
+    return <p className="text-md text-tertiary">Loading…</p>;
   }
 
   const captainName = `${captain.firstName} ${captain.lastName}`;
   const commercialDrops = territory?.commercialDrops ?? [];
   const territoryVolunteers = territory?.volunteers ?? [];
   const hasDrops = commercialDrops.length > 0 || territoryVolunteers.length > 0;
+  const territoryDropItems = [
+    ...territoryVolunteers.map((volunteer) => ({ kind: "volunteer" as const, volunteer })),
+    ...commercialDrops.map((drop) => ({ kind: "commercial" as const, drop })),
+  ];
+  const payoutItems = payouts ?? [];
 
   function openAdd() {
     setInitialDrop(null);
@@ -511,190 +528,203 @@ function CaptainContent({ id }: { id: string }) {
 
   return (
     <>
-      <div className={cn("flex flex-col pb-6 pt-1", editing ? "gap-6" : "gap-1")}>
+      <SidePanelSection title="Personal Details" onEdit={editing ? undefined : startEditing}>
         {editing ? (
           <>
-            <SidePanelField label="Email" htmlFor={`captain-email-${id}`}>
-              <Input
-                id={`captain-email-${id}`}
-                name="email"
-                type="email"
-                autoComplete="email"
-                spellCheck={false}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </SidePanelField>
-            <SidePanelField label="Phone" htmlFor={`captain-phone-${id}`}>
-              <Input
-                id={`captain-phone-${id}`}
-                name="phone"
-                type="tel"
-                autoComplete="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </SidePanelField>
-            <SidePanelField label="Rate" htmlFor={`captain-rate-${id}`}>
-              <div className="flex gap-2">
+            <div className="flex flex-col gap-6 pl-2">
+              <SidePanelField label="Email" htmlFor={`captain-email-${id}`}>
                 <Input
-                  id={`captain-rate-${id}`}
-                  name="payRate"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="0.01"
-                  value={payRate}
-                  onChange={(e) => setPayRate(e.target.value)}
-                  className="min-w-0 tabular-nums"
+                  id={`captain-email-${id}`}
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  spellCheck={false}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                 />
+              </SidePanelField>
+              <SidePanelField label="Phone" htmlFor={`captain-phone-${id}`}>
+                <Input
+                  id={`captain-phone-${id}`}
+                  name="phone"
+                  type="tel"
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </SidePanelField>
+              <SidePanelField label="Rate" htmlFor={`captain-rate-${id}`}>
+                <div className="flex gap-2">
+                  <Input
+                    id={`captain-rate-${id}`}
+                    name="payRate"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="0.01"
+                    value={payRate}
+                    onChange={(e) => setPayRate(e.target.value)}
+                    className="min-w-0 tabular-nums"
+                  />
+                  <Select
+                    id={`captain-pay-type-${id}`}
+                    aria-label="Pay type"
+                    value={payType}
+                    onChange={(v) => setPayType(v as "bundle" | "paper" | "drop")}
+                    options={[
+                      { value: "bundle", label: "by bundle" },
+                      { value: "paper", label: "by paper" },
+                      { value: "drop", label: "by drop" },
+                    ]}
+                  />
+                </div>
+              </SidePanelField>
+              <SidePanelField label="Cadence" htmlFor={`captain-cadence-${id}`}>
                 <Select
-                  id={`captain-pay-type-${id}`}
-                  aria-label="Pay type"
-                  value={payType}
-                  onChange={(v) => setPayType(v as "bundle" | "paper" | "drop")}
+                  id={`captain-cadence-${id}`}
+                  value={payCadence}
+                  onChange={(v) => setPayCadence(v as "biweekly" | "monthly")}
                   options={[
-                    { value: "bundle", label: "by bundle" },
-                    { value: "paper", label: "by paper" },
-                    { value: "drop", label: "by drop" },
+                    { value: "biweekly", label: "Bi-Weekly" },
+                    { value: "monthly", label: "Monthly" },
                   ]}
                 />
+              </SidePanelField>
+              <SidePanelField label="Start Date" htmlFor={`captain-start-${id}`}>
+                <Input
+                  id={`captain-start-${id}`}
+                  name="startDate"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </SidePanelField>
+              {saveError ? (
+                <p className="text-md text-destructive" role="alert" aria-live="polite">
+                  {saveError}
+                </p>
+              ) : null}
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <Button
+                  variant="default"
+                  onClick={cancelEditing}
+                  disabled={updateCaptain.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => void saveInfo()}
+                  disabled={updateCaptain.isPending}
+                  className="active:scale-[0.96]"
+                >
+                  {updateCaptain.isPending ? "Saving…" : "Save"}
+                </Button>
               </div>
-            </SidePanelField>
-            <SidePanelField label="Cadence" htmlFor={`captain-cadence-${id}`}>
-              <Select
-                id={`captain-cadence-${id}`}
-                value={payCadence}
-                onChange={(v) => setPayCadence(v as "biweekly" | "monthly")}
-                options={[
-                  { value: "biweekly", label: "Bi-Weekly" },
-                  { value: "monthly", label: "Monthly" },
-                ]}
-              />
-            </SidePanelField>
-            <SidePanelField label="Start Date" htmlFor={`captain-start-${id}`}>
-              <Input
-                id={`captain-start-${id}`}
-                name="startDate"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </SidePanelField>
+            </div>
+            <Attribute
+              label="Status"
+              value={
+                captain.status === "retired" ? `Retired ${formatDate(captain.retiredAt)}` : "Active"
+              }
+            />
           </>
         ) : (
           <>
-            <Attribute label="Email" value={captain.email} />
-            <Attribute label="Phone" value={captain.phone} />
+            <Attribute label="Email" value={captain.email} copyable />
+            <Attribute label="Phone" value={captain.phone} copyable />
             <Attribute
-              label="Rate"
-              value={`$${captain.payRate.toFixed(2)} ${PAY_TYPE_LABEL[captain.payType] ?? captain.payType}`}
+              label="Pay"
+              value={`${CADENCE_LABEL[captain.payCadence] ?? captain.payCadence}, $${captain.payRate.toFixed(2)} per ${captain.payType}`}
             />
-            <Attribute
-              label="Cadence"
-              value={CADENCE_LABEL[captain.payCadence] ?? captain.payCadence}
+            <SidePanelHeightReveal open={detailsExpanded}>
+              <Attribute label="Start Date" value={formatDate(captain.startDate)} />
+              <Attribute
+                label="Status"
+                value={
+                  captain.status === "retired"
+                    ? `Retired ${formatDate(captain.retiredAt)}`
+                    : "Active"
+                }
+              />
+            </SidePanelHeightReveal>
+            <SidePanelShowMoreRow
+              expanded={detailsExpanded}
+              onToggle={() => setDetailsExpanded((v) => !v)}
             />
-            <Attribute label="Start Date" value={formatDate(captain.startDate)} />
           </>
-        )}
-        <Attribute
-          label="Status"
-          value={
-            captain.status === "retired" ? `Retired ${formatDate(captain.retiredAt)}` : "Active"
-          }
-        />
-        {saveError ? (
-          <p className="text-md text-destructive" role="alert" aria-live="polite">
-            {saveError}
-          </p>
-        ) : null}
-        <div className="flex items-center justify-end gap-2 pt-1">
-          {editing ? (
-            <>
-              <Button variant="default" onClick={cancelEditing} disabled={updateCaptain.isPending}>
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => void saveInfo()}
-                disabled={updateCaptain.isPending}
-                className="active:scale-[0.96]"
-              >
-                {updateCaptain.isPending ? "Saving…" : "Save"}
-              </Button>
-            </>
-          ) : (
-            <Button variant="outline" onClick={startEditing} className="active:scale-[0.96]">
-              Edit info
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <NotesSection role="captain" memberId={id} />
-
-      <SidePanelSection title="Reimbursements">
-        {payoutsPending ? (
-          <SidePanelRow className="text-secondary">Loading…</SidePanelRow>
-        ) : (payouts ?? []).length === 0 ? (
-          <SidePanelRow className="text-secondary">No Record of Reimbursement</SidePanelRow>
-        ) : (
-          (payouts ?? []).map((entry) => (
-            <SidePanelRow key={entry.id} meta={formatDate(entry.issueDate)}>
-              {entry.role === "covered_by" ? (
-                // Someone else covered and was paid, so no amount is shown here:
-                // under a "Reimbursements" heading a figure would read as income.
-                <span className="text-secondary">
-                  {entry.issueName} · covered by {entry.substitutedBy}
-                </span>
-              ) : (
-                <span className="text-primary">
-                  ${entry.amount.toFixed(2)} ·{" "}
-                  {entry.role === "covered_for"
-                    ? `Covered for ${entry.coveredFor}`
-                    : entry.issueName}
-                  {entry.paid ? " · paid" : ""}
-                </span>
-              )}
-            </SidePanelRow>
-          ))
         )}
       </SidePanelSection>
 
+      <NotesSection role="captain" memberId={id} />
+
       <SidePanelSection title="Territory Drops" onAdd={openAdd}>
         {!captain.territory ? (
-          <SidePanelRow className="text-secondary">No territory</SidePanelRow>
+          <SidePanelRow className="text-tertiary">No territory</SidePanelRow>
         ) : !hasDrops ? (
-          <SidePanelRow className="text-secondary">No Drops</SidePanelRow>
+          <SidePanelRow className="text-tertiary">No Drops</SidePanelRow>
         ) : (
-          <>
-            {territoryVolunteers.map((volunteer) => (
-              <SidePanelRow
-                key={volunteer.id}
-                meta="Volunteer"
-                onEdit={() => openEditVolunteer(volunteer)}
-              >
-                <span className="text-primary">
-                  {volunteer.firstName} {volunteer.lastName}
-                </span>
+          <SidePanelCollapsibleList
+            items={territoryDropItems}
+            renderItem={(item) =>
+              item.kind === "volunteer" ? (
+                <SidePanelRow
+                  key={item.volunteer.id}
+                  meta="Volunteer"
+                  onEdit={() => openEditVolunteer(item.volunteer)}
+                >
+                  <span className="text-secondary">
+                    {item.volunteer.firstName} {item.volunteer.lastName}
+                  </span>
+                </SidePanelRow>
+              ) : (
+                <SidePanelRow
+                  key={item.drop.id}
+                  meta={
+                    item.drop.standingBundles === null
+                      ? "Count unknown"
+                      : `${item.drop.standingBundles} bundle${item.drop.standingBundles === 1 ? "" : "s"}`
+                  }
+                  onEdit={() => openEditCommercial(item.drop)}
+                >
+                  <span className="text-secondary">
+                    {item.drop.formattedAddress ?? "Address not geocoded yet"}
+                  </span>
+                </SidePanelRow>
+              )
+            }
+          />
+        )}
+      </SidePanelSection>
+
+      <SidePanelSection title="Reimbursements">
+        {payoutsPending ? (
+          <SidePanelRow className="text-tertiary">Loading…</SidePanelRow>
+        ) : payoutItems.length === 0 ? (
+          <SidePanelRow className="text-tertiary">No Record of Reimbursement</SidePanelRow>
+        ) : (
+          <SidePanelCollapsibleList
+            items={payoutItems}
+            renderItem={(entry) => (
+              <SidePanelRow key={entry.id} meta={formatDate(entry.issueDate)}>
+                {entry.role === "covered_by" ? (
+                  // Someone else covered and was paid, so no amount is shown here:
+                  // under a "Reimbursements" heading a figure would read as income.
+                  <span className="text-tertiary">
+                    {entry.issueName} · covered by {entry.substitutedBy}
+                  </span>
+                ) : (
+                  <span className="text-secondary">
+                    ${entry.amount.toFixed(2)} ·{" "}
+                    {entry.role === "covered_for"
+                      ? `Covered for ${entry.coveredFor}`
+                      : entry.issueName}
+                    {entry.paid ? " · paid" : ""}
+                  </span>
+                )}
               </SidePanelRow>
-            ))}
-            {commercialDrops.map((drop) => (
-              <SidePanelRow
-                key={drop.id}
-                meta={
-                  drop.standingBundles === null
-                    ? "Count unknown"
-                    : `${drop.standingBundles} bundle${drop.standingBundles === 1 ? "" : "s"}`
-                }
-                onEdit={() => openEditCommercial(drop)}
-              >
-                <span className="text-primary">
-                  {drop.formattedAddress ?? "Address not geocoded yet"}
-                </span>
-              </SidePanelRow>
-            ))}
-          </>
+            )}
+          />
         )}
       </SidePanelSection>
 
@@ -846,7 +876,7 @@ function CreateMemberContent({
         e.preventDefault();
         void handleCreate();
       }}
-      className="flex flex-col gap-6 pb-2 pt-1"
+      className="flex flex-col gap-6 pb-2 pl-2 pt-1"
     >
       <SidePanelField label="Role" htmlFor="cm-role">
         <Select
@@ -1063,10 +1093,10 @@ function MemberSidePanel({ member, creating, onClose, onCreated }: MemberSidePan
       <div className="t-side-panel-content flex h-full w-[400px] flex-col">
         <div className="page-header-container">
           {displayedCreating ? (
-            <span className="truncate text-md font-semibold text-primary">New Member</span>
+            <span className="truncate text-md font-normal text-primary">New Member</span>
           ) : (
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-md font-semibold text-primary">{displayed?.name}</span>
+              <span className="truncate text-md font-normal text-primary">{displayed?.name}</span>
               {displayed && (
                 <RoleTag
                   role={displayed.role}
@@ -1086,7 +1116,7 @@ function MemberSidePanel({ member, creating, onClose, onCreated }: MemberSidePan
             <X />
           </Button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="flex-1 overflow-y-auto py-4 pl-4 pr-6">
           {displayedCreating ? (
             <CreateMemberContent onCreated={onCreated} onBusyChange={setCreateBusy} />
           ) : displayed?.role === "volunteer" ? (

@@ -6,31 +6,41 @@ import { cn } from "@/lib/utils";
 
 const listItemVariants = cva(
   [
-    "group/list-item inline-flex w-full cursor-pointer items-center rounded-[4px] font-normal whitespace-nowrap transition-colors",
+    "group/list-item inline-flex w-full cursor-pointer items-center rounded-[4px] font-normal whitespace-nowrap",
     "outline-none select-none",
     "text-primary",
-    "hover:bg-tag-hover",
+    "transition-[color,background-color] duration-150 ease-out",
     "focus-visible:ring-3 focus-visible:ring-ring/50",
-    "data-[active=true]:bg-active-grey data-[active=true]:text-primary",
-    "data-[active=true]:hover:bg-active-grey",
     "disabled:pointer-events-none disabled:text-disabled disabled:hover:bg-transparent",
+    "motion-reduce:transition-none",
     "[&_svg]:pointer-events-none [&_svg]:shrink-0",
   ].join(" "),
   {
     variants: {
       size: {
         sm: "h-6 gap-2 p-2 text-sm [&_svg:not([class*='size-'])]:size-3",
-        md: "gap-2 px-2 py-[7px] text-md [&_svg:not([class*='size-'])]:size-4",
+        md: "h-10 gap-2 p-2 text-md [&_svg:not([class*='size-'])]:size-4",
       },
       type: {
         text: "",
         "leading-icon": "",
         "trailing-icon": "justify-between",
       },
+      /** Resting surface — hover +1 / active +2 on the bg scale. */
+      surface: {
+        primary:
+          "hover:bg-bg-secondary data-[active=true]:bg-bg-tertiary data-[active=true]:text-primary data-[active=true]:hover:bg-bg-tertiary",
+        tertiary:
+          "hover:bg-bg-quaternary data-[active=true]:bg-bg-quinary data-[active=true]:text-primary data-[active=true]:hover:bg-bg-quinary",
+        /** Sidebar shell — hover +2 / active +3; radius matches members rows. */
+        sidebar:
+          "rounded-md hover:bg-sidebar-hover data-[active=true]:bg-sidebar-active data-[active=true]:text-primary data-[active=true]:hover:bg-sidebar-active",
+      },
     },
     defaultVariants: {
       size: "md",
       type: "text",
+      surface: "primary",
     },
   },
 );
@@ -93,12 +103,13 @@ function ListItem({
   className,
   size = "md",
   type = "text",
+  surface = "primary",
   active = false,
   icon,
   children,
   ...props
 }: ListItemProps) {
-  const classes = cn(listItemVariants({ size, type, className }));
+  const classes = cn(listItemVariants({ size, type, surface }), className);
   const content = (
     <ListItemContent type={type ?? "text"} icon={icon}>
       {children}

@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -80,7 +81,7 @@ function PopoverComment({
     "relative flex min-h-6 w-full min-w-0 items-center overflow-visible outline-none focus:outline-none focus-visible:outline-none";
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-1 overflow-visible whitespace-normal rounded-lg bg-bg-secondary p-2">
+    <div className="flex w-full min-w-0 flex-col gap-1 overflow-visible whitespace-normal rounded-lg bg-bg-tertiary p-2">
       <p className="shrink-0 text-md text-primary">Note</p>
       {editing ? (
         <div className={commentRowClassName}>
@@ -127,7 +128,7 @@ function PopoverComment({
               <button
                 type="button"
                 aria-label={isEmpty ? "Add comment" : "Edit comment"}
-                className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[4px] border-0 bg-transparent text-muted-foreground outline-none transition-colors hover:bg-secondary-fill-hover focus:outline-none focus-visible:outline-none [&_svg]:block [&_svg]:fill-none [&_svg]:stroke-current"
+                className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[4px] border-0 bg-transparent text-muted-foreground outline-none transition-colors hover:bg-bg-secondary focus:outline-none focus-visible:outline-none [&_svg]:block [&_svg]:fill-none [&_svg]:stroke-current"
                 onClick={(event) => {
                   event.stopPropagation();
                   startEditing();
@@ -306,7 +307,7 @@ function PaymentAmountPopover({
           align: "shift",
           fallbackAxisSide: "end",
         }}
-        className="box-border w-max min-w-[200px] max-w-[400px] gap-3 overflow-visible rounded-lg border-[0.5px] border-border bg-bg p-3 text-md shadow-[0px_1px_2.5px_rgba(0,0,0,0.1)]"
+        className="box-border w-max min-w-[200px] max-w-[400px] gap-3 overflow-visible rounded-lg bg-bg p-3 text-md smooth-shadow-ring-sm!"
         onMouseEnter={handleHoverEnter}
         onMouseLeave={handleHoverLeave}
       >
@@ -373,9 +374,6 @@ function PaymentAmountPopover({
 
 type CellMenuView = "actions" | "substitute";
 
-const cellMenuItemClassName =
-  "flex w-full rounded-md px-3 py-1.5 text-left text-sm text-primary hover:bg-tag-hover active:bg-secondary-fill-hover";
-
 function SubstituteCaptainPicker({
   selectedCaptain,
   onSelect,
@@ -398,7 +396,7 @@ function SubstituteCaptainPicker({
               type="button"
               onClick={() => onSelect(captain)}
               className={cn(
-                "flex w-full items-center justify-between rounded-md px-3 py-2.5 text-md text-primary transition-colors hover:bg-[#F3F4F6]",
+                "flex w-full items-center justify-between rounded-md px-3 py-2.5 text-md text-primary transition-colors hover:bg-bg-secondary",
                 isSelected && "font-medium",
               )}
             >
@@ -458,9 +456,9 @@ function CellActionsMenu({
             type="button"
             aria-label="Cell actions"
             className={cn(
-              "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[opacity,background-color,color] duration-300 ease-out",
+              "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[opacity,background-color,color] duration-300 ease-out",
               "pointer-events-none group-hover/cell:pointer-events-auto group-hover/cell:bg-muted group-hover/cell:text-primary group-hover/cell:opacity-100",
-              "data-popup-open:pointer-events-auto data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:opacity-100 data-popup-open:hover:bg-muted data-popup-open:hover:text-primary",
+              "data-popup-open:pointer-events-auto data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:opacity-100 data-popup-open:hover:bg-bg-secondary data-popup-open:hover:text-primary",
             )}
             onClick={(event) => event.stopPropagation()}
           >
@@ -472,29 +470,20 @@ function CellActionsMenu({
         align="end"
         side="bottom"
         sideOffset={4}
-        className={cn(
-          "min-w-0 shadow-md ring-1 ring-foreground/10",
-          menuView === "substitute" ? "w-[312px] rounded-lg p-3" : "w-auto rounded-xl px-1 py-1",
-        )}
+        className={cn(menuView === "substitute" && "w-[312px] rounded-lg p-3")}
       >
         {menuView === "actions" ? (
           <>
-            <button
-              type="button"
-              className={cellMenuItemClassName}
-              onMouseDown={(event) => event.preventDefault()}
+            <DropdownMenuItem
+              // Keep menu open so we can swap into the substitute picker view.
+              closeOnClick={false}
               onClick={openSubstituteView}
             >
               Assign substitute captain
-            </button>
-            <button
-              type="button"
-              className={cellMenuItemClassName}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={handleCommentAction}
-            >
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleCommentAction}>
               {hasComment ? "Edit comment" : "Add comment"}
-            </button>
+            </DropdownMenuItem>
           </>
         ) : (
           <SubstituteCaptainPicker

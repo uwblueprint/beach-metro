@@ -102,20 +102,20 @@ export function AddressField(props: {
         }}
       />
       {open && visible.length > 0 ? (
-        <ul className="bg-bg absolute top-full z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border shadow-md">
+        <ul className="bg-bg absolute top-full z-20 mt-1 max-h-56 w-full overflow-auto rounded-[8px] p-1 smooth-shadow-ring-md">
           {visible.map((s, i) => (
-            <li key={s.placeId}>
+            <li key={s.placeId} className="rounded-[4px]">
               <button
                 type="button"
                 className={cn(
-                  "block w-full px-2 py-1.5 text-left text-sm",
-                  i === highlight ? "bg-muted" : "hover:bg-muted/50",
+                  "flex w-full cursor-pointer flex-col rounded-[4px] p-2 text-left text-md text-primary outline-none transition-colors",
+                  i === highlight ? "bg-bg-secondary" : "hover:bg-bg-secondary",
                 )}
                 onMouseEnter={() => setHighlight(i)}
                 onClick={() => pick(s)}
               >
                 <span className="block">{s.primaryText}</span>
-                <span className="text-muted-foreground block text-xs">{s.secondaryText}</span>
+                <span className="block text-xs text-muted-foreground">{s.secondaryText}</span>
               </button>
             </li>
           ))}

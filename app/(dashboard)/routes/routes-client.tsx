@@ -5,14 +5,23 @@
 // assign) — the design engineers restyle it. Structural Tailwind only.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type CSSProperties,
+} from "react";
 import { AddressField } from "@/components/address-field";
 import { BundlePapersTable } from "@/components/bundle-papers-table";
 import { SidePanelField } from "@/components/side-panel-field";
-import { SidePanelRow } from "@/components/side-panel-row";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuRadioGroup,
@@ -25,7 +34,7 @@ import { SearchBar } from "@/components/ui/search-bar";
 import { api } from "@/lib/api/client";
 import { greedySplit } from "@/lib/services/derive";
 import { cn } from "@/lib/utils";
-import { ChevronDown, Filter, MoreHorizontal, Plus } from "lucide-react";
+import { ChevronDown, Check, Filter, MoreHorizontal, Plus, Search } from "lucide-react";
 
 import { FilterPillSlot, readCssDurationMsFrom } from "./filter-pills";
 import {
@@ -33,6 +42,8 @@ import {
   type CaptainFilterOption,
   type DeliveryTypeFilter,
   type FilterPlacement,
+  type LegacyDeliveryTypeFilter,
+  type LegacyVacancyFilter,
   type MapHome,
   type MapRoute,
   type VacancyFilter,
@@ -50,7 +61,7 @@ const SIDE_OPTIONS = [
 
 /** Input-shell trigger — same class as testing InputsSection dropdowns. */
 const inputTriggerClassName =
-  "flex h-auto w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-hairline bg-bg px-3 py-2 text-left text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-bg-secondary disabled:text-disabled disabled:opacity-50";
+  "flex h-auto w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-hairline bg-bg px-3 py-2 text-left text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-bg-tertiary disabled:text-disabled disabled:opacity-50";
 
 /**
  * Attention flag for a row, or null when the route is healthy (route flow
@@ -141,6 +152,30 @@ async function sendJson<T>(url: string, method: string, body?: unknown): Promise
   return json.data as T;
 }
 
+const LEGACY_ASSIGNED_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "assigned", label: "Assigned" },
+  { value: "vacant", label: "Vacant" },
+] as const;
+
+const LEGACY_DELIVERY_TYPE_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "routes", label: "Routes" },
+  { value: "drops", label: "Drops" },
+] as const;
+
+function legacyDeliveryTypeLabel(value: LegacyDeliveryTypeFilter): string {
+  return LEGACY_DELIVERY_TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value;
+}
+
+function legacyVacancyLabel(value: LegacyVacancyFilter): string {
+  return LEGACY_ASSIGNED_OPTIONS.find((o) => o.value === value)?.label ?? value;
+}
+
+function legacyCaptainFilterLabel(captainId: string, options: CaptainFilterOption[]): string {
+  return options.find((o) => o.value === captainId)?.label ?? captainId;
+}
+
 function isTypingTarget(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLInputElement ||
@@ -150,42 +185,18 @@ function isTypingTarget(target: EventTarget | null): boolean {
   );
 }
 
-type Vacancy = VacancyFilter;
+const FILTER_PLACEMENT_ORDER: FilterPlacement[] = ["pills", "legacy", "map"];
 
-const ASSIGNED_OPTIONS = [
-  { value: "all", label: "All" },
-  { value: "assigned", label: "Assigned" },
-  { value: "vacant", label: "Vacant" },
-] as const;
-
-const DELIVERY_TYPE_OPTIONS = [
-  { value: "all", label: "All" },
-  { value: "routes", label: "Routes" },
-  { value: "drops", label: "Drops" },
-] as const;
-
-function deliveryTypeLabel(value: DeliveryTypeFilter): string {
-  return DELIVERY_TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value;
-}
-
-function vacancyLabel(value: Vacancy): string {
-  return ASSIGNED_OPTIONS.find((o) => o.value === value)?.label ?? value;
-}
-
-function captainFilterLabel(captainId: string, options: CaptainFilterOption[]): string {
-  return options.find((o) => o.value === captainId)?.label ?? captainId;
-}
-
-/** Collapsible filter block in the Deliveries side panel (Figma filter subsection). */
-function DeliveriesFilterSection(props: {
+/** Prior sidebar filter UI (PillGroup panels) — kept for Shift+F A/B cycling. */
+function LegacyRoutesFilterSection(props: {
   search: string;
   onSearchChange: (value: string) => void;
   filterOpen: boolean;
   onFilterToggle: () => void;
-  vacancy: Vacancy;
-  onVacancyChange: (value: Vacancy) => void;
-  deliveryType: DeliveryTypeFilter;
-  onDeliveryTypeChange: (value: DeliveryTypeFilter) => void;
+  vacancy: LegacyVacancyFilter;
+  onVacancyChange: (value: LegacyVacancyFilter) => void;
+  deliveryType: LegacyDeliveryTypeFilter;
+  onDeliveryTypeChange: (value: LegacyDeliveryTypeFilter) => void;
   captainId: string;
   onCaptainChange: (value: string) => void;
   captainOptions: CaptainFilterOption[];
@@ -293,17 +304,17 @@ function DeliveriesFilterSection(props: {
 
           <FilterPillSlot
             open={props.deliveryType !== "all"}
-            label={deliveryTypeLabel(props.deliveryType)}
+            label={legacyDeliveryTypeLabel(props.deliveryType)}
             onClear={() => props.onDeliveryTypeChange("all")}
           />
           <FilterPillSlot
             open={props.vacancy !== "all"}
-            label={vacancyLabel(props.vacancy)}
+            label={legacyVacancyLabel(props.vacancy)}
             onClear={() => props.onVacancyChange("all")}
           />
           <FilterPillSlot
             open={props.captainId !== "all"}
-            label={captainFilterLabel(props.captainId, props.captainOptions)}
+            label={legacyCaptainFilterLabel(props.captainId, props.captainOptions)}
             onClear={() => props.onCaptainChange("all")}
           />
 
@@ -332,10 +343,11 @@ function DeliveriesFilterSection(props: {
                 <p className="text-sm text-secondary">Delivery Type</p>
                 <PillGroup
                   exclusive
-                  options={[...DELIVERY_TYPE_OPTIONS]}
+                  options={[...LEGACY_DELIVERY_TYPE_OPTIONS]}
                   value={props.deliveryType}
                   onChange={(value) => {
-                    if (value != null) props.onDeliveryTypeChange(value as DeliveryTypeFilter);
+                    if (value != null)
+                      props.onDeliveryTypeChange(value as LegacyDeliveryTypeFilter);
                   }}
                 />
               </div>
@@ -343,10 +355,10 @@ function DeliveriesFilterSection(props: {
                 <p className="text-sm text-secondary">Assigned</p>
                 <PillGroup
                   exclusive
-                  options={[...ASSIGNED_OPTIONS]}
+                  options={[...LEGACY_ASSIGNED_OPTIONS]}
                   value={props.vacancy}
                   onChange={(value) => {
-                    if (value != null) props.onVacancyChange(value as Vacancy);
+                    if (value != null) props.onVacancyChange(value as LegacyVacancyFilter);
                   }}
                 />
               </div>
@@ -369,25 +381,346 @@ function DeliveriesFilterSection(props: {
   );
 }
 
+const TYPE_OPTIONS: { value: DeliveryTypeFilter; label: string }[] = [
+  { value: "routes", label: "Routes" },
+  { value: "drops", label: "Drops" },
+];
+
+const ASSIGNED_OPTIONS: { value: VacancyFilter; label: string }[] = [
+  { value: "assigned", label: "Assigned" },
+  { value: "vacant", label: "Vacant" },
+];
+
+const FilterPillTrigger = forwardRef<
+  HTMLButtonElement,
+  ComponentProps<"button"> & {
+    label: string;
+    summary: string;
+    hasSelection: boolean;
+  }
+>(function FilterPillTrigger({ label, summary, hasSelection, className, ...props }, ref) {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className={cn(
+        "inline-flex w-max min-w-0 max-w-full shrink cursor-pointer items-center overflow-hidden rounded-full border px-4 py-[7px] text-left text-md font-normal whitespace-nowrap select-none",
+        "shadow-[var(--stroke-inner)] transition-colors outline-none",
+        "focus-visible:ring-2 focus-visible:ring-ring/50",
+        hasSelection
+          ? "border-active-border bg-tag-active text-active hover:bg-tag-active-hover"
+          : "border-hairline bg-tag text-secondary hover:bg-tag-hover",
+        className,
+      )}
+      {...props}
+    >
+      <span className="min-w-0 truncate">
+        <span className="font-semibold">{label}</span>
+        <span>: {summary}</span>
+      </span>
+    </button>
+  );
+});
+
+/** Two-option exclusive filter — checkmark on the selected row; click again to clear to All. */
+function SingleSelectFilterPill({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  value: string | null;
+  onChange: (next: string | null) => void;
+}) {
+  const summary = options.find((o) => o.value === value)?.label ?? "All";
+  const hasSelection = value != null;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={<FilterPillTrigger label={label} summary={summary} hasSelection={hasSelection} />}
+      />
+      <DropdownMenuContent align="start" className="min-w-[12rem]">
+        {options.map((opt) => {
+          const selected = value === opt.value;
+          return (
+            <DropdownMenuItem
+              key={opt.value}
+              className={cn(selected && "font-medium")}
+              onClick={() => onChange(selected ? null : opt.value)}
+            >
+              {opt.label}
+              {selected ? (
+                <Check className="ml-auto size-4 shrink-0 text-active" strokeWidth={2.5} />
+              ) : null}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** Multiselect filter pill with search — used for Captain. */
+function MultiSelectFilterPill({
+  label,
+  options,
+  selected,
+  onChange,
+  searchPlaceholder = "Search",
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  searchPlaceholder?: string;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const selectedLabels = options.filter((o) => selected.includes(o.value)).map((o) => o.label);
+  const summary = selectedLabels.length === 0 ? "All" : selectedLabels.join(", ");
+  const hasSelection = selected.length > 0;
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, query]);
+
+  return (
+    <DropdownMenu
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQuery("");
+      }}
+    >
+      <DropdownMenuTrigger
+        render={<FilterPillTrigger label={label} summary={summary} hasSelection={hasSelection} />}
+      />
+      <DropdownMenuContent align="start" className="min-w-[14rem] p-1">
+        <div
+          className="sticky top-0 z-10 mb-1 bg-bg pb-1"
+          onKeyDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex h-8 items-center gap-2 rounded-[4px] bg-bg-secondary px-2">
+            <Search className="size-3 shrink-0 text-secondary" strokeWidth={2} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={searchPlaceholder}
+              className="min-w-0 flex-1 bg-transparent text-md text-primary outline-none placeholder:text-secondary"
+            />
+          </div>
+        </div>
+        {filtered.length === 0 ? (
+          <p className="px-2 py-1.5 text-md text-secondary">No matches</p>
+        ) : (
+          filtered.map((opt) => (
+            <DropdownMenuCheckboxItem
+              key={opt.value}
+              checked={selected.includes(opt.value)}
+              onCheckedChange={(checked) => {
+                if (checked === true) {
+                  onChange([...selected, opt.value]);
+                } else {
+                  onChange(selected.filter((v) => v !== opt.value));
+                }
+              }}
+            >
+              {opt.label}
+            </DropdownMenuCheckboxItem>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** Search + filter toggle; opening the filter reveals Type / Assigned / Captain pills. */
+function RoutesFilterSection(props: {
+  search: string;
+  onSearchChange: (value: string) => void;
+  filterOpen: boolean;
+  onFilterToggle: () => void;
+  deliveryType: DeliveryTypeFilter | null;
+  onDeliveryTypeChange: (value: DeliveryTypeFilter | null) => void;
+  vacancy: VacancyFilter | null;
+  onVacancyChange: (value: VacancyFilter | null) => void;
+  captainIds: string[];
+  onCaptainIdsChange: (value: string[]) => void;
+  captainOptions: CaptainFilterOption[];
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const filterInnerRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [filterClosing, setFilterClosing] = useState(false);
+  const [filterHeight, setFilterHeight] = useState(0);
+  const [trackedFilterOpen, setTrackedFilterOpen] = useState(props.filterOpen);
+
+  if (props.filterOpen !== trackedFilterOpen) {
+    setTrackedFilterOpen(props.filterOpen);
+    if (props.filterOpen) {
+      setFilterClosing(false);
+    } else if (filterHeight > 0 || filterClosing) {
+      setFilterClosing(true);
+    }
+  }
+
+  const filterVisible = props.filterOpen || filterClosing;
+
+  useLayoutEffect(() => {
+    if (props.filterOpen) {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+      let nested = 0;
+      const outer = requestAnimationFrame(() => {
+        nested = requestAnimationFrame(() => {
+          setFilterHeight(filterInnerRef.current?.scrollHeight ?? 0);
+        });
+      });
+      return () => {
+        cancelAnimationFrame(outer);
+        cancelAnimationFrame(nested);
+      };
+    }
+
+    if (!filterClosing) return;
+
+    let nested = 0;
+    const outer = requestAnimationFrame(() => {
+      nested = requestAnimationFrame(() => {
+        setFilterHeight(0);
+      });
+    });
+    const el = containerRef.current;
+    const closeMs = el
+      ? Math.max(
+          readCssDurationMsFrom(el, "--panel-close-dur", 350),
+          readCssDurationMsFrom(el, "--resize-dur", 150),
+        )
+      : 150;
+    closeTimerRef.current = setTimeout(() => {
+      setFilterClosing(false);
+      closeTimerRef.current = null;
+    }, closeMs);
+
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(nested);
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    };
+  }, [props.filterOpen, filterClosing]);
+
+  useLayoutEffect(() => {
+    if (!filterVisible || !filterInnerRef.current) return;
+    let nested = 0;
+    const outer = requestAnimationFrame(() => {
+      nested = requestAnimationFrame(() => {
+        setFilterHeight(filterInnerRef.current?.scrollHeight ?? 0);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(nested);
+    };
+  }, [filterVisible, props.deliveryType, props.vacancy, props.captainIds, props.captainOptions]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="shrink-0 border-b border-border px-3 py-4"
+      style={
+        {
+          "--resize-dur": "220ms",
+          "--panel-translate-y": "12px",
+        } as CSSProperties
+      }
+    >
+      <div className="flex flex-col">
+        <div className="flex items-center gap-2">
+          <SearchBar
+            value={props.search}
+            onChange={props.onSearchChange}
+            placeholder="Search Address, Route, or Volunteer"
+            className="min-w-0 flex-1"
+          />
+          <Button
+            variant="toolbar"
+            size="toolbar"
+            shape="rounded"
+            aria-label="Toggle filters"
+            aria-expanded={props.filterOpen}
+            selected={props.filterOpen || filterClosing}
+            onClick={props.onFilterToggle}
+          >
+            <Filter />
+          </Button>
+        </div>
+
+        <div className="t-resize overflow-hidden" style={{ height: filterHeight }}>
+          {filterVisible && (
+            <div
+              ref={filterInnerRef}
+              className="t-panel-slide flex min-w-0 gap-2 pt-3"
+              data-open={props.filterOpen ? "true" : "false"}
+            >
+              <SingleSelectFilterPill
+                label="Type"
+                options={TYPE_OPTIONS}
+                value={props.deliveryType}
+                onChange={(next) => props.onDeliveryTypeChange(next as DeliveryTypeFilter | null)}
+              />
+              <SingleSelectFilterPill
+                label="Assigned"
+                options={ASSIGNED_OPTIONS}
+                value={props.vacancy}
+                onChange={(next) => props.onVacancyChange(next as VacancyFilter | null)}
+              />
+              <MultiSelectFilterPill
+                label="Captain"
+                options={props.captainOptions}
+                selected={props.captainIds}
+                onChange={props.onCaptainIdsChange}
+                searchPlaceholder="Search captains"
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function RoutesClient() {
   const qc = useQueryClient();
-  const [vacancy, setVacancy] = useState<Vacancy>("all");
   const [q, setQ] = useState("");
   const [showHomes] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [deliveryType, setDeliveryType] = useState<DeliveryTypeFilter>("routes");
-  const [captainId, setCaptainId] = useState("all");
-  // TEMP: Shift+F toggles filter UI between map overlay and side panel.
-  const [filterPlacement, setFilterPlacement] = useState<FilterPlacement>("map");
+  const [deliveryType, setDeliveryType] = useState<DeliveryTypeFilter | null>(null);
+  const [vacancy, setVacancy] = useState<VacancyFilter | null>(null);
+  const [captainIds, setCaptainIds] = useState<string[]>([]);
+  // Default = new pill filters. Shift+F cycles pills → legacy sidebar → map overlay.
+  const [filterPlacement, setFilterPlacement] = useState<FilterPlacement>("pills");
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key !== "F" || !e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
       if (isTypingTarget(e.target)) return;
       e.preventDefault();
-      setFilterPlacement((p) => (p === "map" ? "sidepanel" : "map"));
+      setFilterPlacement((p) => {
+        const i = FILTER_PLACEMENT_ORDER.indexOf(p);
+        return FILTER_PLACEMENT_ORDER[(i + 1) % FILTER_PLACEMENT_ORDER.length];
+      });
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -395,15 +728,15 @@ export function RoutesClient() {
 
   const listUrl = useMemo(() => {
     const params = new URLSearchParams();
-    if (vacancy !== "all") params.set("vacancy", vacancy);
-    if (captainId !== "all") params.set("captainId", captainId);
+    if (vacancy) params.set("vacancy", vacancy);
+    if (captainIds.length === 1) params.set("captainId", captainIds[0]);
     if (q.trim()) params.set("q", q.trim());
     const qs = params.toString();
     return `/api/routes${qs ? `?${qs}` : ""}`;
-  }, [vacancy, captainId, q]);
+  }, [vacancy, captainIds, q]);
 
   const routes = useQuery({
-    queryKey: ["routes", vacancy, captainId, q],
+    queryKey: ["routes", vacancy, captainIds, q],
     queryFn: () => getJson<RouteSummary[]>(listUrl),
   });
   const volunteers = useQuery({
@@ -434,36 +767,68 @@ export function RoutesClient() {
   );
 
   const captainOptions: CaptainFilterOption[] = useMemo(
-    () => [
-      { value: "all", label: "All" },
-      ...(captains.data ?? []).map((c) => ({
+    () =>
+      (captains.data ?? []).map((c) => ({
         value: c.id,
         label: `${c.firstName} ${c.lastName}`,
       })),
-    ],
     [captains.data],
   );
 
-  const mapRoutes: MapRoute[] = (routes.data ?? [])
-    // Drops aren't on this map yet — Type=Drops shows an empty set for now.
-    .filter(() => deliveryType !== "drops")
-    .map((r) => ({
-      id: r.id,
-      streetName: r.streetName,
-      lifecycle: r.lifecycle,
-      suspended: r.suspended,
-      needsAttention: r.needsAttention,
-      start: r.start,
-      end: r.end,
-      path: pathById.get(r.id) ?? null,
-      label: routeLabel(r),
-      volunteerName: r.assignedVolunteer
-        ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
-        : null,
-      bundleCount: greedySplit(Math.max(0, Math.floor(r.papers))).length,
-      papers: r.papers,
-    }));
-  const listRoutes = deliveryType === "drops" ? [] : (routes.data ?? []);
+  const legacyDeliveryType: LegacyDeliveryTypeFilter = deliveryType ?? "all";
+  const legacyVacancy: LegacyVacancyFilter = vacancy ?? "all";
+  const legacyCaptainId = captainIds.length === 1 ? captainIds[0] : "all";
+  const legacyCaptainOptions: CaptainFilterOption[] = useMemo(
+    () => [{ value: "all", label: "All" }, ...captainOptions],
+    [captainOptions],
+  );
+
+  function setLegacyDeliveryType(value: LegacyDeliveryTypeFilter) {
+    setDeliveryType(value === "all" ? null : value);
+  }
+  function setLegacyVacancy(value: LegacyVacancyFilter) {
+    setVacancy(value === "all" ? null : value);
+  }
+  function setLegacyCaptainId(value: string) {
+    setCaptainIds(value === "all" ? [] : [value]);
+  }
+
+  const filteredRoutes = useMemo(() => {
+    let list = routes.data ?? [];
+
+    // null = All. Drops aren't on the map/list yet.
+    if (deliveryType === "drops") {
+      list = [];
+    }
+
+    if (vacancy) {
+      list = list.filter((r) => r.lifecycle === vacancy);
+    }
+
+    if (captainIds.length > 1) {
+      list = list.filter((r) => r.captain != null && captainIds.includes(r.captain.id));
+    }
+
+    return list;
+  }, [routes.data, deliveryType, vacancy, captainIds]);
+
+  const mapRoutes: MapRoute[] = filteredRoutes.map((r) => ({
+    id: r.id,
+    streetName: r.streetName,
+    lifecycle: r.lifecycle,
+    suspended: r.suspended,
+    needsAttention: r.needsAttention,
+    start: r.start,
+    end: r.end,
+    path: pathById.get(r.id) ?? null,
+    label: routeLabel(r),
+    volunteerName: r.assignedVolunteer
+      ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
+      : null,
+    bundleCount: greedySplit(Math.max(0, Math.floor(r.papers))).length,
+    papers: r.papers,
+  }));
+  const listRoutes = filteredRoutes;
   const mapHomes: MapHome[] = showHomes
     ? (volunteers.data ?? []).map((v) => ({
         id: v.id,
@@ -479,7 +844,7 @@ export function RoutesClient() {
           <div className="flex items-center gap-2">
             <h1 className="text-md text-primary">Routes</h1>
             <p className="text-md text-secondary">
-              {routes.data ? `Showing ${routes.data.length}` : "Loading…"}
+              {routes.data ? `Showing ${listRoutes.length}` : "Loading…"}
             </p>
           </div>
           <Button
@@ -495,7 +860,6 @@ export function RoutesClient() {
         </div>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          {/* Map — fills available space, no rounding/padding */}
           <div className="min-h-0 min-w-0 flex-1">
             <RouteMap
               routes={mapRoutes}
@@ -505,24 +869,23 @@ export function RoutesClient() {
                 setCreating(false);
                 setSelectedId(id);
               }}
-              boundsFitKey={`${vacancy}|${q.trim()}|${deliveryType}|${captainId}|${showHomes ? "homes" : "no-homes"}`}
+              boundsFitKey={`${vacancy ?? "all"}|${q.trim()}|${deliveryType ?? "all"}|${captainIds.join(",")}|${showHomes ? "homes" : "no-homes"}`}
               boundsFitReady={!routes.isFetching && (!showHomes || !volunteers.isFetching)}
               filterPlacement={filterPlacement}
               search={q}
               onSearchChange={setQ}
               filterOpen={filterOpen}
               onFilterToggle={() => setFilterOpen((o) => !o)}
-              vacancy={vacancy}
-              onVacancyChange={setVacancy}
-              deliveryType={deliveryType}
-              onDeliveryTypeChange={setDeliveryType}
-              captainId={captainId}
-              onCaptainChange={setCaptainId}
-              captainOptions={captainOptions}
+              vacancy={legacyVacancy}
+              onVacancyChange={setLegacyVacancy}
+              deliveryType={legacyDeliveryType}
+              onDeliveryTypeChange={setLegacyDeliveryType}
+              captainId={legacyCaptainId}
+              onCaptainChange={setLegacyCaptainId}
+              captainOptions={legacyCaptainOptions}
             />
           </div>
 
-          {/* Right panel — border-left, no rounding, matches member side panel structure */}
           <div className="flex h-full w-[400px] shrink-0 flex-col border-l border-border bg-bg">
             {creating ? (
               <CreateRoutePanel
@@ -546,24 +909,38 @@ export function RoutesClient() {
             ) : (
               <>
                 <div className="page-header-container">
-                  <span className="text-md font-semibold text-primary">Deliveries</span>
+                  <span className="text-md font-normal text-primary">Routes</span>
                 </div>
-                {filterPlacement === "sidepanel" && (
-                  <DeliveriesFilterSection
+                {filterPlacement === "pills" ? (
+                  <RoutesFilterSection
                     search={q}
                     onSearchChange={setQ}
                     filterOpen={filterOpen}
                     onFilterToggle={() => setFilterOpen((o) => !o)}
-                    vacancy={vacancy}
-                    onVacancyChange={setVacancy}
                     deliveryType={deliveryType}
                     onDeliveryTypeChange={setDeliveryType}
-                    captainId={captainId}
-                    onCaptainChange={setCaptainId}
+                    vacancy={vacancy}
+                    onVacancyChange={setVacancy}
+                    captainIds={captainIds}
+                    onCaptainIdsChange={setCaptainIds}
                     captainOptions={captainOptions}
                   />
-                )}
-                <div className="flex-1 overflow-y-auto px-4 py-4">
+                ) : filterPlacement === "legacy" ? (
+                  <LegacyRoutesFilterSection
+                    search={q}
+                    onSearchChange={setQ}
+                    filterOpen={filterOpen}
+                    onFilterToggle={() => setFilterOpen((o) => !o)}
+                    deliveryType={legacyDeliveryType}
+                    onDeliveryTypeChange={setLegacyDeliveryType}
+                    vacancy={legacyVacancy}
+                    onVacancyChange={setLegacyVacancy}
+                    captainId={legacyCaptainId}
+                    onCaptainChange={setLegacyCaptainId}
+                    captainOptions={legacyCaptainOptions}
+                  />
+                ) : null}
+                <div className="flex-1 overflow-y-auto px-2 py-2">
                   <RouteList
                     routes={listRoutes}
                     loading={routes.isLoading}
@@ -603,38 +980,51 @@ function RouteList(props: {
   if (props.routes.length === 0) return <p className="text-md text-secondary">No routes match.</p>;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       {props.routes.map((r) => {
         const isVacant = r.lifecycle === "vacant";
-        const volunteerName = r.assignedVolunteer
-          ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
-          : "vacant";
+        const captainName = r.captain?.name ?? "No captain";
         const state = routeState(r);
 
         return (
-          // TODO: Harmonize SidePanelRow height with members (h-8 vs h-10 here).
-          <SidePanelRow
+          <div
             key={r.id}
-            className="h-10 px-2 py-2"
-            meta={
-              <div className="flex shrink-0 items-center gap-2">
-                {state && <RouteStateTag state={state} />}
-                <span className="text-md text-secondary">{volunteerName}</span>
-                <RouteActionsMenu
-                  routeId={r.id}
-                  hasVolunteer={Boolean(r.assignedVolunteer)}
-                  onOpenDetails={() => props.onSelect(r.id)}
-                  onChanged={props.onRoutesChanged}
-                  onRetired={() => {
-                    if (props.selectedId === r.id) props.onClearSelection();
-                  }}
-                />
-              </div>
-            }
+            role="button"
+            tabIndex={0}
             onClick={() => props.onSelect(r.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                props.onSelect(r.id);
+              }
+            }}
+            className={cn(
+              "group/row flex w-full cursor-pointer items-start gap-2 rounded-md px-2 py-2 text-left outline-none",
+              "transition-colors hover:bg-bg-secondary focus-visible:ring-3 focus-visible:ring-ring/50",
+            )}
           >
-            <RouteTag label={routeLabel(r)} vacant={isVacant} />
-          </SidePanelRow>
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <RouteTag label={routeLabel(r)} vacant={isVacant} />
+                {state && <RouteStateTag state={state} />}
+              </div>
+              <span className="truncate pl-2 text-md font-normal text-secondary">
+                {captainName}
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center self-start">
+              <RouteActionsMenu
+                routeId={r.id}
+                hasVolunteer={Boolean(r.assignedVolunteer)}
+                revealOnRowHover
+                onOpenDetails={() => props.onSelect(r.id)}
+                onChanged={props.onRoutesChanged}
+                onRetired={() => {
+                  if (props.selectedId === r.id) props.onClearSelection();
+                }}
+              />
+            </div>
+          </div>
         );
       })}
     </div>
@@ -686,6 +1076,8 @@ function RouteActionsMenu(props: {
   onRetired: () => void;
   /** Hide when already viewing route detail (header menu). */
   showRouteDetails?: boolean;
+  /** Show the trigger only while the parent `.group/row` is hovered / focused. */
+  revealOnRowHover?: boolean;
 }) {
   const qc = useQueryClient();
   const showRouteDetails = props.showRouteDetails ?? true;
@@ -717,14 +1109,18 @@ function RouteActionsMenu(props: {
         aria-label="Route actions"
         render={
           <Button
-            variant="text"
-            size="icon-sm"
-            className="shrink-0 text-secondary"
+            variant="default"
+            size="icon"
+            className={cn(
+              "shrink-0 bg-transparent text-secondary hover:bg-bg-quaternary data-popup-open:bg-bg-quaternary",
+              props.revealOnRowHover &&
+                "opacity-0 transition-[opacity,background-color,transform,color] group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100",
+            )}
             onClick={stopRowClick}
           />
         }
       >
-        <MoreHorizontal className="size-4" />
+        <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {showRouteDetails ? (
@@ -818,13 +1214,13 @@ function dropLabel(r: RouteDetail): string {
 function DetailBreadcrumb(props: { title: string; onBack: () => void; actions?: React.ReactNode }) {
   return (
     <div className="flex h-[64px] items-center justify-between gap-2 border-b border-border pl-6 pr-4">
-      <div className="flex min-w-0 items-center gap-2.5 text-md font-semibold">
+      <div className="flex min-w-0 items-center gap-2.5 text-md font-normal">
         <button
           type="button"
-          className="shrink-0 text-secondary hover:text-primary"
+          className="shrink-0 cursor-pointer text-secondary hover:text-primary"
           onClick={props.onBack}
         >
-          Deliveries
+          Routes
         </button>
         <span className="text-secondary">&gt;</span>
         <span className="truncate text-primary">{props.title}</span>
