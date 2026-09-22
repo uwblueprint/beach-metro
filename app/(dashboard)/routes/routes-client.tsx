@@ -90,13 +90,12 @@ function routeLabel(r: RouteSummary): string {
 }
 
 /**
- * Point delivery (drop) on the list/map: same start/end place.
- * Prefers coordinates when both are cached; otherwise matching endpoint labels.
- *
- * TODO(backend): Prefer a server `isDrop` (or one shared address id for start+end)
- * so Type=Drops still works when the 30-day coord cache is empty.
+ * Point delivery (drop): the server reports it from the shared address row, so
+ * this holds with a cold coordinate cache. Coordinates and labels stay as a
+ * fallback for rows written before endpoints were shared.
  */
 function isDropSummary(r: RouteSummary): boolean {
+  if (r.isDrop) return true;
   if (
     r.start &&
     r.end &&
@@ -127,6 +126,8 @@ interface RouteSummary {
   id: string;
   streetName: string;
   side: string | null;
+  /** Server-derived: start and end are one address row. */
+  isDrop: boolean;
   lifecycle: "assigned" | "vacant";
   suspended: boolean;
   needsAttention: boolean;
@@ -1068,8 +1069,7 @@ function RouteList(props: {
   return (
     <div className="flex flex-col gap-3">
       {props.routes.map((r) => {
-        // A drop carries no volunteer, so its vacancy is whether a captain holds it.
-        const isVacant = isDropSummary(r) ? !r.captain : r.lifecycle === "vacant";
+        const isVacant = r.lifecycle === "vacant";
         const captainName = r.captain?.name ?? "No captain";
         const state = routeState(r);
 
@@ -1298,6 +1298,7 @@ function InputField(props: {
 
 /** Point delivery (drop): start and end resolve to the same place. */
 function isDropRoute(r: RouteDetail): boolean {
+  if (r.isDrop) return true;
   const start = r.startAddress.formattedAddress?.trim();
   const end = r.endAddress.formattedAddress?.trim();
   if (start && end && start === end) return true;
@@ -1847,16 +1848,12 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
  * Create a drop (point delivery): one address stored as both start and end so
  * the route detail panel treats it as a drop. Captain is required in the UI.
  *
- * TODO(backend / PR):
- * - Apply supabase/migrations/20260807000000_route_assigned_captain.sql
- *   (`pnpm db:push`) or POST with assignedCaptainId fails (missing column).
- * - Prefer server `isDrop` (or one shared address id for start+end) so Type
- *   filters work when the coord cache is empty; create currently inserts two
- *   address rows with the same input.
- * - Optionally require assignedCaptainId in Zod createRoute when start===end;
- *   lifecycle for drops is still volunteer-based (shows vacant without a volunteer).
- * - Captain home pin needs captain address data (not modeled in people flow).
- * - Places autocomplete for editing drop address in detail remains out of scope.
+ * Sending the same address for both endpoints is what marks the row a drop: the
+ * service stores one address row for both, and `isDrop` reads off that.
+ *
+ * Still out of scope: a captain home pin needs captain address data, which the
+ * people flow does not model, and Places autocomplete for editing a drop's
+ * address from the detail panel.
  */
 function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) => void }) {
   const captains = useQuery({

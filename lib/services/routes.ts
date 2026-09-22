@@ -26,13 +26,25 @@ import {
   getAddressDetails,
   type AddressDetail,
 } from "./addresses";
-import { greedySplit, routeEndpointLabel, volunteerStatus } from "./derive";
+import {
+  greedySplit,
+  routeEndpointLabel,
+  routeLifecycle,
+  sameAddressInput,
+  volunteerStatus,
+} from "./derive";
 import { db, throwDb, today } from "./shared";
 
 export interface RouteSummary {
   id: string;
   streetName: string;
   side: RouteSide | null;
+  /**
+   * Point delivery: start and end resolve to the same address row. Authoritative
+   * on the server, so Type filters hold when the 30-day coordinate cache is cold
+   * and the client has no coordinates to compare.
+   */
+  isDrop: boolean;
   lifecycle: "assigned" | "vacant";
   suspended: boolean; // derived: assigned volunteer is on vacation
   needsAttention: boolean; // derived: assigned volunteer retired or past end date
@@ -110,12 +122,18 @@ function toSummary(
       ? (ctx.captains.find((c) => c.id === territory.assigned_captain_id) ?? null)
       : null;
   const captain = directCaptain ?? territoryCaptain;
+  const isDrop = r.start_address_id === r.end_address_id;
 
   return {
     id: r.id,
     streetName: r.street_name,
     side: r.side,
-    lifecycle: r.assigned_volunteer_id ? "assigned" : "vacant",
+    isDrop,
+    lifecycle: routeLifecycle({
+      isDrop,
+      assignedVolunteerId: r.assigned_volunteer_id,
+      assignedCaptainId: r.assigned_captain_id,
+    }),
     suspended: status === "on-vacation",
     needsAttention:
       volunteer !== null &&
@@ -289,10 +307,13 @@ export async function createRouteRecord(input: z.infer<typeof createRoute>): Pro
   if (input.assignedCaptainId) await assertAssignableCaptain(input.assignedCaptainId);
   // Route endpoints are stored as residential addresses (they're intersections /
   // street points, not commercial drops) — recorded as an interpretation.
-  const [start, end] = await Promise.all([
-    createAddress(input.startAddress, "residential"),
-    createAddress(input.endAddress, "residential"),
-  ]);
+  //
+  // Identical endpoints share one address row, which is what makes a drop
+  // recognisable server-side and saves the duplicate geocode. Addresses are
+  // already shareable between route endpoints.
+  const sameEndpoint = sameAddressInput(input.startAddress, input.endAddress);
+  const start = await createAddress(input.startAddress, "residential");
+  const end = sameEndpoint ? start : await createAddress(input.endAddress, "residential");
 
   const bundles: RouteBundle[] =
     input.bundles !== undefined ? input.bundles : greedySplit(input.papers ?? 0);
@@ -323,7 +344,7 @@ export async function updateRouteRecord(
   id: string,
   input: z.infer<typeof updateRoute>,
 ): Promise<RouteDetail> {
-  await fetchRoute(id);
+  const existing = await fetchRoute(id);
 
   const patch: Record<string, unknown> = {};
   if (input.streetName !== undefined) patch.street_name = input.streetName;
@@ -335,11 +356,31 @@ export async function updateRouteRecord(
     if (input.assignedCaptainId) await assertAssignableCaptain(input.assignedCaptainId);
     patch.assigned_captain_id = input.assignedCaptainId;
   }
-  if (input.startAddress !== undefined) {
-    patch.start_address_id = (await createAddress(input.startAddress, "residential")).address.id;
-  }
-  if (input.endAddress !== undefined) {
-    patch.end_address_id = (await createAddress(input.endAddress, "residential")).address.id;
+  // A drop is one address row worn as both endpoints, so moving it has to move
+  // both. Editing one end alone would split the row and turn the drop into a
+  // zero-length route.
+  const wasDrop = existing.start_address_id === existing.end_address_id;
+  const movesDrop = wasDrop && (input.startAddress !== undefined || input.endAddress !== undefined);
+
+  if (movesDrop) {
+    const moved = await createAddress((input.startAddress ?? input.endAddress)!, "residential");
+    patch.start_address_id = moved.address.id;
+    patch.end_address_id = moved.address.id;
+  } else if (
+    input.startAddress !== undefined &&
+    input.endAddress !== undefined &&
+    sameAddressInput(input.startAddress, input.endAddress)
+  ) {
+    const shared = await createAddress(input.startAddress, "residential");
+    patch.start_address_id = shared.address.id;
+    patch.end_address_id = shared.address.id;
+  } else {
+    if (input.startAddress !== undefined) {
+      patch.start_address_id = (await createAddress(input.startAddress, "residential")).address.id;
+    }
+    if (input.endAddress !== undefined) {
+      patch.end_address_id = (await createAddress(input.endAddress, "residential")).address.id;
+    }
   }
 
   if (input.bundles !== undefined) {
