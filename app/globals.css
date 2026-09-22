@@ -1,10 +1,15 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "shadow-plugin";
 
 @theme inline {
   --color-bg: var(--bg);
   --color-bg-secondary: var(--bg-secondary);
+  --color-bg-tertiary: var(--bg-tertiary);
+  --color-bg-quaternary: var(--bg-quaternary);
+  --color-bg-quinary: var(--bg-quinary);
+  --color-bg-senary: var(--bg-senary);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
@@ -22,6 +27,8 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-active: var(--sidebar-active);
 
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
@@ -41,6 +48,8 @@
 
   --color-primary: var(--primary);
   --color-secondary: var(--secondary);
+  --color-tertiary: var(--tertiary);
+  --color-quaternary: var(--quaternary);
 
   /* button / surface fills (not for text-*) */
   --color-secondary-fill: var(--secondary-fill);
@@ -72,6 +81,7 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
   /* Body type scale (Figma: size px / line-height %, 16px root → rem) */
   --text-xs: 0.625rem;
   --text-xs--line-height: 1.3;
@@ -92,35 +102,50 @@
   --text-3xl--line-height: 1.3;
   --text-4xl: 2.75rem;
   --text-4xl--line-height: 1.3;
+
+  /* Font weights — lighter than CSS defaults so normal/medium/semibold stay airy */
+  --font-weight-normal: 300;
+  --font-weight-medium: 400;
+  --font-weight-semibold: 500;
 }
 
 :root {
   --sidebar-width: 200px;
+  /* bg scale: --bg is primary (not renamed). ΔL = 0.01; non-primary ever-so-slightly warm.
+     Interactive steps: hover = +1, active = +2 from the resting surface.
+     Quinary/senary exist so tertiary (and deeper) surfaces can still +2. */
   --bg: oklch(1 0 0);
-  --bg-secondary: oklch(0.98 0 0);
+  --bg-secondary: oklch(0.99 0.004 80);
+  --bg-tertiary: oklch(0.98 0.004 80); /* former --bg-secondary */
+  --bg-quaternary: oklch(0.97 0.004 80);
+  --bg-quinary: oklch(0.96 0.004 80);
+  --bg-senary: oklch(0.95 0.004 80);
   --foreground: oklch(0.216 0.009 255.6);
   --card: var(--bg);
   --card-foreground: var(--foreground);
   --popover: var(--bg);
   --popover-foreground: var(--foreground);
 
-  /* text colors — use with text-primary / text-secondary only */
+  /* text colors — primary/secondary unchanged; tertiary/quaternary continue ΔL ≈ 0.312 */
   --primary: var(--foreground);
   --secondary: oklch(0.528 0 0); /* Figma text/secondary ≈ #6B6B6B */
+  --tertiary: oklch(0.84 0 0);
+  --quaternary: oklch(1 0 0);
 
-  /* button / surface fills */
-  --secondary-fill: oklch(0.94 0 0);
-  --secondary-fill-hover: oklch(0.805 0 0);
+  /* Neutral fills — hover +1 / active +2 from resting surface.
+     On primary: hover secondary, active tertiary. On tertiary: hover quaternary, active quinary. */
+  --secondary-fill: var(--bg-secondary);
+  --secondary-fill-hover: var(--bg-tertiary);
 
   --active: oklch(0.717 0.149 234.3);
-  --active-hover: oklch(0.607 0.126 234.5);
-  --active-grey: oklch(0.946 0 0); /* #EDEDED */
-  --muted: var(--bg-secondary);
+  --active-hover: oklch(0.697 0.149 234.3);
+  --active-grey: var(--bg-tertiary);
+  --muted: var(--bg-tertiary);
   --muted-foreground: var(--secondary);
-  --accent: oklch(0.967 0 0);
+  --accent: var(--bg-secondary);
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.664 0.224 32.3);
-  --destructive-hover: oklch(0.542 0.208 31.5);
+  --destructive-hover: oklch(0.644 0.224 32.3);
   --success: oklch(0.68 0.215 144.9);
   --warning: oklch(0.818 0.169 77.5);
   --disabled: oklch(0.845 0 0);
@@ -135,13 +160,17 @@
   --input: var(--border);
   --ring: oklch(0.605 0.186 257.6);
 
-  --tag: oklch(0.976 0 0);
-  --tag-hover: oklch(0.96 0 0);
+  /* Pills at tertiary → hover +1 = quaternary */
+  --tag: var(--bg-tertiary);
+  --tag-hover: var(--bg-quaternary);
   --tag-success: oklch(0.985 0.027 140.2);
   --tag-active: oklch(0.98 0.04 220.6);
   --tag-active-hover: oklch(0.964 0.06 220.6);
   --tag-warning: oklch(0.988 0.018 92.7);
   --tag-destructive: oklch(0.974 0.014 50.8);
+
+  /* Inner highlight stroke — buttons, pills */
+  --stroke-inner: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
 
   /* chart styles */
   --chart-1: oklch(0.87 0 0);
@@ -152,11 +181,13 @@
 
   /* misc styles */
   --radius: 0.625rem;
-  --sidebar: var(--bg-secondary);
+  --sidebar: var(--bg-tertiary); /* warm shell — same L as cool predecessor, on the bg scale */
+  --sidebar-hover: var(--bg-quinary); /* +2 from sidebar */
+  --sidebar-active: var(--bg-senary); /* +3 from sidebar */
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--active);
   --sidebar-primary-foreground: var(--bg);
-  --sidebar-accent: var(--accent);
+  --sidebar-accent: var(--sidebar-hover);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
@@ -254,11 +285,25 @@
   html {
     @apply font-sans;
   }
+
+  /* Clickable affordances always show a pointer (unless explicitly overridden, e.g. cursor-text). */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  a[href] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled="true"],
+  a[aria-disabled="true"] {
+    cursor: not-allowed;
+  }
 }
 
 @keyframes payment-cell-flash {
   from {
-    background-color: var(--bg-secondary);
+    background-color: var(--bg-tertiary);
   }
   to {
     background-color: transparent;
@@ -272,14 +317,15 @@
 }
 
 @layer components {
-  /* Outer shell beside the sidebar — Figma: pt 12 / pr 12 / pb 16, no left pad */
+  /* Outer shell beside the sidebar — Figma: pt 12 / pr 12 / pb 16.
+     pl-4 matches the sidebar’s left gutter so screen↔sidebar ≡ sidebar↔page. */
   .page-container {
-    @apply bg-bg-secondary flex h-full w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-3 pr-3 pb-4;
+    @apply bg-bg-tertiary flex h-full w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-3 pr-3 pb-4 pl-4;
   }
 
   /* White content panel that fills the container */
   .page {
-    @apply bg-bg border-border min-h-0 flex-1 overflow-y-auto rounded-[16px] border;
+    @apply bg-bg min-h-0 flex-1 overflow-y-auto rounded-[16px] smooth-shadow-ring-md;
   }
 
   .page-header-container {
@@ -308,11 +354,11 @@
   @apply flex h-10 w-full cursor-pointer items-center gap-10 rounded-md p-2 transition-colors select-none;
 
   &:hover {
-    @apply bg-tag-hover;
+    @apply bg-bg-secondary;
   }
 
   &[data-active="true"] {
-    @apply bg-active-grey;
+    @apply bg-bg-tertiary;
   }
 }
 
@@ -368,18 +414,58 @@
   }
 }
 
-/* transitions-dev — reimbursements list expand (grid 0fr ↔ 1fr, uses resize tokens) */
-.t-reimburse-list-expand {
-  grid-template-rows: 0fr;
-  transition: grid-template-rows var(--resize-dur) var(--resize-ease);
-  will-change: grid-template-rows;
+/* Sidebar collapse — content widths animate; aside stays overflow-visible for tile shadow */
+.t-sidebar-inner {
+  transition: width var(--resize-dur) var(--resize-ease);
+  will-change: width;
 }
-.t-reimburse-list-expand[data-open="true"] {
-  grid-template-rows: 1fr;
+
+.t-sidebar-brand {
+  transition:
+    width var(--resize-dur) var(--resize-ease),
+    transform 150ms ease-out;
+  will-change: width;
+}
+
+.t-sidebar .sidebar-label,
+.t-sidebar [data-slot="list-item-label"] {
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 1;
+  transition: opacity var(--resize-dur) var(--resize-ease);
+}
+
+/* Nav items: 12px left pad always (matches collapsed icon-centering; icons don’t shift) */
+.t-sidebar [data-slot="list-item"] {
+  width: 100%;
+  overflow: hidden;
+  padding-left: 12px;
+  gap: 10px; /* list-item md gap-2 (8px) + 2px — keep when collapsed so labels don’t slide */
+  transition:
+    width var(--resize-dur) var(--resize-ease),
+    color 150ms ease-out,
+    background-color 150ms ease-out;
+}
+
+.t-sidebar[data-collapsed="true"] [data-slot="list-item"] {
+  width: 40px; /* SIDEBAR_ICON_RAIL */
+}
+
+/* Opacity only — same fade both ways. Parents clip; don’t snap width/gap on the label. */
+.t-sidebar[data-collapsed="true"] .sidebar-label,
+.t-sidebar[data-collapsed="true"] [data-slot="list-item-label"] {
+  opacity: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .t-reimburse-list-expand {
+  .t-sidebar-brand,
+  .t-sidebar-inner,
+  .t-sidebar [data-slot="list-item"] {
+    transition: none !important;
+  }
+
+  .t-sidebar .sidebar-label,
+  .t-sidebar [data-slot="list-item-label"] {
     transition: none !important;
   }
 }
@@ -492,10 +578,81 @@
   }
 }
 
-/* Map overlay: backdrop blur fades 8px → 0px top to bottom (masked) */
-.map-ui-blur-fill {
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+/* transitions-dev — text states swap */
+.t-text-swap {
+  display: inline-block;
+  transform: translateY(0);
+  filter: blur(0);
+  opacity: 1;
+  transition:
+    transform var(--text-swap-dur) var(--text-swap-ease),
+    filter var(--text-swap-dur) var(--text-swap-ease),
+    opacity var(--text-swap-dur) var(--text-swap-ease);
+  will-change: transform, filter, opacity;
+}
+.t-text-swap.is-exit {
+  transform: translateY(calc(var(--text-swap-translate-y) * -1));
+  filter: blur(var(--text-swap-blur));
+  opacity: 0;
+}
+.t-text-swap.is-enter-start {
+  transform: translateY(var(--text-swap-translate-y));
+  filter: blur(var(--text-swap-blur));
+  opacity: 0;
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-text-swap {
+    transition: none !important;
+  }
+}
+
+/*
+ * Google Maps required attribution (logo + terms) — keep fully visible (ToS),
+ * but quiet it so it reads like app chrome instead of default Maps clutter.
+ * Bottom inset = gap between chips (12px).
+ */
+[data-map-container] .gm-style-cc,
+[data-map-container] .gm-style a[href*="maps.google.com/maps"],
+[data-map-container] .gm-style a[href*="google.com/maps"] {
+  margin: 0 0 6px 0 !important;
+}
+
+[data-map-container] .gm-style-cc,
+[data-map-container] .gm-style-cc button,
+[data-map-container] .gm-style-cc a,
+[data-map-container] .gm-style-cc span,
+[data-map-container] .gm-style-cc div {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  line-height: 1.3 !important;
+  color: var(--secondary) !important;
+  text-shadow: none !important;
+}
+
+[data-map-container] .gm-style-cc a:hover {
+  color: var(--primary) !important;
+  text-decoration: underline !important;
+}
+
+/* Soft pill behind the text attribution (not the logo) */
+[data-map-container] .gm-style-cc > div {
+  background: color-mix(in oklch, var(--bg) 92%, transparent) !important;
+  border-radius: 6px !important;
+  padding: 3px 8px !important;
+  box-shadow: 0 0 0 1px var(--hairline) !important;
+}
+
+/* Google logo — keep size/legibility; sit on the same quiet surface */
+[data-map-container] .gm-style a[rel="noopener"] img,
+[data-map-container] .gm-style > div > div > a > div > img {
+  border-radius: 4px;
+}
+
+[data-map-container] button.gm-control-active,
+[data-map-container] .gm-svpc,
+[data-map-container] .gm-fullscreen-control {
+  display: none !important;
 }

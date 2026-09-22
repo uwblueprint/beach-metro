@@ -154,7 +154,7 @@ function Combobox({
         className={cn(
           // Above dialog overlay/content (z-50); ~200px content cap.
           "z-[60] max-h-[200px] overflow-y-auto rounded-[8px] bg-bg p-1",
-          "shadow-[0px_4px_8px_rgba(0,0,0,0.25)] outline-none",
+          "smooth-shadow-ring-md outline-none",
         )}
       >
         {options.length === 0 && !footer ? (
@@ -169,16 +169,16 @@ function Combobox({
               id={optionId(index)}
               role="option"
               aria-selected={selected}
-              className={cn("rounded-[4px]", isActive && "bg-tag-hover")}
+              className={cn("rounded-[4px]", isActive && "bg-bg-secondary")}
             >
               <button
                 type="button"
                 tabIndex={-1}
                 disabled={option.disabled}
                 className={cn(
-                  "flex w-full cursor-pointer items-center gap-2 rounded-[4px] p-2 text-left text-sm text-primary outline-none transition-colors",
-                  "hover:bg-tag-hover",
-                  selected && "bg-active-grey hover:bg-active-grey",
+                  "flex w-full cursor-pointer items-center gap-2 rounded-[4px] p-2 text-left text-md text-primary outline-none transition-colors",
+                  "hover:bg-bg-secondary",
+                  selected && "bg-bg-tertiary hover:bg-bg-tertiary",
                   option.disabled && "pointer-events-none text-disabled",
                 )}
                 onMouseDown={(e) => e.preventDefault()}

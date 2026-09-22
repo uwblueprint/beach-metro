@@ -10,11 +10,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DatePicker } from "@/components/ui/date-picker";
+import { PageBreadcrumb } from "@/components/ui/page-breadcrumb";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
@@ -133,7 +135,7 @@ function IssueLockButton({ locked, onToggle }: { locked: boolean; onToggle: () =
         ignoreClickRef.current = false;
       }}
       className={cn(
-        "flex shrink-0 items-center justify-center rounded-[4px] p-2 text-muted-foreground transition-[background-color,color] duration-100 hover:bg-muted hover:text-primary [&_svg]:pointer-events-none",
+        "flex shrink-0 items-center justify-center rounded-[4px] p-2 text-muted-foreground transition-[background-color,color] duration-100 hover:bg-bg-secondary hover:text-primary [&_svg]:pointer-events-none",
         locked ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
       )}
     >
@@ -247,7 +249,6 @@ export default function FinancesPage() {
   const [draftFilters, setDraftFilters] =
     React.useState<FinancesFilterState>(DEFAULT_FINANCES_FILTERS);
   const [filtersOpen, setFiltersOpen] = React.useState(false);
-  const [overflowOpen, setOverflowOpen] = React.useState(false);
   const [createTableOpen, setCreateTableOpen] = React.useState(false);
   const [newTableName, setNewTableName] = React.useState("");
   const [showArchiveBanner, setShowArchiveBanner] = React.useState(false);
@@ -360,12 +361,10 @@ export default function FinancesPage() {
 
   function handleArchiveTable() {
     if (!activeYearId || isArchivedYear) return;
-    setOverflowOpen(false);
     archiveYear.mutate(activeYearId, { onSuccess: () => setShowArchiveBanner(true) });
   }
 
   function openCreateTableDialog() {
-    setOverflowOpen(false);
     setNewTableName("");
     setCreateTableOpen(true);
   }
@@ -573,9 +572,14 @@ export default function FinancesPage() {
     return (
       <div className="page-container">
         <div className="page">
-          <p className="p-6 text-md text-secondary">
-            {error instanceof Error ? error.message : "Could not load this finance table."}
-          </p>
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="page-header-container">
+              <h1 className="text-md text-primary">Finances</h1>
+            </div>
+            <p className="p-6 text-md text-secondary">
+              {error instanceof Error ? error.message : "Could not load this finance table."}
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -585,7 +589,12 @@ export default function FinancesPage() {
     return (
       <div className="page-container">
         <div className="page">
-          <p className="p-6 text-md text-secondary">Loading finance table…</p>
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="page-header-container">
+              <h1 className="text-md text-primary">Finances</h1>
+            </div>
+            <p className="p-6 text-md text-secondary">Loading finance table…</p>
+          </div>
         </div>
       </div>
     );
@@ -593,15 +602,12 @@ export default function FinancesPage() {
   return (
     <div className="page-container">
       <div className="page">
-        <div className="flex flex-col gap-4 p-6">
-          {/* Page header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              {/* Same as Overview: the breadcrumb's first segment is the page's
-                  only title, so it carries the h1. Classes unchanged. */}
-              <h1 className="text-md text-muted-foreground">Finances</h1>
-              <span className="text-md text-muted-foreground">/</span>
-              <div className="inline-flex items-center gap-1">
+        <div className="flex h-full min-h-0 flex-col">
+          <PageBreadcrumb
+            className="pr-[18px]"
+            root="Finances"
+            current={
+              <div className="inline-flex min-w-0 items-center gap-1">
                 {isEditingTableTitle ? (
                   <span className="inline-grid items-center [&>*]:col-start-1 [&>*]:row-start-1">
                     <span aria-hidden className="invisible whitespace-pre px-0 text-md font-medium">
@@ -622,26 +628,19 @@ export default function FinancesPage() {
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
-                      <button
+                      <Button
                         type="button"
+                        variant="text"
+                        size="sm"
                         aria-label="Switch table"
-                        className="inline-flex items-center gap-1"
+                        className="-ml-1 gap-1 px-1.5 font-medium"
                         onDoubleClick={!isEditingTableTitle ? startTableTitleEdit : undefined}
-                      >
-                        {!isEditingTableTitle && (
-                          <span
-                            className={cn(
-                              "text-md font-medium text-primary",
-                              !isArchivedYear && "cursor-text",
-                            )}
-                          >
-                            {tableDisplayLabel}
-                          </span>
-                        )}
-                        <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
-                      </button>
+                      />
                     }
-                  />
+                  >
+                    {!isEditingTableTitle && <span className="text-md">{tableDisplayLabel}</span>}
+                    <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
+                  </DropdownMenuTrigger>
                   <DropdownMenuContent
                     align="start"
                     side="bottom"
@@ -672,488 +671,487 @@ export default function FinancesPage() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button variant="default" size="sm" onClick={handleExportCsv}>
-                Export as CSV
-              </Button>
-              <Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
-                <PopoverTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label="More actions"
-                      className={cn(
-                        "flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[background-color,color] duration-300 ease-out",
-                        "hover:bg-muted hover:text-primary",
-                        "data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:hover:bg-muted data-popup-open:hover:text-primary",
-                      )}
-                    >
-                      <MoreHorizontal className="size-4" />
-                    </button>
-                  }
-                />
-                <PopoverContent
-                  align="end"
-                  side="bottom"
-                  sideOffset={4}
-                  className="w-auto min-w-0 gap-0 rounded-lg p-1 shadow-md ring-1 ring-foreground/10"
-                >
-                  {!isArchivedYear && (
-                    <button
-                      type="button"
-                      onClick={handleArchiveTable}
-                      className="flex w-full rounded-md px-3 py-1.5 text-left text-sm text-primary hover:bg-tag-hover active:bg-secondary-fill-hover"
-                    >
-                      Archive table
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={openCreateTableDialog}
-                    className="flex w-full rounded-md px-3 py-1.5 text-left text-sm text-primary hover:bg-tag-hover active:bg-secondary-fill-hover"
+            }
+            actions={
+              <>
+                <Button variant="default" size="sm" onClick={handleExportCsv}>
+                  Export as CSV
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="text"
+                        size="icon"
+                        aria-label="More actions"
+                        className="text-secondary"
+                      />
+                    }
                   >
-                    Create new table
-                  </button>
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
+                    <MoreHorizontal className="size-4" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {!isArchivedYear && (
+                      <DropdownMenuItem onClick={handleArchiveTable}>
+                        Archive table
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onClick={openCreateTableDialog}>
+                      Create new table
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            }
+          />
 
-          {showArchiveBanner && archivedYearDateRange && (
-            <ArchiveBanner
-              dateRange={archivedYearDateRange}
-              onDismiss={() => setShowArchiveBanner(false)}
-              onUnarchive={
-                activeYearId
-                  ? () =>
-                      unarchiveYear.mutate(activeYearId, {
-                        onSuccess: () => setShowArchiveBanner(false),
-                      })
-                  : undefined
-              }
-            />
-          )}
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6">
+            {showArchiveBanner && archivedYearDateRange && (
+              <ArchiveBanner
+                dateRange={archivedYearDateRange}
+                onDismiss={() => setShowArchiveBanner(false)}
+                onUnarchive={
+                  activeYearId
+                    ? () =>
+                        unarchiveYear.mutate(activeYearId, {
+                          onSuccess: () => setShowArchiveBanner(false),
+                        })
+                    : undefined
+                }
+              />
+            )}
 
-          {/* Filter + table */}
-          <div className="flex flex-col gap-2">
-            <div className="flex justify-end">
-              <Popover open={filtersOpen} onOpenChange={handleFiltersOpenChange}>
-                <PopoverTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label="Filter"
-                      className={cn(
-                        "flex size-7 shrink-0 items-center justify-center rounded-[8px] border-[0.5px] border-border bg-bg text-muted-foreground transition-[background-color,color,border-color] duration-300 ease-out",
-                        "hover:border-transparent hover:bg-muted hover:text-primary",
-                        "data-popup-open:border-transparent data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:hover:bg-muted data-popup-open:hover:text-primary",
-                      )}
-                    >
-                      <Filter className="size-4" strokeWidth={1.5} />
-                    </button>
-                  }
-                />
-                <PopoverContent
-                  align="end"
-                  side="bottom"
-                  sideOffset={4}
-                  className="w-[280px] gap-2.5 rounded-lg bg-bg p-3 text-md text-primary shadow-md ring-1 ring-foreground/10"
-                >
-                  <div className="flex flex-col gap-2">
-                    <p className="text-sm font-medium text-primary">Filters</p>
-
-                    <FilterSection label="Issue">
-                      <FilterSegmentGroup<IssueFilterValue>
-                        value={draftFilters.issue}
-                        onChange={(issue) => updateDraftFilters({ issue })}
-                        options={[
-                          { value: "all", label: "All" },
-                          { value: "open", label: "Open" },
-                          { value: "closed", label: "Closed" },
-                        ]}
-                      />
-                    </FilterSection>
-
-                    <FilterSection label="Payment">
-                      <FilterSegmentGroup<PaymentFilterValue>
-                        value={draftFilters.payment}
-                        onChange={(payment) => updateDraftFilters({ payment })}
-                        options={[
-                          { value: "all", label: "All" },
-                          { value: "paid", label: "Paid" },
-                          { value: "unpaid", label: "Unpaid" },
-                        ]}
-                      />
-                    </FilterSection>
-
-                    <FilterSection label="Date">
-                      <div className="flex items-center gap-2">
-                        <div className="min-w-0 flex-1">
-                          <DatePicker
-                            label="Start Date"
-                            value={draftFilters.startDate}
-                            onChange={(startDate) => updateDraftFilters({ startDate })}
-                          />
-                        </div>
-                        <span aria-hidden className="shrink-0 text-sm text-muted-foreground">
-                          →
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <DatePicker
-                            label="End Date"
-                            value={draftFilters.endDate}
-                            onChange={(endDate) => updateDraftFilters({ endDate })}
-                          />
-                        </div>
-                      </div>
-                    </FilterSection>
-
-                    <div className="border-t border-hairline" />
-
-                    <FilterSection label="Captain">
-                      <div className="flex flex-col gap-2">
-                        {allCaptains.map((captain) => {
-                          const checked = draftFilters.captains.includes(captain.id);
-
-                          return (
-                            <label
-                              key={captain.id}
-                              className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground"
-                            >
-                              <Checkbox
-                                checked={checked}
-                                onCheckedChange={(nextChecked) =>
-                                  toggleDraftCaptainFilter(captain.id, nextChecked)
-                                }
-                                className="border-border bg-bg data-checked:border-primary data-checked:bg-primary data-checked:text-bg"
-                              />
-                              {captain.name}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </FilterSection>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2 border-t border-hairline pt-2.5">
-                    <Button type="button" variant="text" size="sm" onClick={clearDraftFilters}>
-                      Clear all
-                    </Button>
-                    <Button type="button" variant="primary" size="sm" onClick={applyFilters}>
-                      Apply
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="overflow-hidden bg-bg">
-              <Table className="w-full table-fixed border-collapse">
-                <colgroup>
-                  <col style={{ width: ISSUE_COLUMN_WIDTH }} />
-                  {visibleCaptains.map((captain) => (
-                    <col key={captain.id} style={{ width: CAPTAIN_COLUMN_WIDTH }} />
-                  ))}
-                </colgroup>
-                <TableHeader className="[&_tr]:border-0">
-                  <TableRow className="border-0 hover:bg-transparent">
-                    <TableHead
-                      className={cn(
-                        "h-10 px-4 text-sm font-medium text-muted-foreground",
-                        FINANCES_TABLE_CELL,
-                      )}
-                      style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span>Issue</span>
-                        {!isEmptyTable && !isArchivedYear && (
-                          <Button
-                            type="button"
-                            variant="text"
-                            size="icon-xs"
-                            aria-label="Add issue"
-                            disabled={!!draftIssue}
-                            onClick={handleAddIssue}
-                            className="size-6 shrink-0 text-muted-foreground hover:text-primary"
-                          >
-                            <Plus className="size-3.5" strokeWidth={1.5} />
-                          </Button>
+            {/* Filter + table */}
+            <div className="flex flex-col gap-2">
+              <div className="flex justify-end">
+                <Popover open={filtersOpen} onOpenChange={handleFiltersOpenChange}>
+                  <PopoverTrigger
+                    render={
+                      <button
+                        type="button"
+                        aria-label="Filter"
+                        className={cn(
+                          "flex size-7 shrink-0 items-center justify-center rounded-[8px] border-[0.5px] border-border bg-bg text-muted-foreground transition-[background-color,color,border-color] duration-300 ease-out",
+                          "hover:border-transparent hover:bg-bg-secondary hover:text-primary",
+                          "data-popup-open:border-transparent data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:hover:bg-bg-secondary data-popup-open:hover:text-primary",
                         )}
-                      </div>
-                    </TableHead>
+                      >
+                        <Filter className="size-4" strokeWidth={1.5} />
+                      </button>
+                    }
+                  />
+                  <PopoverContent
+                    align="end"
+                    side="bottom"
+                    sideOffset={4}
+                    className="w-[280px] gap-2.5 rounded-lg bg-bg p-3 text-md text-primary"
+                  >
+                    <div className="flex flex-col gap-2">
+                      <p className="text-sm font-medium text-primary">Filters</p>
+
+                      <FilterSection label="Issue">
+                        <FilterSegmentGroup<IssueFilterValue>
+                          value={draftFilters.issue}
+                          onChange={(issue) => updateDraftFilters({ issue })}
+                          options={[
+                            { value: "all", label: "All" },
+                            { value: "open", label: "Open" },
+                            { value: "closed", label: "Closed" },
+                          ]}
+                        />
+                      </FilterSection>
+
+                      <FilterSection label="Payment">
+                        <FilterSegmentGroup<PaymentFilterValue>
+                          value={draftFilters.payment}
+                          onChange={(payment) => updateDraftFilters({ payment })}
+                          options={[
+                            { value: "all", label: "All" },
+                            { value: "paid", label: "Paid" },
+                            { value: "unpaid", label: "Unpaid" },
+                          ]}
+                        />
+                      </FilterSection>
+
+                      <FilterSection label="Date">
+                        <div className="flex items-center gap-2">
+                          <div className="min-w-0 flex-1">
+                            <DatePicker
+                              label="Start Date"
+                              value={draftFilters.startDate}
+                              onChange={(startDate) => updateDraftFilters({ startDate })}
+                            />
+                          </div>
+                          <span aria-hidden className="shrink-0 text-sm text-muted-foreground">
+                            →
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <DatePicker
+                              label="End Date"
+                              value={draftFilters.endDate}
+                              onChange={(endDate) => updateDraftFilters({ endDate })}
+                            />
+                          </div>
+                        </div>
+                      </FilterSection>
+
+                      <div className="border-t border-hairline" />
+
+                      <FilterSection label="Captain">
+                        <div className="flex flex-col gap-2">
+                          {allCaptains.map((captain) => {
+                            const checked = draftFilters.captains.includes(captain.id);
+
+                            return (
+                              <label
+                                key={captain.id}
+                                className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground"
+                              >
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(nextChecked) =>
+                                    toggleDraftCaptainFilter(captain.id, nextChecked)
+                                  }
+                                  className="border-border bg-bg data-checked:border-primary data-checked:bg-primary data-checked:text-bg"
+                                />
+                                {captain.name}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </FilterSection>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 border-t border-hairline pt-2.5">
+                      <Button type="button" variant="text" size="sm" onClick={clearDraftFilters}>
+                        Clear all
+                      </Button>
+                      <Button type="button" variant="primary" size="sm" onClick={applyFilters}>
+                        Apply
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="overflow-hidden bg-bg">
+                <Table className="w-full table-fixed border-collapse">
+                  <colgroup>
+                    <col style={{ width: ISSUE_COLUMN_WIDTH }} />
                     {visibleCaptains.map((captain) => (
+                      <col key={captain.id} style={{ width: CAPTAIN_COLUMN_WIDTH }} />
+                    ))}
+                  </colgroup>
+                  <TableHeader className="[&_tr]:border-0">
+                    <TableRow className="border-0 hover:bg-transparent">
                       <TableHead
-                        key={captain.id}
                         className={cn(
                           "h-10 px-4 text-sm font-medium text-muted-foreground",
                           FINANCES_TABLE_CELL,
                         )}
-                        style={{ width: CAPTAIN_COLUMN_WIDTH, minWidth: CAPTAIN_COLUMN_WIDTH }}
+                        style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
                       >
-                        {captain.name}
+                        <div className="flex items-center justify-between gap-2">
+                          <span>Issue</span>
+                          {!isEmptyTable && !isArchivedYear && (
+                            <Button
+                              type="button"
+                              variant="text"
+                              size="icon-xs"
+                              aria-label="Add issue"
+                              disabled={!!draftIssue}
+                              onClick={handleAddIssue}
+                              className="size-6 shrink-0 text-muted-foreground hover:text-primary"
+                            >
+                              <Plus className="size-3.5" strokeWidth={1.5} />
+                            </Button>
+                          )}
+                        </div>
                       </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody className="[&_tr:last-child]:border-0">
-                  {isEmptyTable && !isArchivedYear && (
-                    <TableRow className="border-0 hover:bg-transparent">
-                      <TableCell
-                        className={cn("px-4 py-3", FINANCES_TABLE_CELL)}
-                        style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
-                      >
-                        <Button type="button" variant="outline" size="sm" onClick={handleAddIssue}>
-                          Add Issue
-                        </Button>
-                      </TableCell>
                       {visibleCaptains.map((captain) => (
-                        <TableCell
-                          key={`empty-${captain.id}`}
-                          className={cn("h-12", FINANCES_TABLE_CELL)}
+                        <TableHead
+                          key={captain.id}
+                          className={cn(
+                            "h-10 px-4 text-sm font-medium text-muted-foreground",
+                            FINANCES_TABLE_CELL,
+                          )}
                           style={{ width: CAPTAIN_COLUMN_WIDTH, minWidth: CAPTAIN_COLUMN_WIDTH }}
-                        />
+                        >
+                          {captain.name}
+                        </TableHead>
                       ))}
                     </TableRow>
-                  )}
-                  {draftIssue && (
-                    <TableRow className="border-0 hover:bg-transparent">
-                      <TableCell
-                        className={cn(
-                          "relative z-10 px-4 py-3 outline outline-2 outline-active -outline-offset-2",
-                          FINANCES_TABLE_CELL,
-                        )}
-                        style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
-                      >
-                        <input
-                          autoFocus
-                          placeholder="Issue Name"
-                          value={draftIssue.label}
-                          onChange={(e) => setDraftIssue({ label: e.target.value })}
-                          onKeyDown={handleDraftKeyDown}
-                          onBlur={handleDraftBlur}
-                          aria-label="Issue name"
-                          className="w-full border-0 bg-transparent p-0 text-md text-primary outline-none placeholder:text-muted-foreground"
-                        />
-                      </TableCell>
-                      {visibleCaptains.map((captain) => (
+                  </TableHeader>
+                  <TableBody className="[&_tr:last-child]:border-0">
+                    {isEmptyTable && !isArchivedYear && (
+                      <TableRow className="border-0 hover:bg-transparent">
                         <TableCell
-                          key={`draft-${captain.id}`}
-                          className={cn("h-12", FINANCES_TABLE_CELL)}
-                          style={{ width: CAPTAIN_COLUMN_WIDTH, minWidth: CAPTAIN_COLUMN_WIDTH }}
-                        />
-                      ))}
-                    </TableRow>
-                  )}
-                  {visibleIssues.map((issue) => {
-                    const isIssueLocked = issue.locked;
-                    const isIssueClosed = issue.status === "closed";
-
-                    return (
-                      <TableRow key={issue.id} className="group border-0 hover:bg-transparent">
-                        <TableCell
-                          className={cn("h-12 px-4 py-2 text-md text-primary", FINANCES_TABLE_CELL)}
+                          className={cn("px-4 py-3", FINANCES_TABLE_CELL)}
                           style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
                         >
-                          <div className="flex h-full w-full items-center justify-between gap-2">
-                            {editingIssueId === issue.id ? (
-                              <input
-                                autoFocus
-                                type="text"
-                                value={issueNameEditValue}
-                                onChange={(e) => setIssueNameEditValue(e.target.value)}
-                                onKeyDown={(e) => handleIssueNameKeyDown(e, issue.id, issue.name)}
-                                onBlur={() => commitIssueNameEdit(issue.id, issue.name)}
-                                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-md text-primary outline-none"
-                              />
-                            ) : (
-                              <span
-                                className={cn(
-                                  "min-w-0 whitespace-nowrap",
-                                  !isArchivedYear && "cursor-text",
-                                )}
-                                onDoubleClick={
-                                  !isArchivedYear ? () => startIssueNameEdit(issue) : undefined
-                                }
-                              >
-                                {issue.name}
-                              </span>
-                            )}
-                            {!isArchivedYear && !isIssueClosed && (
-                              <IssueLockButton
-                                locked={isIssueLocked}
-                                onToggle={() => toggleIssueLock(issue.id, isIssueLocked)}
-                              />
-                            )}
-                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleAddIssue}
+                          >
+                            Add Issue
+                          </Button>
                         </TableCell>
-                        {visibleCaptains.map((captain) => {
-                          const cell = issue.cells.find((c) => c.captainId === captain.id);
-                          const cellKey = cell?.payoutId ?? `${issue.id}-${captain.id}`;
-                          if (!cell) {
+                        {visibleCaptains.map((captain) => (
+                          <TableCell
+                            key={`empty-${captain.id}`}
+                            className={cn("h-12", FINANCES_TABLE_CELL)}
+                            style={{ width: CAPTAIN_COLUMN_WIDTH, minWidth: CAPTAIN_COLUMN_WIDTH }}
+                          />
+                        ))}
+                      </TableRow>
+                    )}
+                    {draftIssue && (
+                      <TableRow className="border-0 hover:bg-transparent">
+                        <TableCell
+                          className={cn(
+                            "relative z-10 px-4 py-3 outline outline-2 outline-active -outline-offset-2",
+                            FINANCES_TABLE_CELL,
+                          )}
+                          style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
+                        >
+                          <input
+                            autoFocus
+                            placeholder="Issue Name"
+                            value={draftIssue.label}
+                            onChange={(e) => setDraftIssue({ label: e.target.value })}
+                            onKeyDown={handleDraftKeyDown}
+                            onBlur={handleDraftBlur}
+                            aria-label="Issue name"
+                            className="w-full border-0 bg-transparent p-0 text-md text-primary outline-none placeholder:text-muted-foreground"
+                          />
+                        </TableCell>
+                        {visibleCaptains.map((captain) => (
+                          <TableCell
+                            key={`draft-${captain.id}`}
+                            className={cn("h-12", FINANCES_TABLE_CELL)}
+                            style={{ width: CAPTAIN_COLUMN_WIDTH, minWidth: CAPTAIN_COLUMN_WIDTH }}
+                          />
+                        ))}
+                      </TableRow>
+                    )}
+                    {visibleIssues.map((issue) => {
+                      const isIssueLocked = issue.locked;
+                      const isIssueClosed = issue.status === "closed";
+
+                      return (
+                        <TableRow key={issue.id} className="group border-0 hover:bg-transparent">
+                          <TableCell
+                            className={cn(
+                              "h-12 px-4 py-2 text-md text-primary",
+                              FINANCES_TABLE_CELL,
+                            )}
+                            style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
+                          >
+                            <div className="flex h-full w-full items-center justify-between gap-2">
+                              {editingIssueId === issue.id ? (
+                                <input
+                                  autoFocus
+                                  type="text"
+                                  value={issueNameEditValue}
+                                  onChange={(e) => setIssueNameEditValue(e.target.value)}
+                                  onKeyDown={(e) => handleIssueNameKeyDown(e, issue.id, issue.name)}
+                                  onBlur={() => commitIssueNameEdit(issue.id, issue.name)}
+                                  className="min-w-0 flex-1 border-0 bg-transparent p-0 text-md text-primary outline-none"
+                                />
+                              ) : (
+                                <span
+                                  className={cn(
+                                    "min-w-0 whitespace-nowrap",
+                                    !isArchivedYear && "cursor-text",
+                                  )}
+                                  onDoubleClick={
+                                    !isArchivedYear ? () => startIssueNameEdit(issue) : undefined
+                                  }
+                                >
+                                  {issue.name}
+                                </span>
+                              )}
+                              {!isArchivedYear && !isIssueClosed && (
+                                <IssueLockButton
+                                  locked={isIssueLocked}
+                                  onToggle={() => toggleIssueLock(issue.id, isIssueLocked)}
+                                />
+                              )}
+                            </div>
+                          </TableCell>
+                          {visibleCaptains.map((captain) => {
+                            const cell = issue.cells.find((c) => c.captainId === captain.id);
+                            const cellKey = cell?.payoutId ?? `${issue.id}-${captain.id}`;
+                            if (!cell) {
+                              return (
+                                <TableCell
+                                  key={cellKey}
+                                  className={cn("h-12 px-4", FINANCES_TABLE_CELL)}
+                                  style={{
+                                    width: CAPTAIN_COLUMN_WIDTH,
+                                    minWidth: CAPTAIN_COLUMN_WIDTH,
+                                  }}
+                                >
+                                  <span className="text-md text-muted-foreground">—</span>
+                                </TableCell>
+                              );
+                            }
+
+                            const key: CellKey = cell.payoutId;
+                            const isEditing = editingCell === key;
+                            const overridden = cell.calculationStatus === "overridden";
+                            const override: CellOverride | undefined = overridden
+                              ? {
+                                  amount: cell.effectiveAmount,
+                                  originalValue: cell.calculatedAmount,
+                                  note: cell.overrideReason ?? "",
+                                }
+                              : undefined;
+                            // Quantity implied by the formula, so the popover can show
+                            // "N x rate" without a request per cell.
+                            const quantity =
+                              captain.payRate > 0
+                                ? Math.round(cell.calculatedAmount / captain.payRate)
+                                : 0;
+
                             return (
                               <TableCell
                                 key={cellKey}
-                                className={cn("h-12 px-4", FINANCES_TABLE_CELL)}
+                                className={cn("p-0", FINANCES_TABLE_CELL)}
                                 style={{
                                   width: CAPTAIN_COLUMN_WIDTH,
                                   minWidth: CAPTAIN_COLUMN_WIDTH,
                                 }}
                               >
-                                <span className="text-md text-muted-foreground">—</span>
+                                <PaymentCell
+                                  key={cell.payoutId}
+                                  value={cell.effectiveAmount}
+                                  paid={cell.paid}
+                                  columnCaptain={captain.name}
+                                  substituteCaptain={cell.substituteCaptainName ?? NO_SUBSTITUTE}
+                                  substituteOptions={substituteOptions}
+                                  onSubstituteChange={(nextName) =>
+                                    handleSubstituteChange(key, captain.id, nextName)
+                                  }
+                                  paymentDetail={{
+                                    captainName: captain.name,
+                                    issueLabel: issue.name,
+                                    lastModified: formatIssueDateLong(issue.date),
+                                    territory: `${captain.name}'s territory`,
+                                    bundleCount: quantity,
+                                    ratePerBundle: captain.payRate,
+                                  }}
+                                  comment={cell.comment ?? undefined}
+                                  onCommentChange={(nextComment) =>
+                                    handleCommentChange(key, nextComment)
+                                  }
+                                  overridden={overridden}
+                                  override={override}
+                                  flashTrigger={flashTriggers[key] ?? 0}
+                                  onMarkPaid={() => handleMarkPaid(key)}
+                                  isEditing={isEditing}
+                                  editValue={editValue}
+                                  onEditValueChange={setEditValue}
+                                  onEditSubmit={() => handleEditSubmit(key)}
+                                  onEditCancel={() => setEditingCell(null)}
+                                  onDoubleClick={() => handleDoubleClick(key)}
+                                  readOnly={isArchivedYear}
+                                  isLocked={isIssueLocked}
+                                />
                               </TableCell>
                             );
-                          }
-
-                          const key: CellKey = cell.payoutId;
-                          const isEditing = editingCell === key;
-                          const overridden = cell.calculationStatus === "overridden";
-                          const override: CellOverride | undefined = overridden
-                            ? {
-                                amount: cell.effectiveAmount,
-                                originalValue: cell.calculatedAmount,
-                                note: cell.overrideReason ?? "",
-                              }
-                            : undefined;
-                          // Quantity implied by the formula, so the popover can show
-                          // "N x rate" without a request per cell.
-                          const quantity =
-                            captain.payRate > 0
-                              ? Math.round(cell.calculatedAmount / captain.payRate)
-                              : 0;
-
-                          return (
-                            <TableCell
-                              key={cellKey}
-                              className={cn("p-0", FINANCES_TABLE_CELL)}
-                              style={{
-                                width: CAPTAIN_COLUMN_WIDTH,
-                                minWidth: CAPTAIN_COLUMN_WIDTH,
-                              }}
-                            >
-                              <PaymentCell
-                                key={cell.payoutId}
-                                value={cell.effectiveAmount}
-                                paid={cell.paid}
-                                columnCaptain={captain.name}
-                                substituteCaptain={cell.substituteCaptainName ?? NO_SUBSTITUTE}
-                                substituteOptions={substituteOptions}
-                                onSubstituteChange={(nextName) =>
-                                  handleSubstituteChange(key, captain.id, nextName)
-                                }
-                                paymentDetail={{
-                                  captainName: captain.name,
-                                  issueLabel: issue.name,
-                                  lastModified: formatIssueDateLong(issue.date),
-                                  territory: `${captain.name}'s territory`,
-                                  bundleCount: quantity,
-                                  ratePerBundle: captain.payRate,
-                                }}
-                                comment={cell.comment ?? undefined}
-                                onCommentChange={(nextComment) =>
-                                  handleCommentChange(key, nextComment)
-                                }
-                                overridden={overridden}
-                                override={override}
-                                flashTrigger={flashTriggers[key] ?? 0}
-                                onMarkPaid={() => handleMarkPaid(key)}
-                                isEditing={isEditing}
-                                editValue={editValue}
-                                onEditValueChange={setEditValue}
-                                onEditSubmit={() => handleEditSubmit(key)}
-                                onEditCancel={() => setEditingCell(null)}
-                                onDoubleClick={() => handleDoubleClick(key)}
-                                readOnly={isArchivedYear}
-                                isLocked={isIssueLocked}
-                              />
-                            </TableCell>
-                          );
-                        })}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                          })}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
+
+            <Dialog
+              open={createTableOpen}
+              onOpenChange={(open) => !open && closeCreateTableDialog()}
+            >
+              <DialogContent className="gap-6 border-hairline p-5">
+                <div className="flex flex-col gap-4">
+                  <DialogTitle className="text-md font-normal text-primary">
+                    New Finance Table
+                  </DialogTitle>
+
+                  <Input
+                    placeholder="2027 Payments"
+                    value={newTableName}
+                    onChange={(e) => setNewTableName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleCreateTable();
+                      }
+                    }}
+                    aria-label="Finance table name"
+                    className="h-auto rounded-lg border-hairline bg-bg px-3 py-2 text-md"
+                  />
+                </div>
+
+                <DialogFooter className="mt-0 justify-end gap-2 border-t-0 p-0">
+                  <Button type="button" variant="default" onClick={closeCreateTableDialog}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    disabled={!newTableName.trim()}
+                    onClick={handleCreateTable}
+                  >
+                    Create Table
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!confirmDialog} onOpenChange={(open) => !open && closeConfirmDialog()}>
+              <DialogContent className="gap-0 overflow-hidden p-0">
+                <DialogHeader className="border-b border-border px-6 py-4">
+                  <DialogTitle className="text-md font-medium leading-snug">
+                    Leave a note to override{" "}
+                    {confirmDialog
+                      ? `${formatCurrency(confirmDialog.originalValue)} to ${formatCurrency(parseFloat(confirmDialog.value))}`
+                      : ""}
+                  </DialogTitle>
+                </DialogHeader>
+
+                <div className="flex flex-col gap-3 px-6 py-4">
+                  <DialogDescription className="text-md text-primary">
+                    This will replace the calculated value with a manual entry.
+                  </DialogDescription>
+                  <Textarea
+                    placeholder="Enter a description..."
+                    value={overrideNote}
+                    onChange={(e) => setOverrideNote(e.target.value)}
+                    aria-label="Override note"
+                  />
+                </div>
+
+                <DialogFooter className="mt-0 gap-2 border-t border-border px-6 py-4">
+                  <Button type="button" variant="default" onClick={closeConfirmDialog}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    disabled={!overrideNote.trim()}
+                    onClick={confirmEdit}
+                  >
+                    Override
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
-
-          <Dialog open={createTableOpen} onOpenChange={(open) => !open && closeCreateTableDialog()}>
-            <DialogContent className="gap-6 border-hairline p-5">
-              <div className="flex flex-col gap-4">
-                <DialogTitle className="text-md font-normal text-primary">
-                  New Finance Table
-                </DialogTitle>
-
-                <Input
-                  placeholder="2027 Payments"
-                  value={newTableName}
-                  onChange={(e) => setNewTableName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleCreateTable();
-                    }
-                  }}
-                  aria-label="Finance table name"
-                  className="h-auto rounded-lg border-hairline bg-bg px-3 py-2 text-md"
-                />
-              </div>
-
-              <DialogFooter className="mt-0 justify-end gap-2 border-t-0 p-0">
-                <Button type="button" variant="default" onClick={closeCreateTableDialog}>
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  variant="primary"
-                  disabled={!newTableName.trim()}
-                  onClick={handleCreateTable}
-                >
-                  Create Table
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={!!confirmDialog} onOpenChange={(open) => !open && closeConfirmDialog()}>
-            <DialogContent className="gap-0 overflow-hidden p-0">
-              <DialogHeader className="border-b border-border px-6 py-4">
-                <DialogTitle className="text-md font-medium leading-snug">
-                  Leave a note to override{" "}
-                  {confirmDialog
-                    ? `${formatCurrency(confirmDialog.originalValue)} to ${formatCurrency(parseFloat(confirmDialog.value))}`
-                    : ""}
-                </DialogTitle>
-              </DialogHeader>
-
-              <div className="flex flex-col gap-3 px-6 py-4">
-                <DialogDescription className="text-md text-primary">
-                  This will replace the calculated value with a manual entry.
-                </DialogDescription>
-                <Textarea
-                  placeholder="Enter a description..."
-                  value={overrideNote}
-                  onChange={(e) => setOverrideNote(e.target.value)}
-                  aria-label="Override note"
-                />
-              </div>
-
-              <DialogFooter className="mt-0 gap-2 border-t border-border px-6 py-4">
-                <Button type="button" variant="default" onClick={closeConfirmDialog}>
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  variant="danger"
-                  disabled={!overrideNote.trim()}
-                  onClick={confirmEdit}
-                >
-                  Override
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
     </div>

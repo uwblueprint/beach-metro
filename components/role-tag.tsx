@@ -44,12 +44,12 @@ export function RoleTag({
     <span
       aria-label={`${ROLE_LABEL[role]}, ${STATUS_LABEL[status]}`}
       className={cn(
-        "inline-flex items-center justify-center px-2 py-1",
+        "inline-flex max-w-full min-w-0 items-center justify-center overflow-hidden px-2 py-1",
         STATUS_CLASSES[status],
         className,
       )}
     >
-      {ROLE_LABEL[role]}
+      <span className="min-w-0 truncate">{ROLE_LABEL[role]}</span>
     </span>
   );
 }

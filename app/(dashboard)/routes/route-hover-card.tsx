@@ -235,7 +235,7 @@ export function RouteHoverCard(props: {
         >
           <div
             className={cn(
-              "flex w-max max-w-[14rem] flex-col gap-1 rounded-xl bg-bg p-1 pb-2 text-left shadow-md select-none",
+              "flex w-max max-w-[14rem] flex-col gap-1 rounded-xl bg-bg p-1 pb-2 text-left smooth-shadow-ring-md select-none",
               "text-md",
             )}
           >

@@ -5,8 +5,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { inputFieldClassName } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+
+/** Ghost papers field: hairline outline, no fill/pad so value stays flush with the Papers header. */
+const papersFieldClassName = cn(
+  "flex h-8 w-full items-center rounded-[4px] bg-transparent px-0 py-1 text-md tabular-nums",
+  "outline outline-1 -outline-offset-1 outline-border",
+);
 
 interface BundlePapersTableProps {
   /** Papers per bundle row. Use `0` for an empty/draft cell. */
@@ -181,11 +186,9 @@ function BundlePapersTable({
   const allLabelled = flags.length > 0 && labelledCount === flags.length;
   const someLabelled = labelledCount > 0 && !allLabelled;
 
-  const papersCellClassName = "h-8 rounded-[4px] px-2 py-1";
-
   return (
     <div className={cn("flex w-full flex-col gap-1", className)}>
-      <div className="flex h-10 items-center rounded-[8px] bg-bg-secondary px-2 py-2">
+      <div className="flex h-10 items-center rounded-[8px] bg-bg-tertiary px-2 py-2">
         <div className="flex w-fit shrink-0 items-center pr-2">
           <Checkbox
             checked={allLabelled}
@@ -213,7 +216,10 @@ function BundlePapersTable({
         const invalid = visibleInvalidRows.has(index);
 
         return (
-          <div key={index} className="group/bundle flex h-10 items-center px-2 py-1">
+          <div
+            key={index}
+            className="group/bundle flex h-10 items-center rounded-md px-2 py-1 transition-colors hover:bg-bg-secondary"
+          >
             <div className="flex w-fit shrink-0 items-center pr-2">
               <Checkbox
                 checked={flags[index] === true}
@@ -231,7 +237,7 @@ function BundlePapersTable({
                   type="text"
                   inputMode="numeric"
                   aria-label={`Papers for bundle ${index + 1}`}
-                  aria-invalid={invalid && draft.trim() === "" ? true : undefined}
+                  aria-invalid={invalid || undefined}
                   value={draft}
                   onChange={(e) => {
                     const next = e.target.value.replace(/\D/g, "");
@@ -249,23 +255,30 @@ function BundlePapersTable({
                       cancelEdit(index);
                     }
                   }}
-                  className={cn(inputFieldClassName, papersCellClassName)}
+                  className={cn(
+                    papersFieldClassName,
+                    "text-primary outline-active",
+                    invalid && "outline-destructive",
+                  )}
                 />
               ) : (
                 <button
                   type="button"
-                  data-invalid={invalid || undefined}
-                  className={cn(
-                    "flex h-8 w-full cursor-text items-center rounded-[4px] text-left text-md tabular-nums outline-none",
+                  // An empty cell renders no text, so the state has to reach
+                  // assistive tech through the name rather than the content.
+                  // aria-invalid belongs on a form control, not on a button.
+                  aria-label={
                     invalid
-                      ? cn(inputFieldClassName, papersCellClassName, "text-secondary")
-                      : cn(
-                          "px-0 focus-visible:ring-2 focus-visible:ring-active/40",
-                          papers > 0 ? "text-primary" : "text-secondary",
-                        ),
+                      ? `Papers for bundle ${index + 1}, empty`
+                      : `Papers for bundle ${index + 1}`
+                  }
+                  className={cn(
+                    papersFieldClassName,
+                    "cursor-text text-left text-secondary outline-none",
+                    "focus-visible:outline-active focus-visible:ring-2 focus-visible:ring-active/40",
+                    invalid && "outline-destructive",
                   )}
                   onClick={() => startEdit(index)}
-                  onDoubleClick={() => startEdit(index)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();

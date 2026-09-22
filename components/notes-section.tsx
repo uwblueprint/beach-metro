@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { NoteEditor } from "@/components/note-editor";
+import { SidePanelCollapsibleList, SidePanelHeightReveal } from "@/components/side-panel-collapse";
 import { SidePanelRow } from "@/components/side-panel-row";
 import { SidePanelSection } from "@/components/side-panel-section";
 import {
@@ -13,10 +14,8 @@ import {
   type MemberNote,
   type MemberRole,
 } from "@/features/members/api";
-import { cn } from "@/lib/utils";
 
 const NEW_NOTE_ID = "__new-note__";
-const VISIBLE_COUNT = 4;
 
 interface NotesSectionProps {
   role: MemberRole;
@@ -70,7 +69,6 @@ function NotesSection({ role, memberId }: NotesSectionProps) {
   const deleteNote = useDeleteNote(role, memberId);
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(false);
   const isAdding = editingId === NEW_NOTE_ID;
 
   function stopEditing() {
@@ -78,9 +76,6 @@ function NotesSection({ role, memberId }: NotesSectionProps) {
   }
 
   const rows = notes ?? [];
-  const preview = rows.slice(0, VISIBLE_COUNT);
-  const extra = rows.slice(VISIBLE_COUNT);
-  const hasMore = extra.length > 0;
 
   function renderNoteRow(note: MemberNote) {
     if (editingId === note.id) {
@@ -108,14 +103,14 @@ function NotesSection({ role, memberId }: NotesSectionProps) {
         // An optimistic row has no server id yet, so editing it would 404.
         onEdit={note.id.startsWith("optimistic-") ? undefined : () => setEditingId(note.id)}
       >
-        <span className="text-primary">{note.text}</span>
+        <span className="text-secondary">{note.text}</span>
       </SidePanelRow>
     );
   }
 
   return (
     <SidePanelSection title="Notes" onAdd={() => setEditingId(NEW_NOTE_ID)}>
-      {isAdding && (
+      <SidePanelHeightReveal open={isAdding}>
         <NoteEditor
           onSave={(text) => {
             createNote.mutate(text);
@@ -124,38 +119,16 @@ function NotesSection({ role, memberId }: NotesSectionProps) {
           onDelete={stopEditing}
           onCancel={stopEditing}
         />
-      )}
+      </SidePanelHeightReveal>
       {isError ? (
-        <SidePanelRow className="text-secondary">Could not load notes</SidePanelRow>
+        <SidePanelRow className="text-tertiary">Could not load notes</SidePanelRow>
       ) : isPending ? (
-        <SidePanelRow className="text-secondary">Loading notes…</SidePanelRow>
+        <SidePanelRow className="text-tertiary">Loading notes…</SidePanelRow>
       ) : rows.length === 0 && !isAdding ? (
-        <SidePanelRow className="text-secondary">No notes</SidePanelRow>
-      ) : (
-        <>
-          {preview.map((note) => renderNoteRow(note))}
-          {hasMore ? (
-            <>
-              <div className="t-reimburse-list-expand grid" data-open={expanded ? "true" : "false"}>
-                <div className="min-h-0 overflow-hidden">
-                  {extra.map((note) => renderNoteRow(note))}
-                </div>
-              </div>
-              <button
-                type="button"
-                aria-expanded={expanded}
-                className={cn(
-                  "mt-1 self-start text-md text-secondary transition-colors",
-                  "hover:text-primary active:scale-[0.98]",
-                )}
-                onClick={() => setExpanded((open) => !open)}
-              >
-                {expanded ? "See less" : "See more"}
-              </button>
-            </>
-          ) : null}
-        </>
-      )}
+        <SidePanelRow className="text-tertiary">No notes</SidePanelRow>
+      ) : rows.length > 0 ? (
+        <SidePanelCollapsibleList items={rows} renderItem={(note) => renderNoteRow(note)} />
+      ) : null}
     </SidePanelSection>
   );
 }

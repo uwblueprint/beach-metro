@@ -76,7 +76,7 @@ function Checkbox({ className, indeterminate, ...props }: CheckboxPrimitive.Root
       indeterminate={indeterminate}
       className={cn(
         checkboxSurfaceClassName,
-        "border-border text-active",
+        "cursor-pointer border-border text-active",
         "focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40",
         "disabled:cursor-not-allowed disabled:opacity-50",
         "data-checked:border-active data-checked:bg-tag-active",
