@@ -4,6 +4,7 @@ import type { z } from "zod";
 import { conflict, notFound } from "@/lib/api/errors";
 import type {
   createVolunteer,
+  retireMember,
   setVacation,
   updateVolunteer,
   volunteersQuery,
@@ -274,7 +275,10 @@ export async function setVolunteerVacation(
 }
 
 /** Soft retire; detaches carried routes, which become Vacant (people flow §4f). */
-export async function retireVolunteer(id: string): Promise<VolunteerDetail> {
+export async function retireVolunteer(
+  id: string,
+  input: z.infer<typeof retireMember> = {},
+): Promise<VolunteerDetail> {
   const v = await fetchVolunteer(id);
   if (v.retired_at) throw conflict("Volunteer is already retired.");
 
@@ -291,6 +295,8 @@ export async function retireVolunteer(id: string): Promise<VolunteerDetail> {
     .eq("assigned_volunteer_id", id)
     .is("deleted_at", null);
   if (detachError) throwDb(detachError);
+
+  if (input.note) await createNoteRecord("volunteer", id, { text: input.note });
 
   return getVolunteer(id);
 }

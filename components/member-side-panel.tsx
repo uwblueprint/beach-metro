@@ -350,7 +350,7 @@ function VolunteerContent({ id }: { id: string }) {
         )}
       </SidePanelSection>
 
-      <NotesSection role="volunteer" memberId={id} />
+      <NotesSection key={id} role="volunteer" memberId={id} />
 
       <SidePanelSection title="Route Info" onAdd={openCreate}>
         {volunteer.routesCarried.length === 0 ? (

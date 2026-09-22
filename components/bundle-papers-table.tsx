@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,8 +17,13 @@ interface BundlePapersTableProps {
   /** Papers per bundle row. Use `0` for an empty/draft cell. */
   value: number[];
   onChange: (next: number[]) => void;
+  /** Checked ⇒ this bundle gets a printed label. Controlled when `onLabelledChange` is set. */
+  labelled?: boolean[];
+  onLabelledChange?: (next: boolean[]) => void;
   /** When true, the last row's papers cell starts in the active editing state. */
   startEditingLast?: boolean;
+  /** Called when every row is either filled or removed — no empty error cells remain. */
+  onValidityChange?: (valid: boolean) => void;
   className?: string;
 }
 
@@ -30,10 +35,27 @@ function resizeFlags(prev: boolean[], length: number): boolean[] {
   return prev.slice(0, length);
 }
 
+function shiftInvalidAfterRemove(prev: Set<number>, removedIndex: number): Set<number> {
+  const next = new Set<number>();
+  for (const i of prev) {
+    if (i === removedIndex) continue;
+    next.add(i > removedIndex ? i - 1 : i);
+  }
+  return next;
+}
+
+function parsePapersDraft(draft: string): number {
+  const parsed = draft.trim() === "" ? 0 : Number.parseInt(draft, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
 function BundlePapersTable({
   value,
   onChange,
+  labelled: labelledProp,
+  onLabelledChange,
   startEditingLast = false,
+  onValidityChange,
   className,
 }: BundlePapersTableProps) {
   const [editingIndex, setEditingIndex] = useState<number | null>(
@@ -46,9 +68,16 @@ function BundlePapersTable({
     }
     return "";
   });
-  /** Checked ⇒ this bundle gets a printed label. */
-  const [labelled, setLabelled] = useState<boolean[]>(() => value.map(() => false));
+  /** Row indices left empty after blur — shown with a destructive border until filled or removed. */
+  const [invalidRows, setInvalidRows] = useState<Set<number>>(() => new Set());
+  const [internalLabelled, setInternalLabelled] = useState<boolean[]>(() => value.map(() => false));
+  const labelledControlled = onLabelledChange !== undefined;
   const inputRef = useRef<HTMLInputElement>(null);
+
+  function updateLabelled(next: boolean[]) {
+    if (labelledControlled) onLabelledChange(next);
+    else setInternalLabelled(next);
+  }
 
   useEffect(() => {
     if (editingIndex != null) {
@@ -61,25 +90,61 @@ function BundlePapersTable({
     if (value.length === 0) onChange([0]);
   }, [value.length, onChange]);
 
+  const visibleInvalidRows = useMemo(() => {
+    const next = new Set<number>();
+    for (const i of invalidRows) {
+      if (i < value.length && value[i] === 0) next.add(i);
+    }
+    return next;
+  }, [invalidRows, value]);
+
+  useEffect(() => {
+    // Block save while any row is still empty — including a newly added draft row
+    // before blur marks it with the destructive border.
+    onValidityChange?.(value.every((papers) => papers > 0));
+  }, [value, onValidityChange]);
+
+  function setRowInvalid(index: number, invalid: boolean) {
+    setInvalidRows((prev) => {
+      const next = new Set(prev);
+      if (invalid) next.add(index);
+      else next.delete(index);
+      return next;
+    });
+  }
+
   function startEdit(index: number) {
     setEditingIndex(index);
     setDraft(value[index] ? String(value[index]) : "");
   }
 
+  function finishEdit(index: number, nextVal: number) {
+    const next = [...value];
+    next[index] = nextVal;
+    onChange(next);
+    setRowInvalid(index, nextVal === 0);
+    setEditingIndex(null);
+  }
+
   function commitEdit() {
     if (editingIndex == null) return;
-    const parsed = draft.trim() === "" ? 0 : Number.parseInt(draft, 10);
-    const nextVal = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-    const next = [...value];
-    next[editingIndex] = nextVal;
-    onChange(next);
+    finishEdit(editingIndex, parsePapersDraft(draft));
+  }
+
+  function cancelEdit(index: number) {
+    if (draft.trim() === "" || parsePapersDraft(draft) === 0) {
+      setRowInvalid(index, true);
+    }
     setEditingIndex(null);
   }
 
   function addRow() {
     const next = [...value, 0];
     onChange(next);
-    setLabelled((prev) => [...resizeFlags(prev, value.length), false]);
+    const prevFlags = labelledControlled
+      ? resizeFlags(labelledProp ?? [], value.length)
+      : resizeFlags(internalLabelled, value.length);
+    updateLabelled([...prevFlags, false]);
     setEditingIndex(next.length - 1);
     setDraft("");
   }
@@ -87,28 +152,36 @@ function BundlePapersTable({
   function removeRow(index: number) {
     if (value.length <= 1) return;
     onChange(value.filter((_, i) => i !== index));
-    setLabelled((prev) => resizeFlags(prev, value.length).filter((_, i) => i !== index));
+    const prevFlags = labelledControlled
+      ? resizeFlags(labelledProp ?? [], value.length)
+      : resizeFlags(internalLabelled, value.length);
+    updateLabelled(prevFlags.filter((_, i) => i !== index));
+    setInvalidRows((prev) => shiftInvalidAfterRemove(prev, index));
     if (editingIndex === index) setEditingIndex(null);
     else if (editingIndex != null && editingIndex > index) setEditingIndex(editingIndex - 1);
   }
 
   function setRowLabelled(index: number, next: boolean) {
-    setLabelled((prev) => {
-      const flags = resizeFlags(prev, value.length);
-      const copy = [...flags];
-      copy[index] = next;
-      return copy;
-    });
+    const prevFlags = labelledControlled
+      ? resizeFlags(labelledProp ?? [], value.length)
+      : resizeFlags(internalLabelled, value.length);
+    const copy = [...prevFlags];
+    copy[index] = next;
+    updateLabelled(copy);
   }
 
   function toggleAllLabelled() {
-    const flags = resizeFlags(labelled, value.length);
+    const flags = labelledControlled
+      ? resizeFlags(labelledProp ?? [], value.length)
+      : resizeFlags(internalLabelled, value.length);
     const allOn = flags.length > 0 && flags.every(Boolean);
-    setLabelled(Array.from({ length: value.length }, () => !allOn));
+    updateLabelled(Array.from({ length: value.length }, () => !allOn));
   }
 
   const canRemoveRow = value.length > 1;
-  const flags = resizeFlags(labelled, value.length);
+  const flags = labelledControlled
+    ? resizeFlags(labelledProp ?? [], value.length)
+    : resizeFlags(internalLabelled, value.length);
   const labelledCount = flags.filter(Boolean).length;
   const allLabelled = flags.length > 0 && labelledCount === flags.length;
   const someLabelled = labelledCount > 0 && !allLabelled;
@@ -139,83 +212,114 @@ function BundlePapersTable({
         </div>
       </div>
 
-      {value.map((papers, index) => (
-        <div
-          key={index}
-          className="group/bundle flex h-10 items-center rounded-md px-2 py-1 transition-colors hover:bg-bg-secondary"
-        >
-          <div className="flex w-fit shrink-0 items-center pr-2">
-            <Checkbox
-              checked={flags[index] === true}
-              aria-label={`Label bundle ${index + 1}`}
-              onCheckedChange={(checked) => setRowLabelled(index, checked === true)}
-            />
-          </div>
-          <span className="ml-1 min-w-0 flex-1 tabular-nums text-md text-secondary">
-            {index + 1}
-          </span>
-          <div className="min-w-0 flex-1">
-            {editingIndex === index ? (
-              <input
-                ref={inputRef}
-                type="text"
-                inputMode="numeric"
-                aria-label={`Papers for bundle ${index + 1}`}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value.replace(/\D/g, ""))}
-                onBlur={commitEdit}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    commitEdit();
-                  }
-                  if (e.key === "Escape") {
-                    e.preventDefault();
-                    setEditingIndex(null);
-                  }
-                }}
-                className={cn(papersFieldClassName, "text-primary outline-active")}
+      {value.map((papers, index) => {
+        const invalid = visibleInvalidRows.has(index);
+
+        return (
+          <div
+            key={index}
+            className="group/bundle flex h-10 items-center rounded-md px-2 py-1 transition-colors hover:bg-bg-secondary"
+          >
+            <div className="flex w-fit shrink-0 items-center pr-2">
+              <Checkbox
+                checked={flags[index] === true}
+                aria-label={`Label bundle ${index + 1}`}
+                onCheckedChange={(checked) => setRowLabelled(index, checked === true)}
               />
-            ) : (
-              <button
-                type="button"
-                className={cn(
-                  papersFieldClassName,
-                  "cursor-text text-left text-secondary outline-none",
-                  "focus-visible:outline-active focus-visible:ring-2 focus-visible:ring-active/40",
-                )}
-                onClick={() => startEdit(index)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    startEdit(index);
+            </div>
+            <span className="ml-1 min-w-0 flex-1 tabular-nums text-md text-secondary">
+              {index + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              {editingIndex === index ? (
+                <input
+                  ref={inputRef}
+                  type="text"
+                  inputMode="numeric"
+                  aria-label={`Papers for bundle ${index + 1}`}
+                  aria-invalid={invalid || undefined}
+                  value={draft}
+                  onChange={(e) => {
+                    const next = e.target.value.replace(/\D/g, "");
+                    setDraft(next);
+                    if (next.trim() !== "") setRowInvalid(index, false);
+                  }}
+                  onBlur={commitEdit}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitEdit();
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      cancelEdit(index);
+                    }
+                  }}
+                  className={cn(
+                    papersFieldClassName,
+                    "text-primary outline-active",
+                    invalid && "outline-destructive",
+                  )}
+                />
+              ) : (
+                <button
+                  type="button"
+                  // An empty cell renders no text, so the state has to reach
+                  // assistive tech through the name rather than the content.
+                  // aria-invalid belongs on a form control, not on a button.
+                  aria-label={
+                    invalid
+                      ? `Papers for bundle ${index + 1}, empty`
+                      : `Papers for bundle ${index + 1}`
                   }
-                }}
-              >
-                {papers > 0 ? papers : ""}
-              </button>
-            )}
+                  className={cn(
+                    papersFieldClassName,
+                    // No outline-none here. It would win over the field's own
+                    // outline and collapse outline-style to none, taking the
+                    // resting hairline and the destructive state with it.
+                    "cursor-text text-left text-secondary",
+                    "focus-visible:outline-active focus-visible:ring-2 focus-visible:ring-active/40",
+                    invalid && "outline-destructive",
+                  )}
+                  onClick={() => startEdit(index)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      startEdit(index);
+                    }
+                  }}
+                >
+                  {papers > 0 ? papers : ""}
+                </button>
+              )}
+            </div>
+            <div className="flex w-6 shrink-0 items-center justify-end">
+              {canRemoveRow ? (
+                <Button
+                  type="button"
+                  variant="text"
+                  size="icon-sm"
+                  aria-label={`Remove bundle ${index + 1}`}
+                  className="opacity-0 transition-opacity group-hover/bundle:opacity-100 focus-visible:opacity-100"
+                  onClick={() => removeRow(index)}
+                >
+                  <Trash2 className="size-3" />
+                </Button>
+              ) : null}
+            </div>
           </div>
-          <div className="flex w-6 shrink-0 items-center justify-end">
-            {canRemoveRow ? (
-              <Button
-                type="button"
-                variant="text"
-                size="icon-sm"
-                aria-label={`Remove bundle ${index + 1}`}
-                className="opacity-0 transition-opacity group-hover/bundle:opacity-100 focus-visible:opacity-100"
-                onClick={() => removeRow(index)}
-              >
-                <Trash2 className="size-3" />
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      ))}
+        );
+      })}
 
       <p className="px-2 pt-1 text-md text-secondary">A checked bundle row will be labelled</p>
     </div>
   );
 }
 
-export { BundlePapersTable };
+/** True when row count or any paper count differs — includes draft `0` rows. */
+function papersRowsDiffer(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return true;
+  return a.some((papers, index) => papers !== b[index]);
+}
+
+export { BundlePapersTable, papersRowsDiffer };

@@ -8,6 +8,8 @@ import {
   calculationStatus,
   effectiveAmount,
   greedySplit,
+  routeLifecycle,
+  sameAddressInput,
   volunteerNeedsAttention,
   volunteerStatus,
 } from "@/lib/services/derive";
@@ -169,5 +171,92 @@ describe("payout cell derivations", () => {
   it("bundleCount derives from the stored breakdown", () => {
     expect(bundleCount(greedySplit(130))).toBe(4);
     expect(bundleCount([])).toBe(0);
+  });
+});
+
+describe("sameAddressInput", () => {
+  const lines = (addressLines: string[], extra: Record<string, string> = {}) => ({
+    addressLines,
+    locality: "Toronto",
+    administrativeArea: "ON",
+    regionCode: "CA" as const,
+    ...extra,
+  });
+
+  it("matches two identical place ids", () => {
+    expect(sameAddressInput({ placeId: "abc" }, { placeId: "abc" })).toBe(true);
+  });
+
+  it("separates two different place ids", () => {
+    expect(sameAddressInput({ placeId: "abc" }, { placeId: "xyz" })).toBe(false);
+  });
+
+  it("never matches a place id against free-form lines, since neither is resolved yet", () => {
+    expect(sameAddressInput({ placeId: "abc" }, lines(["1900 Queen St E"]))).toBe(false);
+    expect(sameAddressInput(lines(["1900 Queen St E"]), { placeId: "abc" })).toBe(false);
+  });
+
+  it("matches the same address typed for both endpoints", () => {
+    expect(sameAddressInput(lines(["1900 Queen St E"]), lines(["1900 Queen St E"]))).toBe(true);
+  });
+
+  it("separates the two ends of a street route", () => {
+    expect(sameAddressInput(lines(["1900 Queen St E"]), lines(["2100 Queen St E"]))).toBe(false);
+  });
+
+  it("separates lines that differ only past the first", () => {
+    expect(sameAddressInput(lines(["1900 Queen St E", "Unit 1"]), lines(["1900 Queen St E"]))).toBe(
+      false,
+    );
+  });
+
+  it("separates the same street in a different locality", () => {
+    expect(
+      sameAddressInput(
+        lines(["1900 Queen St E"]),
+        lines(["1900 Queen St E"], { locality: "Ajax" }),
+      ),
+    ).toBe(false);
+  });
+
+  it("separates the same lines when only one carries a postal code", () => {
+    expect(
+      sameAddressInput(
+        lines(["1900 Queen St E"]),
+        lines(["1900 Queen St E"], { postalCode: "M4L" }),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("routeLifecycle", () => {
+  it("reads a street route off its volunteer", () => {
+    expect(
+      routeLifecycle({ isDrop: false, assignedVolunteerId: "v1", assignedCaptainId: null }),
+    ).toBe("assigned");
+    expect(
+      routeLifecycle({ isDrop: false, assignedVolunteerId: null, assignedCaptainId: null }),
+    ).toBe("vacant");
+  });
+
+  it("reads a drop off its captain", () => {
+    expect(
+      routeLifecycle({ isDrop: true, assignedVolunteerId: null, assignedCaptainId: "c1" }),
+    ).toBe("assigned");
+    expect(
+      routeLifecycle({ isDrop: true, assignedVolunteerId: null, assignedCaptainId: null }),
+    ).toBe("vacant");
+  });
+
+  it("does not let a territory-inherited volunteer make a captainless drop look assigned", () => {
+    expect(
+      routeLifecycle({ isDrop: true, assignedVolunteerId: "v1", assignedCaptainId: null }),
+    ).toBe("vacant");
+  });
+
+  it("ignores a captain on a street route, whose carrier is the volunteer", () => {
+    expect(
+      routeLifecycle({ isDrop: false, assignedVolunteerId: null, assignedCaptainId: "c1" }),
+    ).toBe("vacant");
   });
 });
