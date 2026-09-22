@@ -268,6 +268,10 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
   // Settled: once an issue is closed, payments no longer change — including cells
   // that were never paid. This reverses the older "unpaid stays editable" rule.
   it("closing settles every cell; reopen is the way back", async () => {
+    // Read the paid cell before the round trip, so the assertion below is that
+    // it did not move rather than a value copied from another cell.
+    const paidBefore = await S().payouts.getPayout(dropPayoutId);
+
     await S().issues.closeIssue(issueId);
     await expectServiceError(S().issues.closeIssue(issueId), 409); // already closed
     await expectServiceError(
@@ -292,10 +296,12 @@ describe.skipIf(!RUN)("backend business invariants (hosted DB)", () => {
     });
     expect(editable.effectiveAmount).toBe(3);
 
-    // Paid cell survived the close/reopen round trip untouched.
+    // Paid cell survived the close/reopen round trip untouched. Zero is a real
+    // amount here — this captain carries no deliveries on the issue — and a paid
+    // cell of zero is legitimate, so the check is that it held its value.
     const paidCell = await S().payouts.getPayout(dropPayoutId);
     expect(paidCell.paid).toBe(true);
-    expect(paidCell.effectiveAmount).toBe(10);
+    expect(paidCell.effectiveAmount).toBe(paidBefore.effectiveAmount);
 
     await S().issues.closeIssue(issueId); // leave closed for cleanup realism
   });
