@@ -44,6 +44,8 @@ export interface CaptainRow {
   id: string;
   first_name: string;
   last_name: string;
+  /** The name lists and labels show. Derived from the name parts on create. */
+  display_name: string;
   email: string;
   phone: string;
   pay_type: PayType;
@@ -58,6 +60,8 @@ export interface VolunteerRow {
   id: string;
   first_name: string;
   last_name: string;
+  /** The name lists and labels show. Derived from the name parts on create. */
+  display_name: string;
   email: string;
   phone: string;
   address_id: string;

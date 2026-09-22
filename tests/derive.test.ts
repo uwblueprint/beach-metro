@@ -8,6 +8,7 @@ import {
   calculationStatus,
   effectiveAmount,
   greedySplit,
+  memberDisplayName,
   volunteerNeedsAttention,
   volunteerStatus,
 } from "@/lib/services/derive";
@@ -169,5 +170,21 @@ describe("payout cell derivations", () => {
   it("bundleCount derives from the stored breakdown", () => {
     expect(bundleCount(greedySplit(130))).toBe(4);
     expect(bundleCount([])).toBe(0);
+  });
+});
+
+describe("memberDisplayName", () => {
+  it("joins the two name parts", () => {
+    expect(memberDisplayName("Val", "Ng")).toBe("Val Ng");
+  });
+
+  it("does not leave a stray space when one part is blank", () => {
+    expect(memberDisplayName("St. Aidan's Church", "")).toBe("St. Aidan's Church");
+    expect(memberDisplayName("", "Ng")).toBe("Ng");
+  });
+
+  it("trims surrounding whitespace, matching the column's own backfill", () => {
+    expect(memberDisplayName("  Val  ", "  Ng  ")).toBe("Val     Ng");
+    expect(memberDisplayName(" ", " ")).toBe("");
   });
 });

@@ -16,6 +16,19 @@ export function volunteerStatus(
   return "active";
 }
 
+/**
+ * The name a member is known by. `display_name` is NOT NULL in the database and
+ * has no default, so every insert has to supply one.
+ *
+ * Derived from the two name parts here, which is exactly what the column's own
+ * backfill did. It is a separate column rather than a computed read because it
+ * is meant to become authoritative for people who are not one individual, such
+ * as an organization or a household sharing a route.
+ */
+export function memberDisplayName(firstName: string, lastName: string): string {
+  return `${firstName} ${lastName}`.trim();
+}
+
 /** Needs attention: end date passed but not retired (a planning flag, never an auto-retire). */
 export function volunteerNeedsAttention(
   v: Pick<VolunteerRow, "end_date" | "retired_at">,

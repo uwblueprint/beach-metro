@@ -6,6 +6,7 @@ import { conflict, notFound } from "@/lib/api/errors";
 import type { captainsQuery, createCaptain, updateCaptain } from "@/lib/validation/people";
 import type { CaptainRow, CaptainTerritoryRow, PayCadence, PayType } from "@/types/db";
 
+import { memberDisplayName } from "./derive";
 import { createNoteRecord } from "./notes";
 import { recalculateOpenIssues } from "./recalc";
 import { coerceCaptainNumerics, db, throwDb, today } from "./shared";
@@ -91,6 +92,7 @@ export async function createCaptainRecord(
     .insert({
       first_name: input.firstName,
       last_name: input.lastName,
+      display_name: memberDisplayName(input.firstName, input.lastName),
       email: input.email,
       phone: input.phone,
       pay_type: input.payType,

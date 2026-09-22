@@ -18,6 +18,7 @@ import {
 } from "./addresses";
 import {
   greedySplit,
+  memberDisplayName,
   routeLabel,
   volunteerNeedsAttention,
   volunteerStatus,
@@ -217,6 +218,7 @@ export async function createVolunteerRecord(
     .insert({
       first_name: input.firstName,
       last_name: input.lastName,
+      display_name: memberDisplayName(input.firstName, input.lastName),
       email: input.email,
       phone: input.phone,
       address_id: address.id,
