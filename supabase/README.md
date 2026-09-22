@@ -12,7 +12,17 @@ Supabase project config, database migrations, and seed data.
 
 ## Workflow (hosted project — the current setup)
 
-We develop directly against the hosted Supabase project (no local Docker stack).
+We develop directly against the hosted Supabase project. CI is the exception: it
+starts the local stack instead, so the database-backed suites run against a fresh
+schema and seed rather than a shared project that drifts between runs.
+
+    supabase start          # Postgres, PostgREST and Auth in Docker
+    supabase db reset       # migrations + seed.sql
+    supabase status -o env  # the values .env.local needs
+    supabase stop
+
+Running it locally needs Docker and gives the same database CI uses, which is
+worth reaching for when a hosted-database failure will not reproduce.
 
 1. Put the connection string in `.env.local` as `SUPABASE_DB_URL`
    (Dashboard → Connect → Session pooler URI), plus `SUPABASE_SECRET_KEY`
