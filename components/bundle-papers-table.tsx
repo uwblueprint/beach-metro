@@ -274,7 +274,10 @@ function BundlePapersTable({
                   }
                   className={cn(
                     papersFieldClassName,
-                    "cursor-text text-left text-secondary outline-none",
+                    // No outline-none here. It would win over the field's own
+                    // outline and collapse outline-style to none, taking the
+                    // resting hairline and the destructive state with it.
+                    "cursor-text text-left text-secondary",
                     "focus-visible:outline-active focus-visible:ring-2 focus-visible:ring-active/40",
                     invalid && "outline-destructive",
                   )}
