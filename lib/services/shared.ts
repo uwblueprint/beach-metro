@@ -39,15 +39,12 @@ export function throwDb(error: PgError): never {
       throw conflict("A record with these unique values already exists.");
     case "23503": // foreign_key_violation
       throw invalid("A referenced record does not exist.");
-    case "23502": {
-      // not_null_violation — a required field was absent
+    case "23502":
+      // not_null_violation — a required field was absent. The column name is the
+      // useful part when debugging, and it is a schema detail, so it goes to the
+      // log rather than the response.
       console.error("[db] not_null_violation:", error);
-      const colMatch = /column "(\w+)"/.exec(error.message);
-      const field = colMatch?.[1].replace(/_/g, " ");
-      throw invalid(
-        field ? `A required field is missing: ${field}.` : "A required field is missing.",
-      );
-    }
+      throw invalid("A required field is missing.");
     case "23514": // check_violation
     case "P0001": // raise exception (our invariant triggers)
       throw invalid(error.message);
