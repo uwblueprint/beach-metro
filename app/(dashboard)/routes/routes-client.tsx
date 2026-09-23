@@ -133,7 +133,7 @@ interface RouteSummary {
   needsAttention: boolean;
   effectiveHouseCount: number;
   papers: number;
-  assignedVolunteer: { id: string; firstName: string; lastName: string; status: string } | null;
+  assignedVolunteer: { id: string; displayName: string; status: string } | null;
   captain: { id: string; name: string } | null;
   start: { latitude: number; longitude: number } | null;
   end: { latitude: number; longitude: number } | null;
@@ -167,8 +167,7 @@ function findLabelRoute(sheet: LabelSheet | undefined, routeId: string) {
 }
 interface VolunteerSummary {
   id: string;
-  firstName: string;
-  lastName: string;
+  displayName: string;
   status: string;
   home: { latitude: number; longitude: number } | null;
   territory: { id: string; captainId: string | null; captainName: string | null } | null;
@@ -801,8 +800,7 @@ export function RoutesClient() {
       getJson<
         {
           id: string;
-          firstName: string;
-          lastName: string;
+          displayName: string;
           status: string;
         }[]
       >("/api/captains?status=active"),
@@ -822,7 +820,7 @@ export function RoutesClient() {
     () =>
       (captains.data ?? []).map((c) => ({
         value: c.id,
-        label: `${c.firstName} ${c.lastName}`,
+        label: c.displayName,
       })),
     [captains.data],
   );
@@ -878,9 +876,7 @@ export function RoutesClient() {
       end: r.end,
       path: drop ? null : (pathById.get(r.id) ?? null),
       label: deliveryListLabel(r),
-      volunteerName: r.assignedVolunteer
-        ? `${r.assignedVolunteer.firstName} ${r.assignedVolunteer.lastName}`
-        : null,
+      volunteerName: r.assignedVolunteer ? r.assignedVolunteer.displayName : null,
       bundleCount: greedySplit(Math.max(0, Math.floor(r.papers))).length,
       papers: r.papers,
       isDrop: drop,
@@ -890,7 +886,7 @@ export function RoutesClient() {
   const mapHomes: MapHome[] = showHomes
     ? (volunteers.data ?? []).map((v) => ({
         id: v.id,
-        name: `${v.firstName} ${v.lastName}`,
+        name: v.displayName,
         home: v.home,
       }))
     : [];
@@ -1368,8 +1364,7 @@ function RouteDetailPanel({
       getJson<
         {
           id: string;
-          firstName: string;
-          lastName: string;
+          displayName: string;
           status: string;
         }[]
       >("/api/captains?status=active"),
@@ -1409,7 +1404,7 @@ function RouteDetailPanel({
       onMemberHomeChange({
         latitude: vol.home.latitude,
         longitude: vol.home.longitude,
-        name: `${vol.firstName} ${vol.lastName}`,
+        name: vol.displayName,
       });
     } else {
       onMemberHomeChange(null);
@@ -1526,14 +1521,14 @@ function RouteDetailPanel({
     { value: "", label: "— vacant —" },
     ...(volunteers.data ?? []).map((v) => ({
       value: v.id,
-      label: `${v.firstName} ${v.lastName}`,
+      label: v.displayName,
     })),
   ];
   const captainOptions = [
     { value: "", label: "— no captain —" },
     ...(captains.data ?? []).map((c) => ({
       value: c.id,
-      label: `${c.firstName} ${c.lastName}`,
+      label: c.displayName,
     })),
   ];
 
@@ -1732,7 +1727,7 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
     { value: "", label: "— leave vacant —" },
     ...(volunteers.data ?? []).map((v) => ({
       value: v.id,
-      label: `${v.firstName} ${v.lastName}`,
+      label: v.displayName,
     })),
   ];
   const volunteerDisplay =
@@ -1862,8 +1857,7 @@ function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) =
       getJson<
         {
           id: string;
-          firstName: string;
-          lastName: string;
+          displayName: string;
           status: string;
         }[]
       >("/api/captains?status=active"),
@@ -1920,7 +1914,7 @@ function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) =
     { value: "", label: "Select a captain" },
     ...(captains.data ?? []).map((c) => ({
       value: c.id,
-      label: `${c.firstName} ${c.lastName}`,
+      label: c.displayName,
     })),
   ];
   const captainDisplay =

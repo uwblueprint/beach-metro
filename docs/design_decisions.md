@@ -4,6 +4,23 @@ Running log of locked design decisions, kept out of the individual specs so they
 stay lean. When a decision is locked (client call, review round, team discussion),
 append it here with a one-line rationale and update the docs that implement it.
 
+## Label printing — bundle Type (2026-08-23)
+
+Kristen (design), confirming a guess `label_printing_flow.md` had already made:
+Type is a property of the delivery, not a route-vs-drop split.
+
+- **Carrier** = a normal volunteer route.
+- **Commercial** = a bulk drop at a business.
+- **Residential** = a bulk drop at an apartment or condo — mechanically the
+  same as Commercial (one address, one bulk quantity per issue), just a
+  different kind of building. **Not** the same thing as `Address.type =
+  'residential'`, which means an ordinary volunteer home or route endpoint.
+  A residential bulk-drop location is a third address kind the schema has
+  never modeled; see `label_printing_flow.md` §7.
+- Every row the labels feature can currently show is `Carrier` — commercial
+  and residential drops have no per-issue delivery record yet, so this is a
+  fact today, not a display choice.
+
 ## Finances data layer (2026-08)
 
 Wiring the finances and overview screens. **Where the design and the backend

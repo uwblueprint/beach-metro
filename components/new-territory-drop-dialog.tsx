@@ -48,13 +48,7 @@ export interface NewTerritoryDropDialogProps {
   onSuccess?: () => void;
 }
 
-function volunteerLabel(
-  firstName: string,
-  lastName: string,
-  assigned: boolean,
-  retired: boolean,
-): string {
-  const name = `${firstName} ${lastName}`;
+function volunteerLabel(name: string, assigned: boolean, retired: boolean): string {
   if (retired) return `${name} (retired)`;
   return assigned ? `${name} (assigned)` : name;
 }
@@ -92,7 +86,7 @@ function NewTerritoryDropForm({
       const retired = v.status === "retired";
       return {
         value: `volunteer:${v.id}`,
-        label: volunteerLabel(v.firstName, v.lastName, assigned, retired),
+        label: volunteerLabel(v.displayName, assigned, retired),
         assigned: assigned || retired,
       };
     });

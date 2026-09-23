@@ -149,11 +149,11 @@ function VolunteerContent({ id }: { id: string }) {
   }
 
   function startEditing() {
-    setEmail(volunteer!.email);
-    setPhone(volunteer!.phone);
+    setEmail(volunteer!.email ?? "");
+    setPhone(volunteer!.phone ?? "");
     setAddress(currentAddress);
     setAddressPlaceId(volunteer!.address.placeId);
-    setStartDate(volunteer!.startDate);
+    setStartDate(volunteer!.startDate ?? "");
     setCaptainTerritoryId(volunteer!.territory?.id ?? "");
     setSaveError(null);
     setEditing(true);
@@ -176,21 +176,17 @@ function VolunteerContent({ id }: { id: string }) {
       setSaveError("Address is required.");
       return;
     }
-    if (!startDate) {
-      setSaveError("Start date is required.");
-      return;
-    }
 
     const body: {
-      email?: string;
-      phone?: string;
-      startDate?: string;
+      email?: string | null;
+      phone?: string | null;
+      startDate?: string | null;
       address?: { addressLines: string[] } | { placeId: string };
       captainTerritoryId?: string | null;
     } = {};
-    if (trimmedEmail !== volunteer!.email) body.email = trimmedEmail;
-    if (trimmedPhone !== volunteer!.phone) body.phone = trimmedPhone;
-    if (startDate !== volunteer!.startDate) body.startDate = startDate;
+    if (trimmedEmail !== (volunteer!.email ?? "")) body.email = trimmedEmail || null;
+    if (trimmedPhone !== (volunteer!.phone ?? "")) body.phone = trimmedPhone || null;
+    if (startDate !== (volunteer!.startDate ?? "")) body.startDate = startDate || null;
     if (trimmedAddress !== currentAddress) {
       body.address = addressPlaceId
         ? { placeId: addressPlaceId }
@@ -320,8 +316,16 @@ function VolunteerContent({ id }: { id: string }) {
           </>
         ) : (
           <>
-            <Attribute label="Email" value={volunteer.email} copyable />
-            <Attribute label="Phone" value={volunteer.phone} copyable />
+            <Attribute
+              label="Email"
+              value={volunteer.email ?? "Not on file"}
+              copyable={Boolean(volunteer.email)}
+            />
+            <Attribute
+              label="Phone"
+              value={volunteer.phone ?? "Not on file"}
+              copyable={Boolean(volunteer.phone)}
+            />
             <Attribute
               label="Address"
               value={volunteer.address.formattedAddress ?? "Not geocoded yet"}
@@ -423,7 +427,7 @@ function CaptainContent({ id }: { id: string }) {
     return <p className="text-md text-tertiary">Loading…</p>;
   }
 
-  const captainName = `${captain.firstName} ${captain.lastName}`;
+  const captainName = captain.displayName;
   const commercialDrops = territory?.commercialDrops ?? [];
   const territoryVolunteers = territory?.volunteers ?? [];
   const hasDrops = commercialDrops.length > 0 || territoryVolunteers.length > 0;
@@ -454,22 +458,22 @@ function CaptainContent({ id }: { id: string }) {
     setDialogOpen(true);
   }
 
-  function openEditVolunteer(volunteer: { id: string; firstName: string; lastName: string }) {
+  function openEditVolunteer(volunteer: { id: string; displayName: string }) {
     setInitialDrop({
       kind: "volunteer",
       volunteerId: volunteer.id,
-      label: `${volunteer.firstName} ${volunteer.lastName}`,
+      label: volunteer.displayName,
     });
     setDialogOpen(true);
   }
 
   function startEditing() {
-    setEmail(captain!.email);
-    setPhone(captain!.phone);
+    setEmail(captain!.email ?? "");
+    setPhone(captain!.phone ?? "");
     setPayRate(String(captain!.payRate));
     setPayType(captain!.payType);
     setPayCadence(captain!.payCadence);
-    setStartDate(captain!.startDate);
+    setStartDate(captain!.startDate ?? "");
     setSaveError(null);
     setEditing(true);
   }
@@ -491,25 +495,21 @@ function CaptainContent({ id }: { id: string }) {
       setSaveError("Enter a valid pay rate (0 or greater).");
       return;
     }
-    if (!startDate) {
-      setSaveError("Start date is required.");
-      return;
-    }
 
     const body: {
-      email?: string;
-      phone?: string;
+      email?: string | null;
+      phone?: string | null;
       payRate?: number;
       payType?: "bundle" | "paper" | "drop";
       payCadence?: "biweekly" | "monthly";
-      startDate?: string;
+      startDate?: string | null;
     } = {};
-    if (trimmedEmail !== captain!.email) body.email = trimmedEmail;
-    if (trimmedPhone !== captain!.phone) body.phone = trimmedPhone;
+    if (trimmedEmail !== (captain!.email ?? "")) body.email = trimmedEmail || null;
+    if (trimmedPhone !== (captain!.phone ?? "")) body.phone = trimmedPhone || null;
     if (rate !== captain!.payRate) body.payRate = rate;
     if (payType !== captain!.payType) body.payType = payType;
     if (payCadence !== captain!.payCadence) body.payCadence = payCadence;
-    if (startDate !== captain!.startDate) body.startDate = startDate;
+    if (startDate !== (captain!.startDate ?? "")) body.startDate = startDate || null;
 
     if (Object.keys(body).length === 0) {
       setEditing(false);
@@ -631,8 +631,16 @@ function CaptainContent({ id }: { id: string }) {
           </>
         ) : (
           <>
-            <Attribute label="Email" value={captain.email} copyable />
-            <Attribute label="Phone" value={captain.phone} copyable />
+            <Attribute
+              label="Email"
+              value={captain.email ?? "Not on file"}
+              copyable={Boolean(captain.email)}
+            />
+            <Attribute
+              label="Phone"
+              value={captain.phone ?? "Not on file"}
+              copyable={Boolean(captain.phone)}
+            />
             <Attribute
               label="Pay"
               value={`${CADENCE_LABEL[captain.payCadence] ?? captain.payCadence}, $${captain.payRate.toFixed(2)} per ${captain.payType}`}
@@ -673,9 +681,7 @@ function CaptainContent({ id }: { id: string }) {
                   meta="Volunteer"
                   onEdit={() => openEditVolunteer(item.volunteer)}
                 >
-                  <span className="text-secondary">
-                    {item.volunteer.firstName} {item.volunteer.lastName}
-                  </span>
+                  <span className="text-secondary">{item.volunteer.displayName}</span>
                 </SidePanelRow>
               ) : (
                 <SidePanelRow
@@ -799,14 +805,6 @@ function CreateMemberContent({
       setCreateError("First and last name are required.");
       return;
     }
-    if (!startDate) {
-      setCreateError("Start date is required.");
-      return;
-    }
-    if (!email.trim() || !phone.trim()) {
-      setCreateError("Email and phone are required.");
-      return;
-    }
     if (role === "volunteer" && !address.trim()) {
       setCreateError("Street address is required.");
       return;
@@ -843,7 +841,7 @@ function CreateMemberContent({
         onCreated({
           id: created.id,
           role: "volunteer",
-          name: `${created.firstName} ${created.lastName}`,
+          name: created.displayName,
           status: "active",
         });
       } else {
@@ -860,7 +858,7 @@ function CreateMemberContent({
         onCreated({
           id: created.id,
           role: "captain",
-          name: `${created.firstName} ${created.lastName}`,
+          name: created.displayName,
           status: "active",
         });
       }

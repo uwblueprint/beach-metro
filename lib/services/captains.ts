@@ -11,21 +11,27 @@ import type {
 } from "@/lib/validation/people";
 import type { CaptainRow, CaptainTerritoryRow, PayCadence, PayType } from "@/types/db";
 
+import { recomposedDisplayName } from "./derive";
 import { createNoteRecord } from "./notes";
 import { recalculateOpenIssues } from "./recalc";
 import { coerceCaptainNumerics, db, throwDb, today } from "./shared";
 
 export interface CaptainSummary {
   id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
+  /** Territory code printed on the label chip; null until assigned. */
+  rtNumber: string | null;
+  /** Authoritative name; what lists and labels show. */
+  displayName: string;
+  /** Null when the recipient is not one person. */
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
   status: "active" | "retired";
   payType: PayType;
   payRate: number;
   payCadence: PayCadence;
-  startDate: string;
+  startDate: string | null;
   endDate: string | null;
   retiredAt: string | null;
   territory: { id: string; color: string | null } | null;
@@ -35,6 +41,8 @@ function toSummary(c: CaptainRow, territories: CaptainTerritoryRow[]): CaptainSu
   const territory = territories.find((t) => t.assigned_captain_id === c.id) ?? null;
   return {
     id: c.id,
+    rtNumber: c.rt_number,
+    displayName: c.display_name,
     firstName: c.first_name,
     lastName: c.last_name,
     email: c.email,
@@ -59,7 +67,7 @@ async function fetchTerritories(): Promise<CaptainTerritoryRow[]> {
 export async function listCaptains(
   filters: z.infer<typeof captainsQuery>,
 ): Promise<CaptainSummary[]> {
-  const { data, error } = await db().from("captains").select("*").order("last_name");
+  const { data, error } = await db().from("captains").select("*").order("display_name");
   if (error) throwDb(error);
   const territories = await fetchTerritories();
 
@@ -69,7 +77,11 @@ export async function listCaptains(
   if (filters.status) all = all.filter((c) => c.status === filters.status);
   if (filters.q) {
     const q = filters.q.toLowerCase();
-    all = all.filter((c) => `${c.firstName} ${c.lastName} ${c.email}`.toLowerCase().includes(q));
+    // displayName, not first + last: those are null for a non-person captain,
+    // and displayName is what the list actually shows.
+    all = all.filter((c) =>
+      [c.displayName, c.email].filter(Boolean).join(" ").toLowerCase().includes(q),
+    );
   }
   return all;
 }
@@ -94,8 +106,10 @@ export async function createCaptainRecord(
   const { data, error } = await client
     .from("captains")
     .insert({
-      first_name: input.firstName,
-      last_name: input.lastName,
+      display_name: input.displayName,
+      rt_number: input.rtNumber ?? null,
+      first_name: input.firstName ?? null,
+      last_name: input.lastName ?? null,
       email: input.email,
       phone: input.phone,
       pay_type: input.payType,
@@ -129,9 +143,13 @@ export async function updateCaptainRecord(
   id: string,
   input: z.infer<typeof updateCaptain>,
 ): Promise<CaptainSummary> {
-  await fetchCaptain(id);
+  const current = await fetchCaptain(id);
 
   const patch: Record<string, unknown> = {};
+  if (input.displayName !== undefined) patch.display_name = input.displayName;
+  const renamed = recomposedDisplayName(current, input);
+  if (renamed !== null) patch.display_name = renamed;
+  if (input.rtNumber !== undefined) patch.rt_number = input.rtNumber;
   if (input.firstName !== undefined) patch.first_name = input.firstName;
   if (input.lastName !== undefined) patch.last_name = input.lastName;
   if (input.email !== undefined) patch.email = input.email;
@@ -150,16 +168,6 @@ export async function updateCaptainRecord(
   if (input.payType !== undefined || input.payRate !== undefined) {
     await recalculateOpenIssues();
   }
-  return getCaptain(id);
-}
-
-/** Reactivation: clears retirement (people flow Retired → Active). The territory
- * is not re-attached; the manager reassigns it manually after reactivation. */
-export async function reactivateCaptain(id: string): Promise<CaptainSummary> {
-  const c = await fetchCaptain(id);
-  if (!c.retired_at) throw conflict("Captain is not retired.");
-  const { error } = await db().from("captains").update({ retired_at: null }).eq("id", id);
-  if (error) throwDb(error);
   return getCaptain(id);
 }
 
@@ -217,6 +225,27 @@ export async function deleteCaptain(id: string): Promise<void> {
 }
 
 /** Soft retire; the territory becomes captain-less and awaits reassignment (§4k). */
+/**
+ * Undo a retirement. Clears `retired_at` and nothing else.
+ *
+ * Deliberately does NOT reclaim the territory retirement detached. A territory
+ * holds at most one captain, so it may already have been handed to someone
+ * else; taking it back here would silently displace them. Reassign by hand.
+ *
+ * No recalculation follows: the captain comes back with no territory, so there
+ * is nothing for the open-issue cells to roll up from and every amount they
+ * would touch is already zero.
+ */
+export async function reactivateCaptain(id: string): Promise<CaptainSummary> {
+  const c = await fetchCaptain(id);
+  if (!c.retired_at) throw conflict("Captain is not retired.");
+
+  const { error } = await db().from("captains").update({ retired_at: null }).eq("id", id);
+  if (error) throwDb(error);
+
+  return getCaptain(id);
+}
+
 export async function retireCaptain(
   id: string,
   input: z.infer<typeof retireMember> = {},

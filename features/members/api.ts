@@ -235,11 +235,13 @@ export function useSetVacation(volunteerId: string) {
   });
 }
 
+/** Either `displayName` alone, or `firstName` + `lastName` for the server to compose. */
 export type CreateVolunteerBody = {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
+  displayName?: string;
+  firstName?: string;
+  lastName?: string;
+  email: string | null;
+  phone: string | null;
   address: { addressLines: string[] } | { placeId: string };
   startDate: string;
   captainTerritoryId?: string | null;
@@ -247,11 +249,15 @@ export type CreateVolunteerBody = {
   note?: string | null;
 };
 
+/** Either `displayName` alone, or `firstName` + `lastName` for the server to compose. */
 export type CreateCaptainBody = {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
+  displayName?: string;
+  firstName?: string;
+  lastName?: string;
+  email: string | null;
+  phone: string | null;
+  /** Territory code printed on the label chip; null until the office assigns one. */
+  rtNumber?: string | null;
   payType: "bundle" | "paper" | "drop";
   payRate: number;
   payCadence: "biweekly" | "monthly";
@@ -282,10 +288,10 @@ export function useCreateCaptain() {
 }
 
 export type UpdateVolunteerBody = {
-  email?: string;
-  phone?: string;
+  email?: string | null;
+  phone?: string | null;
   address?: { addressLines: string[] } | { placeId: string };
-  startDate?: string;
+  startDate?: string | null;
   endDate?: string | null;
   firstName?: string;
   lastName?: string;
@@ -319,12 +325,12 @@ export function useUpdateVolunteer(id: string) {
 }
 
 export type UpdateCaptainBody = {
-  email?: string;
-  phone?: string;
+  email?: string | null;
+  phone?: string | null;
   payType?: "bundle" | "paper" | "drop";
   payRate?: number;
   payCadence?: "biweekly" | "monthly";
-  startDate?: string;
+  startDate?: string | null;
   endDate?: string | null;
   firstName?: string;
   lastName?: string;

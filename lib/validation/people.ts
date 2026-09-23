@@ -3,6 +3,84 @@ import { z } from "zod";
 
 import { addressInput, boolQuery, isoDate, noteField, uuid } from "./common";
 
+/**
+ * Contact details are optional for everyone — volunteers and captains, on create
+ * and on update. Only 19% of the office's real roster has a phone on file and
+ * 42% an email (docs/reference/route_labels_spreadsheet.md §2.2), so requiring
+ * either would block most of their people from being entered at all.
+ *
+ * A cleared form field arrives as `""`, which `z.email()` would reject, so both
+ * accept the empty string and normalise every absent form — `undefined`, `null`,
+ * `""`, whitespace — to `null`. That keeps one representation of "not on file"
+ * in the database instead of three.
+ */
+const optionalEmail = z
+  .preprocess(
+    // z.email() does not trim, so "   " would fail both branches and surface as
+    // "Invalid email address" instead of "not on file". Trim first, matching
+    // optionalPhone, so every blank form lands on the same answer.
+    (v) => (typeof v === "string" ? v.trim() : v),
+    z.union([z.email(), z.literal("")]).nullish(),
+  )
+  .transform((v) => v || null);
+
+const optionalPhone = z
+  .string()
+  .trim()
+  .nullish()
+  .transform((v) => v || null);
+
+/**
+ * Start date, when there is one. Missing for anyone who joined before the office
+ * started recording it, and for rows that are not a person at all. Nothing
+ * derives from it — status comes from retirement and the vacation window,
+ * needs-attention from the end date — so an absent one costs only a blank in the
+ * side panel. Empty string folds to null like the contact fields.
+ */
+const optionalStartDate = z
+  .preprocess((v) => (typeof v === "string" && v.trim() === "" ? null : v), isoDate.nullish())
+  .transform((v) => v ?? null);
+
+/**
+ * A third of the office's roster is not one person — churches, apartment
+ * buildings, households, two people sharing a route. `displayName` is the
+ * authoritative name for all of them; `firstName` / `lastName` are optional and
+ * carried only for individuals, where surname sort and structured search still
+ * earn their keep. See docs/reference/route_labels_spreadsheet.md §2.1.
+ */
+const nameFields = {
+  displayName: z.string().trim().min(1).optional(),
+  firstName: z.string().trim().min(1).nullish(),
+  lastName: z.string().trim().min(1).nullish(),
+};
+
+/**
+ * Fill `displayName` from first + last when the caller gave a person's name but
+ * no display form, so the common case stays a two-field write. Callers naming a
+ * church send `displayName` alone.
+ */
+function composeDisplayName<
+  T extends { displayName?: string; firstName?: string | null; lastName?: string | null },
+>(o: T, ctx: z.RefinementCtx) {
+  const displayName = o.displayName || [o.firstName, o.lastName].filter(Boolean).join(" ");
+  if (!displayName) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Provide displayName, or firstName and lastName.",
+      path: ["displayName"],
+    });
+    return z.NEVER;
+  }
+  return { ...o, displayName };
+}
+
+/**
+ * The RT number printed on the label chip. Text because the office's live values
+ * include '01' (the leading zero prints) and '31-71' for a span of driven
+ * routes. Optional: a captain can exist before the office assigns one.
+ */
+const rtNumber = z.string().trim().min(1).nullish();
+
 // ---------------------------------------------------------------------------
 // Volunteers
 // ---------------------------------------------------------------------------
@@ -27,27 +105,29 @@ export const volunteersQuery = z.object({
   q: z.string().trim().min(1).optional(),
 });
 
-export const createVolunteer = z.object({
-  firstName: z.string().trim().min(1),
-  lastName: z.string().trim().min(1),
-  email: z.email(),
-  phone: z.string().trim().min(1),
-  address: addressInput,
-  captainTerritoryId: uuid.nullish(),
-  startDate: isoDate,
-  endDate: isoDate.nullish(),
-  note: noteField,
-});
+export const createVolunteer = z
+  .object({
+    ...nameFields,
+    email: optionalEmail,
+    phone: optionalPhone,
+    address: addressInput,
+    captainTerritoryId: uuid.nullish(),
+    startDate: optionalStartDate,
+    endDate: isoDate.nullish(),
+    note: noteField,
+  })
+  .transform(composeDisplayName);
 
 export const updateVolunteer = z
   .object({
-    firstName: z.string().trim().min(1),
-    lastName: z.string().trim().min(1),
-    email: z.email(),
-    phone: z.string().trim().min(1),
+    displayName: z.string().trim().min(1),
+    firstName: z.string().trim().min(1).nullable(),
+    lastName: z.string().trim().min(1).nullable(),
+    email: optionalEmail,
+    phone: optionalPhone,
     address: addressInput, // re-validates + swaps the home address
     captainTerritoryId: uuid.nullable(),
-    startDate: isoDate,
+    startDate: optionalStartDate,
     endDate: isoDate.nullable(),
     // No `note` here: notes are their own resource now (see lib/validation/notes.ts).
     // A single field on PATCH could not say WHICH note it meant.
@@ -81,29 +161,33 @@ export const captainsQuery = z.object({
   q: z.string().trim().min(1).optional(),
 });
 
-export const createCaptain = z.object({
-  firstName: z.string().trim().min(1),
-  lastName: z.string().trim().min(1),
-  email: z.email(),
-  phone: z.string().trim().min(1),
-  payType: z.enum(["bundle", "paper", "drop"]),
-  payRate: z.number().min(0), // 0 is valid (donate-back)
-  payCadence: z.enum(["biweekly", "monthly"]),
-  startDate: isoDate,
-  endDate: isoDate.nullish(),
-  note: noteField,
-});
+export const createCaptain = z
+  .object({
+    ...nameFields,
+    email: optionalEmail,
+    phone: optionalPhone,
+    rtNumber,
+    payType: z.enum(["bundle", "paper", "drop"]),
+    payRate: z.number().min(0), // 0 is valid (donate-back)
+    payCadence: z.enum(["biweekly", "monthly"]),
+    startDate: optionalStartDate,
+    endDate: isoDate.nullish(),
+    note: noteField,
+  })
+  .transform(composeDisplayName);
 
 export const updateCaptain = z
   .object({
-    firstName: z.string().trim().min(1),
-    lastName: z.string().trim().min(1),
-    email: z.email(),
-    phone: z.string().trim().min(1),
+    displayName: z.string().trim().min(1),
+    firstName: z.string().trim().min(1).nullable(),
+    lastName: z.string().trim().min(1).nullable(),
+    email: optionalEmail,
+    phone: optionalPhone,
+    rtNumber: z.string().trim().min(1).nullable(),
     payType: z.enum(["bundle", "paper", "drop"]),
     payRate: z.number().min(0),
     payCadence: z.enum(["biweekly", "monthly"]),
-    startDate: isoDate,
+    startDate: optionalStartDate,
     endDate: isoDate.nullable(),
     // No `note` here either — see updateVolunteer above.
   })

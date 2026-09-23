@@ -28,6 +28,7 @@ import {
   PAGE_W,
   SIZE_ADDRESS,
   SIZE_BUNDLE,
+  SIZE_COPIES,
   SIZE_HEADLINE,
   SIZE_NAME,
 } from "./label-geometry";
@@ -97,7 +98,7 @@ function drawCentered(
  * Draw one label with its top-left corner at (left, top).
  *
  *   ┌──────────┬──────────────┐
- *   │ ██ RTxx  │  N COPIES    │   28pt bold, RT box reversed on #0D0D0D
+ *   │ ██ RTxx  │  N COPIES    │   28pt / 24pt bold, RT box reversed on #0D0D0D
  *   ├──────────┴──────────────┤
  *   │         Name            │   14pt
  *   │        Address          │   16pt bold, underlined
@@ -137,23 +138,25 @@ function drawLabel(
     color: CHIP_FILL,
   });
   // Optically centre the cap-height inside the chip rather than sitting the
-  // baseline on its floor.
-  const headlineBaseline = chipTop - CHIP_H + (CHIP_H - SIZE_HEADLINE * 0.72) / 2;
+  // baseline on its floor. The copy count is a smaller size, so it gets its own
+  // baseline from the same formula — both cells are `vAlign` centre in the docx,
+  // which centres each independently rather than sharing one baseline.
+  const centreCapHeight = (size: number) => chipTop - CHIP_H + (CHIP_H - size * 0.72) / 2;
   drawCentered(page, `RT${label.routeCode}`, {
     font: fonts.bold,
     size: SIZE_HEADLINE,
     x: innerLeft,
     width: CHIP_W,
-    y: headlineBaseline,
+    y: centreCapHeight(SIZE_HEADLINE),
     color: CHIP_INK,
     inset: CHIP_INSET,
   });
   drawCentered(page, `${label.papers} COPIES`, {
     font: fonts.bold,
-    size: SIZE_HEADLINE,
+    size: SIZE_COPIES,
     x: innerLeft + CHIP_W,
     width: COPIES_W,
-    y: headlineBaseline,
+    y: centreCapHeight(SIZE_COPIES),
     inset: HEADLINE_GAP,
   });
 

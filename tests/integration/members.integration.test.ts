@@ -86,6 +86,7 @@ describe.skipIf(!RUN)("members list", () => {
     if (!RUN) return;
     fixtureSurname = unique("ZzListFixture");
     const captain = await S().captains.createCaptainRecord({
+      displayName: `${TEST_FIRST_NAME} ${fixtureSurname}`,
       firstName: TEST_FIRST_NAME,
       lastName: fixtureSurname,
       email: `${unique("it-listrole")}@example.com`,
@@ -168,6 +169,7 @@ describe.skipIf(!RUN)("members list", () => {
 describe.skipIf(!RUN)("member notes", () => {
   it("creates, lists newest-first, edits and deletes", async () => {
     const captain = await S().captains.createCaptainRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("Notes")}`,
       firstName: TEST_FIRST_NAME,
       lastName: unique("Notes"),
       email: `${unique("it-notes")}@example.com`,
@@ -204,6 +206,7 @@ describe.skipIf(!RUN)("member notes", () => {
 
   it("stores an optional retirement reason as a member note", async () => {
     const volunteer = await S().volunteers.createVolunteerRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("RetireNote")}`,
       firstName: TEST_FIRST_NAME,
       lastName: unique("RetireNote"),
       email: `${unique("it-retirenote")}@example.com`,
@@ -228,6 +231,7 @@ describe.skipIf(!RUN)("member notes", () => {
 
   it("cascades notes when the person is deleted, rather than orphaning them", async () => {
     const captain = await S().captains.createCaptainRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("Cascade")}`,
       firstName: TEST_FIRST_NAME,
       lastName: unique("Cascade"),
       email: `${unique("it-cascade")}@example.com`,
@@ -260,6 +264,7 @@ describe.skipIf(!RUN)("member notes", () => {
 
   it("rejects a blank note", async () => {
     const captain = await S().captains.createCaptainRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("Blank")}`,
       firstName: TEST_FIRST_NAME,
       lastName: unique("Blank"),
       email: `${unique("it-blank")}@example.com`,
@@ -285,6 +290,7 @@ describe.skipIf(!RUN)("member notes", () => {
   it("refuses a note with two parents, and a note with none", async () => {
     const client = createAdminClient();
     const captain = await S().captains.createCaptainRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("Parent")}`,
       firstName: TEST_FIRST_NAME,
       lastName: unique("Parent"),
       email: `${unique("it-parent")}@example.com`,
@@ -319,6 +325,7 @@ describe.skipIf(!RUN)("captain payout history", () => {
   // a payout vanish between the two reads it compares.
   it("agrees with the per-issue payout list, newest issue first", async () => {
     const captain = await S().captains.createCaptainRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("History")}`,
       firstName: TEST_FIRST_NAME,
       lastName: unique("History"),
       email: `${unique("it-history")}@example.com`,
@@ -401,6 +408,7 @@ describe.skipIf(!RUN)("captain payout history", () => {
   it("shows a covered cell to the owner and the substitute, on opposite sides", async () => {
     const makeCaptain = async (label: string) => {
       const c = await S().captains.createCaptainRecord({
+        displayName: `${TEST_FIRST_NAME} ${unique(label)}`,
         firstName: TEST_FIRST_NAME,
         lastName: unique(label),
         email: `${unique(`it-${label.toLowerCase()}`)}@example.com`,
@@ -511,6 +519,7 @@ describe.skipIf(!RUN)("commercial drop standing counts", () => {
 describe.skipIf(!RUN)("reactivation and hard delete", () => {
   async function makeCaptain(tag: string) {
     const captain = await S().captains.createCaptainRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique(tag)}`,
       firstName: TEST_FIRST_NAME,
       lastName: unique(tag),
       email: `${unique(`it-${tag.toLowerCase()}`)}@example.com`,
@@ -529,6 +538,7 @@ describe.skipIf(!RUN)("reactivation and hard delete", () => {
 
   it("clears a volunteer's retirement, and refuses when they are not retired", async () => {
     const volunteer = await S().volunteers.createVolunteerRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("Reactivate")}`,
       firstName: TEST_FIRST_NAME,
       lastName: unique("Reactivate"),
       email: `${unique("it-vreactivate")}@example.com`,
@@ -569,6 +579,7 @@ describe.skipIf(!RUN)("reactivation and hard delete", () => {
 
   it("hard-deletes a volunteer and vacates the routes they carried", async () => {
     const volunteer = await S().volunteers.createVolunteerRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("Delete")}`,
       firstName: TEST_FIRST_NAME,
       lastName: unique("Delete"),
       email: `${unique("it-vdelete")}@example.com`,
@@ -668,4 +679,66 @@ afterAll(async () => {
     await client.from("volunteer_routes").delete().in("assigned_volunteer_id", strayVolunteerIds);
     await client.from("volunteers").delete().in("id", strayVolunteerIds);
   }
+});
+
+// Retirement is reachable from the members table, so undoing one has to work.
+// Reactivation clears the flag only: routes and territories detached on retire
+// may already belong to someone else, so they are NOT pulled back.
+describe.skipIf(!RUN)("reactivation", () => {
+  it("brings a retired captain back, and refuses if they are not retired", async () => {
+    const captain = await S().captains.createCaptainRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("React")}`,
+      firstName: TEST_FIRST_NAME,
+      lastName: unique("React"),
+      email: `${unique("it-react")}@example.com`,
+      phone: "416-555-0430",
+      payType: "bundle",
+      payRate: 1,
+      payCadence: "biweekly",
+      startDate: "2026-01-01",
+      endDate: null,
+      note: null,
+    });
+    created.captainIds.push(captain.id);
+    if (captain.territory) created.territoryIds.push(captain.territory.id);
+
+    // Not retired yet, so there is nothing to undo.
+    await expectServiceError(S().captains.reactivateCaptain(captain.id), 409);
+
+    await S().captains.retireCaptain(captain.id);
+    expect((await S().captains.getCaptain(captain.id)).status).toBe("retired");
+
+    const back = await S().captains.reactivateCaptain(captain.id);
+    expect(back.status).toBe("active");
+    expect(back.retiredAt).toBeNull();
+    // The territory stays detached — retirement gave it up and someone else may
+    // hold it now.
+    expect(back.territory).toBeNull();
+  });
+
+  it("brings a retired volunteer back without reclaiming their routes", async () => {
+    const volunteer = await S().volunteers.createVolunteerRecord({
+      displayName: `${TEST_FIRST_NAME} ${unique("ReactVol")}`,
+      firstName: TEST_FIRST_NAME,
+      lastName: unique("ReactVol"),
+      email: `${unique("it-reactvol")}@example.com`,
+      phone: "416-555-0431",
+      address: { addressLines: ["1 Reactivate Way"] },
+      startDate: "2026-01-01",
+      endDate: null,
+      captainTerritoryId: null,
+      note: null,
+    });
+    created.volunteerIds.push(volunteer.id);
+
+    await expectServiceError(S().volunteers.reactivateVolunteer(volunteer.id), 409);
+
+    await S().volunteers.retireVolunteer(volunteer.id);
+    expect((await S().volunteers.getVolunteer(volunteer.id)).status).toBe("retired");
+
+    const back = await S().volunteers.reactivateVolunteer(volunteer.id);
+    expect(back.status).toBe("active");
+    expect(back.retiredAt).toBeNull();
+    expect(back.routesCarried).toHaveLength(0);
+  });
 });

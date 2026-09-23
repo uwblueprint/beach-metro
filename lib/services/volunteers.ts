@@ -19,6 +19,7 @@ import {
 } from "./addresses";
 import {
   greedySplit,
+  recomposedDisplayName,
   routeLabel,
   volunteerNeedsAttention,
   volunteerStatus,
@@ -45,17 +46,20 @@ export interface CarriedRoute {
 
 export interface VolunteerSummary {
   id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
+  /** Authoritative name; what lists and labels show. */
+  displayName: string;
+  /** Null when the recipient is not one person. */
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
   status: VolunteerStatus;
   needsAttention: boolean;
   territory: { id: string; captainId: string | null; captainName: string | null } | null;
   routesCarried: CarriedRoute[];
   /** Cached home coordinates for the map (null when the coordinate cache is empty). */
   home: { latitude: number; longitude: number } | null;
-  startDate: string;
+  startDate: string | null;
   endDate: string | null;
   vacationStart: string | null;
   vacationEnd: string | null;
@@ -69,7 +73,7 @@ export interface VolunteerDetail extends VolunteerSummary {
 interface Context {
   routes: RouteLite[];
   territories: CaptainTerritoryRow[];
-  captains: Pick<CaptainRow, "id" | "first_name" | "last_name">[];
+  captains: Pick<CaptainRow, "id" | "display_name">[];
   /** Endpoint addresses for every route, so route labels need no extra round trip. */
   addresses: Map<string, AddressDetail>;
 }
@@ -82,7 +86,7 @@ async function fetchContext(): Promise<Context> {
       .select("id, street_name, assigned_volunteer_id, papers, start_address_id, end_address_id")
       .is("deleted_at", null),
     client.from("captain_territories").select("*"),
-    client.from("captains").select("id, first_name, last_name"),
+    client.from("captains").select("id, display_name"),
   ]);
   if (routesRes.error) throwDb(routesRes.error);
   if (territoriesRes.error) throwDb(territoriesRes.error);
@@ -96,7 +100,7 @@ async function fetchContext(): Promise<Context> {
   return {
     routes,
     territories: (territoriesRes.data ?? []) as CaptainTerritoryRow[],
-    captains: (captainsRes.data ?? []) as Pick<CaptainRow, "id" | "first_name" | "last_name">[],
+    captains: (captainsRes.data ?? []) as Pick<CaptainRow, "id" | "display_name">[],
     addresses: await getAddressDetails(addressIds),
   };
 }
@@ -130,6 +134,7 @@ function toSummary(
     : null;
   return {
     id: v.id,
+    displayName: v.display_name,
     firstName: v.first_name,
     lastName: v.last_name,
     email: v.email,
@@ -140,7 +145,7 @@ function toSummary(
       ? {
           id: territory.id,
           captainId: captain?.id ?? null,
-          captainName: captain ? `${captain.first_name} ${captain.last_name}` : null,
+          captainName: captain ? captain.display_name : null,
         }
       : null,
     routesCarried: ctx.routes
@@ -161,7 +166,7 @@ function toSummary(
 export async function listVolunteers(
   filters: z.infer<typeof volunteersQuery>,
 ): Promise<VolunteerSummary[]> {
-  const { data, error } = await db().from("volunteers").select("*").order("last_name");
+  const { data, error } = await db().from("volunteers").select("*").order("display_name");
   if (error) throwDb(error);
   const ctx = await fetchContext();
   const date = today();
@@ -179,7 +184,11 @@ export async function listVolunteers(
   }
   if (filters.q) {
     const q = filters.q.toLowerCase();
-    all = all.filter((v) => `${v.firstName} ${v.lastName} ${v.email}`.toLowerCase().includes(q));
+    // displayName, not first + last: those are null for a church or a household,
+    // and displayName is what the list actually shows.
+    all = all.filter((v) =>
+      [v.displayName, v.email].filter(Boolean).join(" ").toLowerCase().includes(q),
+    );
   }
   return all;
 }
@@ -216,8 +225,9 @@ export async function createVolunteerRecord(
   const { data, error } = await db()
     .from("volunteers")
     .insert({
-      first_name: input.firstName,
-      last_name: input.lastName,
+      display_name: input.displayName,
+      first_name: input.firstName ?? null,
+      last_name: input.lastName ?? null,
       email: input.email,
       phone: input.phone,
       address_id: address.id,
@@ -239,10 +249,13 @@ export async function updateVolunteerRecord(
   id: string,
   input: z.infer<typeof updateVolunteer>,
 ): Promise<VolunteerDetail> {
-  await fetchVolunteer(id);
+  const current = await fetchVolunteer(id);
   if (input.captainTerritoryId) await assertTerritoryExists(input.captainTerritoryId);
 
   const patch: Record<string, unknown> = {};
+  if (input.displayName !== undefined) patch.display_name = input.displayName;
+  const renamed = recomposedDisplayName(current, input);
+  if (renamed !== null) patch.display_name = renamed;
   if (input.firstName !== undefined) patch.first_name = input.firstName;
   if (input.lastName !== undefined) patch.last_name = input.lastName;
   if (input.email !== undefined) patch.email = input.email;
@@ -275,6 +288,28 @@ export async function setVolunteerVacation(
 }
 
 /** Soft retire; detaches carried routes, which become Vacant (people flow §4f). */
+/**
+ * Undo a retirement. Clears `retired_at` and nothing else.
+ *
+ * Deliberately does NOT re-attach the routes retirement detached: those routes
+ * are vacant now and may already have been reassigned to someone else, so
+ * silently pulling them back would overwrite a real assignment. Whoever
+ * reactivates picks the routes up again by hand.
+ *
+ * `end_date` is left alone too. If it has already passed the volunteer comes
+ * back flagged "needs attention", which is the correct prompt to set a new one
+ * rather than something to paper over here.
+ */
+export async function reactivateVolunteer(id: string): Promise<VolunteerDetail> {
+  const v = await fetchVolunteer(id);
+  if (!v.retired_at) throw conflict("Volunteer is not retired.");
+
+  const { error } = await db().from("volunteers").update({ retired_at: null }).eq("id", id);
+  if (error) throwDb(error);
+
+  return getVolunteer(id);
+}
+
 export async function retireVolunteer(
   id: string,
   input: z.infer<typeof retireMember> = {},
@@ -298,16 +333,6 @@ export async function retireVolunteer(
 
   if (input.note) await createNoteRecord("volunteer", id, { text: input.note });
 
-  return getVolunteer(id);
-}
-
-/** Reactivation: clears retirement (people flow Retired → Active). Routes are not
- * re-attached; the manager assigns them manually after reactivation. */
-export async function reactivateVolunteer(id: string): Promise<VolunteerDetail> {
-  const v = await fetchVolunteer(id);
-  if (!v.retired_at) throw conflict("Volunteer is not retired.");
-  const { error } = await db().from("volunteers").update({ retired_at: null }).eq("id", id);
-  if (error) throwDb(error);
   return getVolunteer(id);
 }
 

@@ -42,27 +42,39 @@ export interface AddressRow {
 
 export interface CaptainRow {
   id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string;
+  /** Authoritative name; what prints and what search matches. */
+  display_name: string;
+  /** Territory code printed as RT<value>; null until the office assigns one. */
+  rt_number: string | null;
+  /** Populated only when the recipient is one person. */
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
   pay_type: PayType;
   pay_rate: number;
   pay_cadence: PayCadence;
-  start_date: string;
+  /** Missing for anyone who predates the office recording it, and for rows that
+   * are not a person. Nothing derives from it. */
+  start_date: string | null;
   end_date: string | null;
   retired_at: string | null;
 }
 
 export interface VolunteerRow {
   id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string;
+  /** Authoritative name; what prints and what search matches. */
+  display_name: string;
+  /** Populated only when the recipient is one person. */
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
   address_id: string;
   captain_territory_id: string | null;
-  start_date: string;
+  /** Missing for anyone who predates the office recording it, and for rows that
+   * are not a person. Nothing derives from it. */
+  start_date: string | null;
   end_date: string | null;
   vacation_start: string | null;
   vacation_end: string | null;

@@ -34,29 +34,43 @@ Remove entries as they're resolved (and record the decision in
 - **Territories have no name or number.** The members table describes a captain's
   territory by its contents ("4 volunteers, 2 drops") because there is nothing else
   to show. If the office refers to territories by number, that needs a schema field
-  and a migration. → `lib/services/members.ts`.
+  and a migration. → `lib/services/members.ts`. **Likely the same gap as the RT
+  number** on printed labels — `RouteLabelsFileBMN.xlsx`'s `Route` column groups
+  by captain/territory, not by individual route (see
+  `label_printing_flow.md` §7). One schema field probably closes both items.
+- **A per-territory "skip" list has no home.** `RouteLabelsFileBMN.xlsx` has a
+  `SKIP HOUSES` sheet keyed by the same `RT` (territory) number, listing specific
+  addresses the office has decided not to deliver to within that territory.
+  Nothing in our schema represents this — not on `addresses`, not on
+  `volunteer_routes`. Relevant to house-count accuracy: a Toronto Open Data count
+  (`feat/house-count`, #23) can't know about a manually-skipped address, so it
+  will overcount wherever one exists.
 
 ## Product/tech decisions still open
 
-- **Google Maps go-live.** Real `GOOGLE_MAPS_SERVER_KEY` +
-  `NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY`, a `lib/maps/google.ts` implementing
-  `MapsProvider` (Address Validation, Geocoding, Route Matrix), key
-  restrictions + per-day quota caps in Cloud Console. Everything runs on the
-  deterministic fake until then.
-- **Coordinate-refresh scheduling.** `pnpm refresh-coords` implements the
-  25-day refresh / 30-day evict pass but nothing schedules it (Vercel cron is
-  the natural home once deployed).
-- **Places Autocomplete.** Nice-to-have for address entry; billed SKU;
-  undecided (research doc §8.2).
-- **House-count auto-calculation.** Manual entry for MVP (locked); Toronto
-  Open Data + PostGIS ingestion is post-MVP. `house_count_override` exists in
-  the schema but only becomes meaningful then.
+- **House-count auto-calculation.** Manual entry for MVP (locked). Toronto
+  Open Data + PostGIS ingestion is **built, not yet merged** — PR #23
+  (`feat/house-count`) implements it, targeting `feat/maps-routes-page`
+  (merged into `main` back on 2026-08-05; #23 needs retargeting to `main`
+  before it can land). `house_count_override` exists in the schema now but
+  only becomes meaningful once this merges.
+- **Key restrictions + per-day quota caps** on the live Google Maps keys
+  (server + browser) — Cloud Console configuration, not code. The keys
+  themselves are live and in use (geocoding, autocomplete, and the
+  `refresh-coords` cron are all real as of #17); this item is only the
+  quota-safety follow-up.
 - ~~**Volunteer/captain reactivation.**~~ **Resolved.** `POST /api/volunteers/{id}/reactivate` and
   `POST /api/captains/{id}/reactivate` are implemented. Routes/territory are not re-attached
   automatically; the manager assigns them after reactivation. The members table row menu shows
   "Un-retire member" for retired members in place of the disabled "Retire member" item.
 - **Auth roles.** Both admins have identical permissions (locked for MVP);
   the `AdminRole` concept remains SUBJECT TO CHANGE if role gating ever lands.
+- **How the grid should show multiple substitutes for one captain.** One
+  captain can cover several others in the same stretch; `setPayoutSubstitute`
+  doesn't cap it and the overview groups every covered captain rather than
+  dropping any past the first. How that should render in the payout grid
+  itself is still open with design. → `lib/services/payouts.ts`
+  (`setPayoutSubstitute`).
 
 ## Operational follow-ups
 
@@ -129,10 +143,6 @@ Remove entries as they're resolved (and record the decision in
   `lib/services/shared.ts` (`coerce*Numerics`). Note the numeric string→number
   coercion itself is now centralized there; this item is only about the float
   representation of money, which remains.
-- **Transfer isn't atomic.** `transferPayoutAmount` does two sequential writes
-  (source-first, so a partial failure underpays). For a money path, move to a
-  Postgres function/RPC for a real transaction (`postgres` is already a dep).
-  → `lib/services/payouts.ts`.
 - **Payout breakdown vs stored amount can disagree.** `getPayout`'s per-route
   breakdown is rebuilt from *current* territory membership, but the amount is
   stored — for a paid (frozen) cell they can differ. Snapshot the breakdown at
