@@ -54,7 +54,9 @@ export interface CaptainRow {
   pay_type: PayType;
   pay_rate: number;
   pay_cadence: PayCadence;
-  start_date: string;
+  /** Missing for anyone who predates the office recording it, and for rows that
+   * are not a person. Nothing derives from it. */
+  start_date: string | null;
   end_date: string | null;
   retired_at: string | null;
 }
@@ -70,7 +72,9 @@ export interface VolunteerRow {
   phone: string | null;
   address_id: string;
   captain_territory_id: string | null;
-  start_date: string;
+  /** Missing for anyone who predates the office recording it, and for rows that
+   * are not a person. Nothing derives from it. */
+  start_date: string | null;
   end_date: string | null;
   vacation_start: string | null;
   vacation_end: string | null;

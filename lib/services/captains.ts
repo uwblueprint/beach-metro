@@ -31,7 +31,7 @@ export interface CaptainSummary {
   payType: PayType;
   payRate: number;
   payCadence: PayCadence;
-  startDate: string;
+  startDate: string | null;
   endDate: string | null;
   retiredAt: string | null;
   territory: { id: string; color: string | null } | null;

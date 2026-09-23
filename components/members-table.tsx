@@ -56,7 +56,8 @@ const MONTHS = [
   "Dec.",
 ];
 
-function formatDate(iso: string): string {
+function formatDate(iso: string | null): string {
+  if (!iso) return "—";
   const [year, month, day] = iso.split("-").map(Number);
   if (!year || !month || !day) return iso;
   return `${MONTHS[month - 1]} ${day}, ${year}`;

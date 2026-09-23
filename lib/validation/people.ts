@@ -31,6 +31,17 @@ const optionalPhone = z
   .transform((v) => v || null);
 
 /**
+ * Start date, when there is one. Missing for anyone who joined before the office
+ * started recording it, and for rows that are not a person at all. Nothing
+ * derives from it — status comes from retirement and the vacation window,
+ * needs-attention from the end date — so an absent one costs only a blank in the
+ * side panel. Empty string folds to null like the contact fields.
+ */
+const optionalStartDate = z
+  .preprocess((v) => (typeof v === "string" && v.trim() === "" ? null : v), isoDate.nullish())
+  .transform((v) => v ?? null);
+
+/**
  * A third of the office's roster is not one person — churches, apartment
  * buildings, households, two people sharing a route. `displayName` is the
  * authoritative name for all of them; `firstName` / `lastName` are optional and
@@ -101,7 +112,7 @@ export const createVolunteer = z
     phone: optionalPhone,
     address: addressInput,
     captainTerritoryId: uuid.nullish(),
-    startDate: isoDate,
+    startDate: optionalStartDate,
     endDate: isoDate.nullish(),
     note: noteField,
   })
@@ -116,7 +127,7 @@ export const updateVolunteer = z
     phone: optionalPhone,
     address: addressInput, // re-validates + swaps the home address
     captainTerritoryId: uuid.nullable(),
-    startDate: isoDate,
+    startDate: optionalStartDate,
     endDate: isoDate.nullable(),
     // No `note` here: notes are their own resource now (see lib/validation/notes.ts).
     // A single field on PATCH could not say WHICH note it meant.
@@ -159,7 +170,7 @@ export const createCaptain = z
     payType: z.enum(["bundle", "paper", "drop"]),
     payRate: z.number().min(0), // 0 is valid (donate-back)
     payCadence: z.enum(["biweekly", "monthly"]),
-    startDate: isoDate,
+    startDate: optionalStartDate,
     endDate: isoDate.nullish(),
     note: noteField,
   })
@@ -176,7 +187,7 @@ export const updateCaptain = z
     payType: z.enum(["bundle", "paper", "drop"]),
     payRate: z.number().min(0),
     payCadence: z.enum(["biweekly", "monthly"]),
-    startDate: isoDate,
+    startDate: optionalStartDate,
     endDate: isoDate.nullable(),
     // No `note` here either — see updateVolunteer above.
   })

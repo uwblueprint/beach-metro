@@ -153,7 +153,7 @@ function VolunteerContent({ id }: { id: string }) {
     setPhone(volunteer!.phone ?? "");
     setAddress(currentAddress);
     setAddressPlaceId(volunteer!.address.placeId);
-    setStartDate(volunteer!.startDate);
+    setStartDate(volunteer!.startDate ?? "");
     setCaptainTerritoryId(volunteer!.territory?.id ?? "");
     setSaveError(null);
     setEditing(true);
@@ -176,21 +176,17 @@ function VolunteerContent({ id }: { id: string }) {
       setSaveError("Address is required.");
       return;
     }
-    if (!startDate) {
-      setSaveError("Start date is required.");
-      return;
-    }
 
     const body: {
       email?: string | null;
       phone?: string | null;
-      startDate?: string;
+      startDate?: string | null;
       address?: { addressLines: string[] } | { placeId: string };
       captainTerritoryId?: string | null;
     } = {};
     if (trimmedEmail !== (volunteer!.email ?? "")) body.email = trimmedEmail || null;
     if (trimmedPhone !== (volunteer!.phone ?? "")) body.phone = trimmedPhone || null;
-    if (startDate !== volunteer!.startDate) body.startDate = startDate;
+    if (startDate !== (volunteer!.startDate ?? "")) body.startDate = startDate || null;
     if (trimmedAddress !== currentAddress) {
       body.address = addressPlaceId
         ? { placeId: addressPlaceId }
@@ -477,7 +473,7 @@ function CaptainContent({ id }: { id: string }) {
     setPayRate(String(captain!.payRate));
     setPayType(captain!.payType);
     setPayCadence(captain!.payCadence);
-    setStartDate(captain!.startDate);
+    setStartDate(captain!.startDate ?? "");
     setSaveError(null);
     setEditing(true);
   }
@@ -499,10 +495,6 @@ function CaptainContent({ id }: { id: string }) {
       setSaveError("Enter a valid pay rate (0 or greater).");
       return;
     }
-    if (!startDate) {
-      setSaveError("Start date is required.");
-      return;
-    }
 
     const body: {
       email?: string | null;
@@ -510,14 +502,14 @@ function CaptainContent({ id }: { id: string }) {
       payRate?: number;
       payType?: "bundle" | "paper" | "drop";
       payCadence?: "biweekly" | "monthly";
-      startDate?: string;
+      startDate?: string | null;
     } = {};
     if (trimmedEmail !== (captain!.email ?? "")) body.email = trimmedEmail || null;
     if (trimmedPhone !== (captain!.phone ?? "")) body.phone = trimmedPhone || null;
     if (rate !== captain!.payRate) body.payRate = rate;
     if (payType !== captain!.payType) body.payType = payType;
     if (payCadence !== captain!.payCadence) body.payCadence = payCadence;
-    if (startDate !== captain!.startDate) body.startDate = startDate;
+    if (startDate !== (captain!.startDate ?? "")) body.startDate = startDate || null;
 
     if (Object.keys(body).length === 0) {
       setEditing(false);
@@ -811,14 +803,6 @@ function CreateMemberContent({
   async function handleCreate() {
     if (!firstName.trim() || !lastName.trim()) {
       setCreateError("First and last name are required.");
-      return;
-    }
-    if (!startDate) {
-      setCreateError("Start date is required.");
-      return;
-    }
-    if (!email.trim() || !phone.trim()) {
-      setCreateError("Email and phone are required.");
       return;
     }
     if (role === "volunteer" && !address.trim()) {

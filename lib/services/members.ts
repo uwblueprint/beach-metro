@@ -32,7 +32,7 @@ export interface MemberRow {
   /** Volunteers: the captain above them. Captains: themselves. */
   captainName: string;
   /** ISO. The UI decides how to display it. */
-  startDate: string;
+  startDate: string | null;
   status: MemberStatus;
   needsAttention: boolean;
 }

@@ -59,7 +59,7 @@ export interface VolunteerSummary {
   routesCarried: CarriedRoute[];
   /** Cached home coordinates for the map (null when the coordinate cache is empty). */
   home: { latitude: number; longitude: number } | null;
-  startDate: string;
+  startDate: string | null;
   endDate: string | null;
   vacationStart: string | null;
   vacationEnd: string | null;

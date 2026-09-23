@@ -291,7 +291,7 @@ export type UpdateVolunteerBody = {
   email?: string | null;
   phone?: string | null;
   address?: { addressLines: string[] } | { placeId: string };
-  startDate?: string;
+  startDate?: string | null;
   endDate?: string | null;
   firstName?: string;
   lastName?: string;
@@ -330,7 +330,7 @@ export type UpdateCaptainBody = {
   payType?: "bundle" | "paper" | "drop";
   payRate?: number;
   payCadence?: "biweekly" | "monthly";
-  startDate?: string;
+  startDate?: string | null;
   endDate?: string | null;
   firstName?: string;
   lastName?: string;
