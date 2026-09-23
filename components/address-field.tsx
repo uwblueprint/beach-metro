@@ -71,15 +71,14 @@ export function AddressField(props: {
   }
 
   return (
-    <div className={cn("relative", props.className)}>
+    <div className={cn("relative flex flex-col gap-2", props.className)}>
       {props.label ? (
-        <Label htmlFor={props.id} className="text-xs">
+        <Label htmlFor={props.id} className="text-md font-normal text-primary">
           {props.label}
         </Label>
       ) : null}
       <Input
         id={props.id}
-        className="h-8 text-sm"
         placeholder={props.placeholder}
         value={value}
         autoComplete="off"
@@ -103,20 +102,20 @@ export function AddressField(props: {
         }}
       />
       {open && visible.length > 0 ? (
-        <ul className="bg-bg absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border shadow-md">
+        <ul className="bg-bg absolute top-full z-20 mt-1 max-h-56 w-full overflow-auto rounded-[8px] p-1 smooth-shadow-ring-md">
           {visible.map((s, i) => (
-            <li key={s.placeId}>
+            <li key={s.placeId} className="rounded-[4px]">
               <button
                 type="button"
                 className={cn(
-                  "block w-full px-2 py-1.5 text-left text-sm",
-                  i === highlight ? "bg-muted" : "hover:bg-muted/50",
+                  "flex w-full cursor-pointer flex-col rounded-[4px] p-2 text-left text-md text-primary outline-none transition-colors",
+                  i === highlight ? "bg-bg-secondary" : "hover:bg-bg-secondary",
                 )}
                 onMouseEnter={() => setHighlight(i)}
                 onClick={() => pick(s)}
               >
                 <span className="block">{s.primaryText}</span>
-                <span className="text-muted-foreground block text-xs">{s.secondaryText}</span>
+                <span className="block text-xs text-muted-foreground">{s.secondaryText}</span>
               </button>
             </li>
           ))}

@@ -3,7 +3,12 @@
 import type { z } from "zod";
 
 import { conflict, notFound } from "@/lib/api/errors";
-import type { captainsQuery, createCaptain, updateCaptain } from "@/lib/validation/people";
+import type {
+  captainsQuery,
+  createCaptain,
+  retireMember,
+  updateCaptain,
+} from "@/lib/validation/people";
 import type { CaptainRow, CaptainTerritoryRow, PayCadence, PayType } from "@/types/db";
 
 import { recomposedDisplayName } from "./derive";
@@ -166,6 +171,59 @@ export async function updateCaptainRecord(
   return getCaptain(id);
 }
 
+/**
+ * Hard-delete a captain and their 1:1 territory.
+ *
+ * Refuses when the captain carries finance history: `captain_payouts.captain_id`
+ * and `.substitute_captain_id` both reference `captains(id)` with no ON DELETE
+ * clause, so Postgres would raise a foreign-key violation that surfaces as a
+ * misleading "A referenced record does not exist." Check first and say the real
+ * reason, because the caller has already confirmed an irreversible action.
+ *
+ * Deleting the territory sets `captain_territory_id` to NULL on every volunteer
+ * in it (ON DELETE SET NULL) — see the confirmation copy in members-table.tsx.
+ */
+export async function deleteCaptain(id: string): Promise<void> {
+  await fetchCaptain(id);
+
+  const client = db();
+
+  // Pre-flight the blocking references so the common case fails before any write.
+  const [ownPayouts, substitutePayouts] = await Promise.all([
+    client.from("captain_payouts").select("id").eq("captain_id", id).limit(1),
+    client.from("captain_payouts").select("id").eq("substitute_captain_id", id).limit(1),
+  ]);
+  if (ownPayouts.error) throwDb(ownPayouts.error);
+  if (substitutePayouts.error) throwDb(substitutePayouts.error);
+  if ((ownPayouts.data ?? []).length > 0 || (substitutePayouts.data ?? []).length > 0) {
+    throw conflict("This captain has payout history and cannot be deleted. Retire them instead.");
+  }
+
+  // Find the territory owned by this captain so we can remove it after unlinking.
+  const { data: territoryData, error: territoryFetchError } = await client
+    .from("captain_territories")
+    .select("id")
+    .eq("assigned_captain_id", id)
+    .maybeSingle();
+  if (territoryFetchError) throwDb(territoryFetchError);
+
+  const { error } = await client.from("captains").delete().eq("id", id);
+  if (error) throwDb(error);
+
+  // No transaction is available through the REST client, so these two deletes
+  // can't be atomic. Captain first is the safer half-state: the FK already sets
+  // assigned_captain_id to NULL, and a captain-less territory is a state the
+  // product supports and can reassign out of (§4k, same as retiring a captain).
+  // A captain with no territory would not be.
+  if (territoryData) {
+    const { error: delTerritoryError } = await client
+      .from("captain_territories")
+      .delete()
+      .eq("id", (territoryData as { id: string }).id);
+    if (delTerritoryError) throwDb(delTerritoryError);
+  }
+}
+
 /** Soft retire; the territory becomes captain-less and awaits reassignment (§4k). */
 /**
  * Undo a retirement. Clears `retired_at` and nothing else.
@@ -188,7 +246,10 @@ export async function reactivateCaptain(id: string): Promise<CaptainSummary> {
   return getCaptain(id);
 }
 
-export async function retireCaptain(id: string): Promise<CaptainSummary> {
+export async function retireCaptain(
+  id: string,
+  input: z.infer<typeof retireMember> = {},
+): Promise<CaptainSummary> {
   const c = await fetchCaptain(id);
   if (c.retired_at) throw conflict("Captain is already retired.");
 
@@ -208,6 +269,8 @@ export async function retireCaptain(id: string): Promise<CaptainSummary> {
   // Territory is now detached, so open-issue cells no longer roll up to this
   // captain — recompute them to zero (unpaid cells only; paid stay frozen).
   await recalculateOpenIssues();
+
+  if (input.note) await createNoteRecord("captain", id, { text: input.note });
 
   return getCaptain(id);
 }

@@ -5,16 +5,6 @@
 // GET /api/overview now. What is left is formatting and the period menu labels,
 // which are genuinely static UI text rather than data.
 
-export type PaymentPeriod = "ytd" | "q1" | "q2" | "q3" | "q4";
-
-export const PERIOD_OPTIONS: { id: PaymentPeriod; menuLabel: string }[] = [
-  { id: "ytd", menuLabel: "YTD" },
-  { id: "q1", menuLabel: "Q1" },
-  { id: "q2", menuLabel: "Q2" },
-  { id: "q3", menuLabel: "Q3" },
-  { id: "q4", menuLabel: "Q4" },
-];
-
 export function formatCurrency(amount: number) {
   return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }

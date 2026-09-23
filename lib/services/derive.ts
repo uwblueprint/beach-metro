@@ -1,5 +1,6 @@
 // Pure derivations from the flow docs — no I/O, unit-tested directly.
 // Derived values are computed, never stored (data model convention).
+import type { AddressInput } from "@/lib/validation/common";
 import type { CaptainPayoutRow, PayType, RouteBundle, VolunteerRow } from "@/types/db";
 
 export type VolunteerStatus = "active" | "on-vacation" | "retired";
@@ -14,6 +15,42 @@ export function volunteerStatus(
     return "on-vacation";
   }
   return "active";
+}
+
+/**
+ * Whether two endpoint inputs name the same place. A drop is stored as one
+ * address row worn as both endpoints, so this decides whether create/update
+ * shares a row or writes two.
+ *
+ * A `placeId` pair compares directly; free-form input compares every field that
+ * reaches the geocoder, so the same address typed once for both ends matches.
+ */
+export function sameAddressInput(a: AddressInput, b: AddressInput): boolean {
+  if ("placeId" in a || "placeId" in b) {
+    return "placeId" in a && "placeId" in b && a.placeId === b.placeId;
+  }
+  return (
+    a.addressLines.length === b.addressLines.length &&
+    a.addressLines.every((line, i) => line === b.addressLines[i]) &&
+    a.locality === b.locality &&
+    a.administrativeArea === b.administrativeArea &&
+    a.postalCode === b.postalCode &&
+    a.regionCode === b.regionCode
+  );
+}
+
+/**
+ * Route lifecycle (route flow §3a), derived and never stored. A street route is
+ * carried by a volunteer; a drop is carried by a captain directly and holds no
+ * volunteer, so reading a drop off assigned_volunteer_id would call it vacant.
+ */
+export function routeLifecycle(r: {
+  isDrop: boolean;
+  assignedVolunteerId: string | null;
+  assignedCaptainId: string | null;
+}): "assigned" | "vacant" {
+  const carrier = r.isDrop ? r.assignedCaptainId : r.assignedVolunteerId;
+  return carrier ? "assigned" : "vacant";
 }
 
 /** Needs attention: end date passed but not retired (a planning flag, never an auto-retire). */

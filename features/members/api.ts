@@ -7,7 +7,7 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
-import type { MemberRow } from "@/lib/services/members";
+import type { MemberRow, MemberStatus } from "@/lib/services/members";
 import type { MemberNote } from "@/lib/services/notes";
 import type { CaptainPayoutHistoryEntry } from "@/lib/services/payouts";
 import type { CaptainSummary } from "@/lib/services/captains";
@@ -16,7 +16,7 @@ import type { VolunteerDetail } from "@/lib/services/volunteers";
 import { routeKeys } from "@/features/routes/api";
 import { territoryDropKeys } from "@/features/territory-drops/api";
 
-export type { MemberRow, MemberNote, CaptainPayoutHistoryEntry };
+export type { MemberRow, MemberStatus, MemberNote, CaptainPayoutHistoryEntry };
 
 export type MemberRole = "volunteer" | "captain";
 
@@ -104,11 +104,47 @@ export function useTerritory(id: string | null | undefined) {
 export function useRetireMember() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, role }: { id: string; role: MemberRole }) =>
-      api.post<unknown>(`/api/${role}s/${id}/retire`),
+    mutationFn: ({ id, role, note }: { id: string; role: MemberRole; note?: string }) =>
+      api.post<unknown>(`/api/${role}s/${id}/retire`, note ? { note } : undefined),
     onSuccess: (_data, { id, role }) => {
       queryClient.invalidateQueries({ queryKey: memberKeys.all });
       queryClient.invalidateQueries({ queryKey: routeKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: role === "volunteer" ? memberKeys.volunteer(id) : memberKeys.captain(id),
+      });
+      queryClient.invalidateQueries({ queryKey: memberKeys.notes(role, id) });
+    },
+  });
+}
+
+/** Hard-delete: permanently removes the member and their associated data. */
+export function useDeleteMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, role }: { id: string; role: MemberRole }) => api.del(`/api/${role}s/${id}`),
+    onSuccess: (_data, { id, role }) => {
+      queryClient.invalidateQueries({ queryKey: memberKeys.all });
+      queryClient.invalidateQueries({ queryKey: routeKeys.all });
+      queryClient.invalidateQueries({ queryKey: territoryDropKeys.all });
+      queryClient.removeQueries({
+        queryKey: role === "volunteer" ? memberKeys.volunteer(id) : memberKeys.captain(id),
+      });
+    },
+  });
+}
+
+/** Reactivation: clears retirement. Routes/territory are not re-attached automatically. */
+export function useReactivateMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, role }: { id: string; role: MemberRole }) =>
+      api.post<unknown>(`/api/${role}s/${id}/reactivate`),
+    onSuccess: (_data, { id, role }) => {
+      queryClient.invalidateQueries({ queryKey: memberKeys.all });
+      queryClient.invalidateQueries({ queryKey: routeKeys.all });
+      // Territory summaries embed captain status, so they go stale on
+      // reactivation too — the same set useDeleteMember invalidates.
+      queryClient.invalidateQueries({ queryKey: territoryDropKeys.all });
       queryClient.invalidateQueries({
         queryKey: role === "volunteer" ? memberKeys.volunteer(id) : memberKeys.captain(id),
       });
@@ -252,8 +288,8 @@ export function useCreateCaptain() {
 }
 
 export type UpdateVolunteerBody = {
-  email?: string;
-  phone?: string;
+  email?: string | null;
+  phone?: string | null;
   address?: { addressLines: string[] } | { placeId: string };
   startDate?: string;
   endDate?: string | null;
@@ -267,16 +303,30 @@ export function useUpdateVolunteer(id: string) {
   return useMutation({
     mutationFn: (body: UpdateVolunteerBody) =>
       api.patch<VolunteerDetail>(`/api/volunteers/${id}`, body),
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
+      const prev = queryClient.getQueryData<VolunteerDetail>(memberKeys.volunteer(id));
+      const oldTerritoryId = prev?.territory?.id ?? null;
+      const newTerritoryId = data.territory?.id ?? null;
+
       queryClient.invalidateQueries({ queryKey: memberKeys.all });
       queryClient.invalidateQueries({ queryKey: memberKeys.volunteer(id) });
+
+      if (variables.captainTerritoryId !== undefined) {
+        queryClient.invalidateQueries({ queryKey: territoryDropKeys.all });
+        if (oldTerritoryId) {
+          queryClient.invalidateQueries({ queryKey: memberKeys.territory(oldTerritoryId) });
+        }
+        if (newTerritoryId && newTerritoryId !== oldTerritoryId) {
+          queryClient.invalidateQueries({ queryKey: memberKeys.territory(newTerritoryId) });
+        }
+      }
     },
   });
 }
 
 export type UpdateCaptainBody = {
-  email?: string;
-  phone?: string;
+  email?: string | null;
+  phone?: string | null;
   payType?: "bundle" | "paper" | "drop";
   payRate?: number;
   payCadence?: "biweekly" | "monthly";

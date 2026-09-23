@@ -1,17 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { Check, ArrowLeftRight, MoreHorizontal } from "lucide-react";
+import { Check, ArrowLeftRight, MoreHorizontal, Pencil } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { Textarea } from "@/components/ui/textarea";
 
 import type {
   CellOverride,
@@ -20,7 +19,130 @@ import type {
 } from "@/app/(dashboard)/finances/data";
 import { formatCurrency, NO_SUBSTITUTE } from "@/app/(dashboard)/finances/data";
 
-const HOVER_OPEN_DELAY_MS = 400;
+const HOVER_OPEN_DELAY_MS = 200;
+const HOVER_CLOSE_DELAY_MS = 150;
+
+function CommentCornerIndicator() {
+  return (
+    <span
+      aria-hidden
+      className="absolute top-0 right-0 size-[16px] bg-[#7DD3FC]"
+      style={{ clipPath: "polygon(100% 0, 0 0, 100% 100%)" }}
+    />
+  );
+}
+
+function PopoverComment({
+  comment,
+  readOnly,
+  editing,
+  onSave,
+  onEditingChange,
+}: {
+  comment: string;
+  readOnly?: boolean;
+  editing: boolean;
+  onSave?: (comment: string | null) => void;
+  onEditingChange: (editing: boolean) => void;
+}) {
+  const [draft, setDraft] = React.useState(comment);
+  const actionTakenRef = React.useRef(false);
+  const wasEditingRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (editing && !wasEditingRef.current) {
+      actionTakenRef.current = false;
+      setDraft(comment);
+    }
+    wasEditingRef.current = editing;
+  }, [editing, comment]);
+
+  function startEditing() {
+    actionTakenRef.current = false;
+    setDraft(comment);
+    onEditingChange(true);
+  }
+
+  function commit(raw: string) {
+    if (actionTakenRef.current) return;
+    actionTakenRef.current = true;
+    onSave?.(raw.trim() || null);
+    onEditingChange(false);
+  }
+
+  function cancel() {
+    actionTakenRef.current = true;
+    setDraft(comment);
+    onEditingChange(false);
+  }
+
+  const isEmpty = !comment.trim();
+  const commentRowClassName =
+    "relative flex min-h-6 w-full min-w-0 items-center overflow-visible outline-none focus:outline-none focus-visible:outline-none";
+
+  return (
+    <div className="flex w-full min-w-0 flex-col gap-1 overflow-visible whitespace-normal rounded-lg bg-bg-tertiary p-2">
+      <p className="shrink-0 text-md text-primary">Note</p>
+      {editing ? (
+        <div className={commentRowClassName}>
+          <input
+            autoFocus
+            type="text"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.nativeEvent.isComposing) return;
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commit(event.currentTarget.value);
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                cancel();
+              }
+            }}
+            onBlur={(event) => commit(event.currentTarget.value)}
+            onFocus={(event) => event.target.select()}
+            aria-label={isEmpty ? "Add comment" : "Edit comment"}
+            placeholder="Add a note…"
+            className="h-6 min-h-6 w-full min-w-0 appearance-none border-0 bg-transparent p-0 text-md leading-[1.3] text-primary outline-none placeholder:text-muted-foreground"
+          />
+        </div>
+      ) : (
+        <div className={cn("group/comment-row gap-1", commentRowClassName)}>
+          {!readOnly && isEmpty ? (
+            <button
+              type="button"
+              className="flex h-6 min-w-0 flex-1 cursor-text items-center text-left text-md leading-[1.3] break-words text-muted-foreground outline-none focus:outline-none focus-visible:outline-none"
+              onClick={startEditing}
+            >
+              Add a note…
+            </button>
+          ) : (
+            <p className="flex min-h-6 min-w-0 flex-1 items-center text-md leading-[1.3] break-words text-primary">
+              {comment}
+            </p>
+          )}
+          {!readOnly && (
+            <div className="flex h-6 shrink-0 items-center self-center opacity-0 transition-opacity group-hover/comment-row:opacity-100 group-focus-within/comment-row:opacity-100">
+              <button
+                type="button"
+                aria-label={isEmpty ? "Add comment" : "Edit comment"}
+                className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[4px] border-0 bg-transparent text-muted-foreground outline-none transition-colors hover:bg-bg-secondary focus:outline-none focus-visible:outline-none [&_svg]:block [&_svg]:fill-none [&_svg]:stroke-current"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  startEditing();
+                }}
+              >
+                <Pencil className="size-3 fill-none" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 type PaymentCellProps = {
   value: number;
@@ -45,7 +167,7 @@ type PaymentCellProps = {
   onEditCancel?: () => void;
   onDoubleClick?: () => void;
   comment?: string;
-  onCommentChange?: (comment: string) => void;
+  onCommentChange?: (comment: string | null) => void;
   readOnly?: boolean;
   isLocked?: boolean;
   className?: string;
@@ -59,6 +181,9 @@ function PaymentAmountPopover({
   paymentDetail,
   substituteCaptain,
   comment,
+  onCommentChange,
+  readOnly,
+  commentEditRequest = 0,
 }: {
   value: number;
   paid: boolean;
@@ -67,10 +192,15 @@ function PaymentAmountPopover({
   paymentDetail: PaymentDetail;
   substituteCaptain: SubstituteCaptainAssignment;
   comment?: string;
+  onCommentChange?: (comment: string | null) => void;
   readOnly?: boolean;
+  commentEditRequest?: number;
 }) {
   const [open, setOpen] = React.useState(false);
+  const [editingComment, setEditingComment] = React.useState(false);
   const openTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isEditingCommentRef = React.useRef(false);
 
   const clearOpenTimeout = React.useCallback(() => {
     if (openTimeoutRef.current) {
@@ -79,21 +209,57 @@ function PaymentAmountPopover({
     }
   }, []);
 
-  const handleAmountMouseEnter = React.useCallback(() => {
-    clearOpenTimeout();
-    openTimeoutRef.current = setTimeout(() => setOpen(true), HOVER_OPEN_DELAY_MS);
-  }, [clearOpenTimeout]);
+  const clearCloseTimeout = React.useCallback(() => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  }, []);
 
-  const handleAmountMouseLeave = React.useCallback(() => {
+  const handleHoverEnter = React.useCallback(() => {
+    clearCloseTimeout();
+    if (openTimeoutRef.current) return;
+    openTimeoutRef.current = setTimeout(() => {
+      openTimeoutRef.current = null;
+      setOpen(true);
+    }, HOVER_OPEN_DELAY_MS);
+  }, [clearCloseTimeout]);
+
+  const handleHoverLeave = React.useCallback(() => {
+    if (isEditingCommentRef.current) return;
     clearOpenTimeout();
-    setOpen(false);
-  }, [clearOpenTimeout]);
+    clearCloseTimeout();
+    closeTimeoutRef.current = setTimeout(() => {
+      closeTimeoutRef.current = null;
+      setOpen(false);
+    }, HOVER_CLOSE_DELAY_MS);
+  }, [clearOpenTimeout, clearCloseTimeout]);
+
+  const handleCommentEditingChange = React.useCallback(
+    (editing: boolean) => {
+      isEditingCommentRef.current = editing;
+      setEditingComment(editing);
+      if (editing) {
+        clearCloseTimeout();
+        setOpen(true);
+      }
+    },
+    [clearCloseTimeout],
+  );
+
+  React.useEffect(() => {
+    if (commentEditRequest > 0) {
+      const id = setTimeout(() => handleCommentEditingChange(true), 0);
+      return () => clearTimeout(id);
+    }
+  }, [commentEditRequest, handleCommentEditingChange]);
 
   React.useEffect(() => {
     return () => {
       clearOpenTimeout();
+      clearCloseTimeout();
     };
-  }, [clearOpenTimeout]);
+  }, [clearOpenTimeout, clearCloseTimeout]);
 
   const bundleLabel = `${paymentDetail.bundleCount} ${paymentDetail.bundleCount === 1 ? "bundle" : "bundles"}`;
   const calculatedValue = override?.originalValue ?? value;
@@ -101,19 +267,26 @@ function PaymentAmountPopover({
   const hasComment = Boolean(comment?.trim());
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && isEditingCommentRef.current) return;
+        setOpen(nextOpen);
+      }}
+    >
       <PopoverTrigger
         nativeButton={false}
         render={
           <span
             className={cn(
-              "inline-flex w-fit shrink-0 cursor-default flex-col items-start justify-center text-md tabular-nums",
+              "inline-flex w-fit shrink-0 cursor-default flex-col items-start justify-center text-md tabular-nums outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0",
               paid ? "text-muted-foreground opacity-40" : "text-primary",
             )}
-            onMouseEnter={handleAmountMouseEnter}
-            onMouseLeave={handleAmountMouseLeave}
+            onMouseEnter={handleHoverEnter}
+            onMouseLeave={handleHoverLeave}
             onClick={(event) => event.preventDefault()}
           >
+            {hasComment && <CommentCornerIndicator />}
             <span>
               ${value.toFixed(2)}
               {overridden && <span aria-hidden>*</span>}
@@ -134,7 +307,9 @@ function PaymentAmountPopover({
           align: "shift",
           fallbackAxisSide: "end",
         }}
-        className="box-border w-max min-w-[200px] max-w-[400px] gap-3 overflow-visible rounded-lg border-[0.5px] border-border bg-bg p-3 text-md shadow-[0px_1px_2.5px_rgba(0,0,0,0.1)]"
+        className="box-border w-max min-w-[200px] max-w-[400px] gap-3 overflow-visible rounded-lg bg-bg p-3 text-md smooth-shadow-ring-sm!"
+        onMouseEnter={handleHoverEnter}
+        onMouseLeave={handleHoverLeave}
       >
         <div className="flex w-full min-w-0 flex-col gap-3 whitespace-nowrap">
           <div className="flex flex-col gap-1">
@@ -171,11 +346,14 @@ function PaymentAmountPopover({
             </span>
           </div>
 
-          {hasComment && (
-            <div className="flex w-full flex-col gap-1 rounded-lg bg-bg-secondary p-2">
-              <p className="shrink-0 text-md text-primary">Note</p>
-              <p className="shrink-0 text-md text-primary">{comment}</p>
-            </div>
+          {(hasComment || (onCommentChange && !readOnly && !paid)) && (
+            <PopoverComment
+              comment={comment ?? ""}
+              readOnly={readOnly || paid || !onCommentChange}
+              editing={editingComment}
+              onSave={onCommentChange}
+              onEditingChange={handleCommentEditingChange}
+            />
           )}
 
           {override && (
@@ -194,10 +372,7 @@ function PaymentAmountPopover({
   );
 }
 
-type CellMenuView = "actions" | "substitute" | "comment";
-
-const cellMenuItemClassName =
-  "flex w-full rounded-md px-3 py-1.5 text-left text-sm text-primary hover:bg-tag-hover active:bg-secondary-fill-hover";
+type CellMenuView = "actions" | "substitute";
 
 function SubstituteCaptainPicker({
   selectedCaptain,
@@ -221,7 +396,7 @@ function SubstituteCaptainPicker({
               type="button"
               onClick={() => onSelect(captain)}
               className={cn(
-                "flex w-full items-center justify-between rounded-md px-3 py-2.5 text-md text-primary transition-colors hover:bg-[#F3F4F6]",
+                "flex w-full items-center justify-between rounded-md px-3 py-2.5 text-md text-primary transition-colors hover:bg-bg-secondary",
                 isSelected && "font-medium",
               )}
             >
@@ -241,35 +416,36 @@ function CellActionsMenu({
   onSubstituteChange,
   substituteOptions,
   comment,
-  onCommentChange,
+  onCommentAction,
 }: {
   substituteCaptain: SubstituteCaptainAssignment;
   columnCaptain: string;
   onSubstituteChange: (captain: string) => void;
   substituteOptions: readonly string[];
   comment?: string;
-  onCommentChange?: (comment: string) => void;
+  onCommentAction?: () => void;
 }) {
   const [open, setOpen] = React.useState(false);
   const [menuView, setMenuView] = React.useState<CellMenuView>("actions");
-  const [commentText, setCommentText] = React.useState("");
+  const hasComment = Boolean(comment?.trim());
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
-    if (!nextOpen) {
-      setMenuView("actions");
-      setCommentText("");
-    }
+    if (!nextOpen) setMenuView("actions");
   }
 
-  function openCommentView() {
-    setCommentText(comment ?? "");
-    setMenuView("comment");
+  function openSubstituteView(event: React.MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setMenuView("substitute");
+    setOpen(true);
   }
 
-  function handleSaveComment() {
-    onCommentChange?.(commentText);
+  function handleCommentAction(event: React.MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
     handleOpenChange(false);
+    onCommentAction?.();
   }
 
   return (
@@ -280,9 +456,9 @@ function CellActionsMenu({
             type="button"
             aria-label="Cell actions"
             className={cn(
-              "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[opacity,background-color,color] duration-300 ease-out",
+              "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[opacity,background-color,color] duration-300 ease-out",
               "pointer-events-none group-hover/cell:pointer-events-auto group-hover/cell:bg-muted group-hover/cell:text-primary group-hover/cell:opacity-100",
-              "data-popup-open:pointer-events-auto data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:opacity-100 data-popup-open:hover:bg-muted data-popup-open:hover:text-primary",
+              "data-popup-open:pointer-events-auto data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:opacity-100 data-popup-open:hover:bg-bg-secondary data-popup-open:hover:text-primary",
             )}
             onClick={(event) => event.stopPropagation()}
           >
@@ -294,29 +470,22 @@ function CellActionsMenu({
         align="end"
         side="bottom"
         sideOffset={4}
-        className={cn(
-          "min-w-0 shadow-md ring-1 ring-foreground/10",
-          menuView === "substitute"
-            ? "w-[312px] rounded-lg p-3"
-            : menuView === "comment"
-              ? "w-[320px] rounded-xl p-4"
-              : "w-auto rounded-xl px-1 py-1",
-        )}
+        className={cn(menuView === "substitute" && "w-[312px] rounded-lg p-3")}
       >
         {menuView === "actions" ? (
           <>
-            <button
-              type="button"
-              className={cellMenuItemClassName}
-              onClick={() => setMenuView("substitute")}
+            <DropdownMenuItem
+              // Keep menu open so we can swap into the substitute picker view.
+              closeOnClick={false}
+              onClick={openSubstituteView}
             >
               Assign substitute captain
-            </button>
-            <button type="button" className={cellMenuItemClassName} onClick={openCommentView}>
-              Add comment
-            </button>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleCommentAction}>
+              {hasComment ? "Edit comment" : "Add comment"}
+            </DropdownMenuItem>
           </>
-        ) : menuView === "substitute" ? (
+        ) : (
           <SubstituteCaptainPicker
             selectedCaptain={
               substituteCaptain === NO_SUBSTITUTE ? columnCaptain : substituteCaptain
@@ -324,32 +493,6 @@ function CellActionsMenu({
             onSelect={onSubstituteChange}
             options={substituteOptions}
           />
-        ) : (
-          <div className="flex flex-col gap-4">
-            <p className="text-md font-semibold text-primary">Add comment</p>
-            <Textarea
-              rows={4}
-              value={commentText}
-              onChange={(event) => setCommentText(event.target.value)}
-              onKeyDown={(event) => event.stopPropagation()}
-              onPointerDown={(event) => event.stopPropagation()}
-              placeholder="Add a note…"
-              className="min-h-0 resize-none border border-border rounded-lg p-3 text-sm outline-none transition-colors focus:border-active focus:ring-1 focus:ring-active focus-visible:border-active focus-visible:ring-1 focus-visible:ring-active"
-            />
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setMenuView("actions")}
-              >
-                Cancel
-              </Button>
-              <Button type="button" size="sm" onClick={handleSaveComment}>
-                Save
-              </Button>
-            </div>
-          </div>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -383,6 +526,7 @@ export function PaymentCell({
   const hasSubstitute = substituteCaptain !== "None";
   const hasComment = Boolean(comment?.trim());
   const nonInteractive = readOnly || isLocked;
+  const [commentEditRequest, setCommentEditRequest] = React.useState(0);
 
   if (isEditing) {
     return (
@@ -414,23 +558,14 @@ export function PaymentCell({
 
   return (
     <div
-      key={flashTrigger > 0 ? `flash-${flashTrigger}` : "cell"}
       className={cn(
-        "group/cell relative flex h-12 w-full min-w-0 items-center gap-1 px-3 transition-colors",
-        !nonInteractive && "hover:bg-bg-secondary",
+        "group/cell relative flex h-12 w-full min-w-0 items-center gap-1 px-3 outline-none transition-colors focus:outline-none focus-visible:outline-none",
+        !readOnly && "hover:bg-bg-secondary",
         flashTrigger > 0 && "payment-cell-flash",
         className,
       )}
       onDoubleClick={nonInteractive ? undefined : onDoubleClick}
     >
-      {hasComment && (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute top-0 right-0 size-[16px] bg-[#7DD3FC]"
-          style={{ clipPath: "polygon(100% 0, 0 0, 100% 100%)" }}
-        />
-      )}
-
       {paymentDetail ? (
         <PaymentAmountPopover
           value={value}
@@ -440,7 +575,9 @@ export function PaymentCell({
           paymentDetail={paymentDetail}
           substituteCaptain={substituteCaptain}
           comment={comment}
-          readOnly={nonInteractive}
+          onCommentChange={onCommentChange}
+          readOnly={readOnly}
+          commentEditRequest={commentEditRequest}
         />
       ) : (
         <span
@@ -449,6 +586,7 @@ export function PaymentCell({
             paid ? "text-muted-foreground opacity-40" : "text-primary",
           )}
         >
+          {hasComment && <CommentCornerIndicator />}
           <span>
             ${value.toFixed(2)}
             {overridden && <span aria-hidden>*</span>}
@@ -461,7 +599,7 @@ export function PaymentCell({
 
       <span aria-hidden className="min-w-0 flex-1" />
 
-      {nonInteractive ? (
+      {readOnly ? (
         paid ? (
           <Check aria-hidden className="size-4 shrink-0 text-muted-foreground" strokeWidth={0.5} />
         ) : null
@@ -493,14 +631,16 @@ export function PaymentCell({
             />
           </div>
 
-          <CellActionsMenu
-            substituteCaptain={substituteCaptain}
-            columnCaptain={columnCaptain}
-            onSubstituteChange={onSubstituteChange}
-            substituteOptions={substituteOptions}
-            comment={comment}
-            onCommentChange={onCommentChange}
-          />
+          {!paid && (
+            <CellActionsMenu
+              substituteCaptain={substituteCaptain}
+              columnCaptain={columnCaptain}
+              onSubstituteChange={onSubstituteChange}
+              substituteOptions={substituteOptions}
+              comment={comment}
+              onCommentAction={() => setCommentEditRequest((n) => n + 1)}
+            />
+          )}
         </div>
       )}
     </div>

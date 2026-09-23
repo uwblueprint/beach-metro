@@ -36,7 +36,7 @@ export function Pill({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "inline-flex cursor-pointer items-center justify-center rounded-full border px-4 py-[7px] text-md font-normal whitespace-nowrap transition-colors select-none",
+        "inline-flex cursor-pointer items-center justify-center rounded-full border px-4 py-[7px] text-md font-normal whitespace-nowrap transition-colors select-none shadow-[var(--stroke-inner)]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
         !onClick && "pointer-events-none",
         pillVariantClasses[resolvedVariant],

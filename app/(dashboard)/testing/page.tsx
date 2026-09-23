@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Plus, Square, Trash2 } from "lucide-react";
+import { ChevronDown, Filter, Plus, Square, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -422,7 +422,7 @@ function DropdownsSection({
         <section className="space-y-3">
           <h2 className="text-lg font-medium">Radio (checked)</h2>
           <p className="text-secondary text-sm">
-            Selected row uses active-grey; hover uses lighter tag-hover.
+            Rest on primary: hover +1 (secondary), active +2 (tertiary) (primary→secondary).
           </p>
           <DropdownMenu>
             <DropdownMenuTrigger render={<Button variant="outline" />}>
@@ -541,6 +541,34 @@ function SearchBarSection({ searchValue, setSearchValue }: SearchBarSectionProps
           <SearchBar value="" onChange={() => {}} placeholder="Disabled search" disabled />
         </div>
       </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">With toolbar icon buttons</h2>
+        <p className="text-secondary text-md">
+          SearchBar uses a focus ring when typing. Toolbar buttons use fill hover; the focus ring
+          appears only when <code className="text-primary">selected</code>.
+        </p>
+        <div className="flex max-w-xl items-center gap-2.5">
+          <Button variant="toolbar" size="toolbar" shape="rounded" aria-label="Toggle filters">
+            <Filter />
+          </Button>
+          <SearchBar
+            value={searchValue}
+            onChange={setSearchValue}
+            placeholder="Search by name"
+            className="min-w-0 flex-1"
+          />
+          <Button
+            variant="toolbar"
+            size="toolbar"
+            shape="rounded"
+            aria-label="Toggle filters"
+            selected
+          >
+            <Filter />
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -553,7 +581,7 @@ const ROLE_OPTIONS = [
 ] as const;
 
 const inputTriggerClassName =
-  "flex h-auto w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-hairline bg-bg px-3 py-2 text-left text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-bg-secondary disabled:text-disabled disabled:opacity-50";
+  "flex h-auto w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-hairline bg-bg px-3 py-2 text-left text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-bg-tertiary disabled:text-disabled disabled:opacity-50";
 
 function InputsSection() {
   const [captain, setCaptain] = useState<string>(CAPTAIN_OPTIONS[0]);

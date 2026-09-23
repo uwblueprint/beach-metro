@@ -59,6 +59,10 @@ Remove entries as they're resolved (and record the decision in
   themselves are live and in use (geocoding, autocomplete, and the
   `refresh-coords` cron are all real as of #17); this item is only the
   quota-safety follow-up.
+- ~~**Volunteer/captain reactivation.**~~ **Resolved.** `POST /api/volunteers/{id}/reactivate` and
+  `POST /api/captains/{id}/reactivate` are implemented. Routes/territory are not re-attached
+  automatically; the manager assigns them after reactivation. The members table row menu shows
+  "Un-retire member" for retired members in place of the disabled "Retire member" item.
 - **Auth roles.** Both admins have identical permissions (locked for MVP);
   the `AdminRole` concept remains SUBJECT TO CHANGE if role gating ever lands.
 - **How the grid should show multiple substitutes for one captain.** One
@@ -114,12 +118,11 @@ Remove entries as they're resolved (and record the decision in
   uses — sweeping that deleted rows the other suite was still using). **This is the
   concrete argument for a separate CI database** before adding
   `SUPABASE_DB_URL` / `SUPABASE_SECRET_KEY` as Actions secrets.
-- **Reactivation now has an endpoint, but no UI.** `POST /{id}/reactivate` exists
-  for both volunteers and captains and clears `retiredAt`. Nothing in the members
-  table or side panel calls it yet, so undoing an accidental retirement still means
-  hitting the API directly. Note it deliberately does not re-attach routes or
-  reclaim a territory — those may already belong to someone else — so a
-  reactivated person comes back unassigned and needs reassigning by hand.
+- ~~**No reactivation, but retirement is now reachable from the UI.**~~ **Resolved** alongside the item above.
+- **Add Member is still a no-op.** The button has no form and no design. What it
+  needs is written up in the PR description: volunteers need address validation
+  through `POST /api/addresses/validate`; captains need pay type, rate and cadence,
+  and creating one also creates their territory.
 - **Status is not surfaced in the table.** `GET /api/members` returns `status` and
   `needsAttention` for every row, and the side panel shows status, but the table's
   pills filter by role only. The people flow §4b asks for status filtering. Needs a

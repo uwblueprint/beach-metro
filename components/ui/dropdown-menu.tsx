@@ -7,18 +7,20 @@ import { ChevronRightIcon } from "lucide-react";
 import { CheckboxIcon } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
-/** Shared item surface — aligned with ListItem (4px radius, 8px padding).
- * Hover: tag-hover (lighter). Selected / open: active-grey (darker). */
+/** Compact action-menu surface (⋯ menus, selects, simple lists).
+ * Panel: rounded-[8px], p-1, min-w-32, smooth-shadow-ring-md.
+ * Item: p-2, rounded-[4px], text-md — aligned with ListItem.
+ * Prefer this over Popover for short action lists; use Popover for form/filter panels. */
 const dropdownItemStyles = [
   "group/dropdown-menu-item relative flex w-full cursor-pointer items-center gap-2 rounded-[4px] p-2",
-  "text-sm font-normal text-primary whitespace-nowrap transition-colors",
+  "text-md font-normal text-primary whitespace-nowrap transition-colors",
   "outline-none select-none",
-  "hover:bg-tag-hover",
-  "data-highlighted:bg-tag-hover data-highlighted:text-primary",
-  "data-checked:bg-active-grey data-checked:text-primary",
-  "data-checked:data-highlighted:bg-active-grey data-checked:hover:bg-active-grey",
-  "data-popup-open:bg-active-grey data-popup-open:text-primary data-popup-open:hover:bg-active-grey",
-  "data-open:bg-active-grey data-open:text-primary data-open:hover:bg-active-grey",
+  "hover:bg-bg-secondary",
+  "data-highlighted:bg-bg-secondary data-highlighted:text-primary",
+  "data-checked:bg-bg-tertiary data-checked:text-primary",
+  "data-checked:data-highlighted:bg-bg-tertiary data-checked:hover:bg-bg-tertiary",
+  "data-popup-open:bg-bg-tertiary data-popup-open:text-primary data-popup-open:hover:bg-bg-tertiary",
+  "data-open:bg-bg-tertiary data-open:text-primary data-open:hover:bg-bg-tertiary",
   "data-disabled:pointer-events-none data-disabled:text-disabled data-disabled:hover:bg-transparent",
   "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
 ].join(" ");
@@ -58,7 +60,7 @@ function DropdownMenuContent({
           className={cn(
             // Outer 8px + p-1 (4px) → item radius 4px (concentric with ListItem)
             "z-50 max-h-(--available-height) min-w-32 origin-(--transform-origin) overflow-x-hidden overflow-y-auto",
-            "rounded-[8px] bg-bg p-1 text-primary shadow-[0px_4px_8px_rgba(0,0,0,0.25)]",
+            "rounded-[8px] bg-bg p-1 text-primary smooth-shadow-ring-md",
             "duration-100 outline-none",
             "data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
             "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
@@ -185,7 +187,7 @@ function DropdownMenuCheckboxItem({
       className={cn(
         dropdownItemStyles,
         // Multiselect: selection is the left checkbox only — no selected row fill.
-        "data-checked:bg-transparent data-checked:hover:bg-tag-hover data-checked:data-highlighted:bg-tag-hover",
+        "data-checked:bg-transparent data-checked:hover:bg-bg-secondary data-checked:data-highlighted:bg-bg-secondary",
         "data-inset:pl-7",
         className,
       )}
@@ -206,6 +208,7 @@ function DropdownMenuRadioItem({
   className,
   children,
   inset,
+  closeOnClick = true,
   ...props
 }: MenuPrimitive.RadioItem.Props & {
   inset?: boolean;
@@ -214,6 +217,7 @@ function DropdownMenuRadioItem({
     <MenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
       data-inset={inset}
+      closeOnClick={closeOnClick}
       className={cn(dropdownItemStyles, "data-inset:pl-7", className)}
       {...props}
     >

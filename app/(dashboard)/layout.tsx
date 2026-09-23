@@ -7,7 +7,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const email = typeof claims?.email === "string" ? claims.email : null;
 
   return (
-    <div className="flex h-screen flex-1 overflow-hidden">
+    <div className="flex h-screen flex-1 overflow-hidden bg-sidebar">
       <KeyboardShortcuts />
       <AppSidebar userEmail={email} />
       <main className="flex min-h-0 flex-1 overflow-hidden">{children}</main>
