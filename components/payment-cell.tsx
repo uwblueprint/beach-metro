@@ -17,7 +17,7 @@ import type {
   PaymentDetail,
   SubstituteCaptainAssignment,
 } from "@/app/(dashboard)/finances/data";
-import { formatCurrency, NO_SUBSTITUTE } from "@/app/(dashboard)/finances/data";
+import { formatCurrency } from "@/app/(dashboard)/finances/data";
 
 const HOVER_OPEN_DELAY_MS = 200;
 const HOVER_CLOSE_DELAY_MS = 150;
@@ -45,42 +45,46 @@ function PopoverComment({
   onSave?: (comment: string | null) => void;
   onEditingChange: (editing: boolean) => void;
 }) {
-  // Display what the user last committed until the parent `comment` prop catches up
-  // from the grid cache — otherwise the field snaps back to "Add a note…" on blur.
-  const [displayComment, setDisplayComment] = React.useState(comment);
+  // Optimistic cache updates the `comment` prop quickly; keep a short-lived local
+  // override so the note stays visible if the parent is a frame behind.
+  const [pendingComment, setPendingComment] = React.useState<string | undefined>(undefined);
   const [draft, setDraft] = React.useState(comment);
-  const actionTakenRef = React.useRef(false);
-  const wasEditingRef = React.useRef(false);
+  const [editSession, setEditSession] = React.useState(false);
+  const [actionTaken, setActionTaken] = React.useState(false);
 
-  React.useEffect(() => {
-    setDisplayComment(comment);
-  }, [comment]);
+  const displayComment = pendingComment !== undefined ? pendingComment : comment;
 
-  React.useEffect(() => {
-    if (editing && !wasEditingRef.current) {
-      actionTakenRef.current = false;
-      setDraft(displayComment);
-    }
-    wasEditingRef.current = editing;
-  }, [editing, displayComment]);
+  // Prop caught up to what we saved — drop the local override (render-time adjust).
+  if (pendingComment !== undefined && pendingComment === comment) {
+    setPendingComment(undefined);
+  }
+
+  // Entering an edit session (pencil or ⋯ → Add comment) seeds the draft once.
+  if (editing && !editSession) {
+    setEditSession(true);
+    setActionTaken(false);
+    setDraft(displayComment);
+  } else if (!editing && editSession) {
+    setEditSession(false);
+  }
 
   function startEditing() {
-    actionTakenRef.current = false;
+    setActionTaken(false);
     setDraft(displayComment);
     onEditingChange(true);
   }
 
   function commit(raw: string) {
-    if (actionTakenRef.current) return;
-    actionTakenRef.current = true;
+    if (actionTaken) return;
+    setActionTaken(true);
     const next = raw.trim() || null;
-    setDisplayComment(next ?? "");
+    setPendingComment(next ?? "");
     onSave?.(next);
     onEditingChange(false);
   }
 
   function cancel() {
-    actionTakenRef.current = true;
+    setActionTaken(true);
     setDraft(displayComment);
     onEditingChange(false);
   }
