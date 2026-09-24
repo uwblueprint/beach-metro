@@ -324,6 +324,7 @@ type CreateRoute = {
 | POST   | `/api/financial-years/{yearId}/issues` | Create one or many issues (batch via array body — lay out the year). Created **Open**: payouts + delivery rows auto-populate and live calc starts | 4b / delivery 4a |
 | GET    | `/api/issues/{id}`                     | Detail                                                                                                                                            |                  |
 | PATCH  | `/api/issues/{id}`                     | Edit name / date                                                                                                                                  | 4b               |
+| DELETE | `/api/issues/{id}`                     | Hard-delete an **open** issue with **no paid cells** (cascades payouts + deliveries)                                                              |                  |
 | POST   | `/api/issues/{id}/close`               | Open → Closed; **detaches every payout from live calc + locks delivery actuals**; payouts default unpaid                                          | 4e / delivery 4c |
 | POST   | `/api/issues/{id}/reopen`              | Closed → Open (guarded admin correction)                                                                                                          | finance 3a       |
 | POST   | `/api/issues/{id}/lock`                | Freeze every unpaid cell in the issue at once (bundling day)                                                                                      | finance 4j       |
