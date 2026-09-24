@@ -380,9 +380,7 @@ export function useSetSubstitute(yearId: string | null) {
       if (previous) {
         patchYearCell(queryClient, yearId, payoutId, {
           substituteCaptainId,
-          substituteCaptainName: substituteCaptainId
-            ? (substituteCaptainName ?? null)
-            : null,
+          substituteCaptainName: substituteCaptainId ? (substituteCaptainName ?? null) : null,
         });
       }
       return { previous };

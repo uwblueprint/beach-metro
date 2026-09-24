@@ -411,10 +411,7 @@ function SubstituteCaptainPicker({
             <DropdownMenuItem
               key={captain}
               onClick={() => onSelect(captain)}
-              className={cn(
-                "justify-between rounded-md px-3 py-2.5",
-                isSelected && "font-medium",
-              )}
+              className={cn("justify-between rounded-md px-3 py-2.5", isSelected && "font-medium")}
             >
               <span>{captain}</span>
               {isSelected && <Check className="size-4 shrink-0" strokeWidth={2} />}
@@ -639,19 +636,10 @@ export function PaymentCell({
 
       {readOnly ? (
         paid ? (
-          <Check
-            aria-hidden
-            className="size-4 shrink-0 text-muted-foreground"
-            strokeWidth={0.5}
-          />
+          <Check aria-hidden className="size-4 shrink-0 text-muted-foreground" strokeWidth={0.5} />
         ) : null
       ) : (
-        <div
-          className={cn(
-            "flex shrink-0 items-center justify-end gap-1",
-            paid ? "w-4" : "w-12",
-          )}
-        >
+        <div className={cn("flex shrink-0 items-center justify-end gap-1", paid ? "w-4" : "w-12")}>
           <div className="relative flex size-4 shrink-0 items-center justify-center">
             <button
               type="button"

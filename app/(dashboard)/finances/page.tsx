@@ -343,10 +343,7 @@ export default function FinancesPage() {
    * the same as nobody covering. One person may cover several captains, so this
    * is not capped. How the grid should show that is still open with design.
    */
-  const otherCaptainNames = React.useMemo(
-    () => allCaptains.map((c) => c.name),
-    [allCaptains],
-  );
+  const otherCaptainNames = React.useMemo(() => allCaptains.map((c) => c.name), [allCaptains]);
 
   function handleFiltersOpenChange(open: boolean) {
     if (open) setDraftFilters(filters);
