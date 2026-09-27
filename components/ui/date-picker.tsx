@@ -214,9 +214,12 @@ function DatePicker({
         sideOffset={4}
         collisionPadding={16}
         collisionAvoidance={{
+          // Stay on the vertical axis (bottom, or top if needed). Never slide
+          // beside the input — nested period popovers sit near the viewport edge
+          // and that fallback made the calendar open to the left.
           side: "flip",
           align: "shift",
-          fallbackAxisSide: "end",
+          fallbackAxisSide: "none",
         }}
         className="w-auto min-w-[280px] gap-0 rounded-xl bg-bg p-3 smooth-shadow-ring-sm!"
       >

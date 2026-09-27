@@ -367,7 +367,13 @@ export default function FinancesPage() {
     setDraftFilters(DEFAULT_FINANCES_FILTERS);
   }
 
+  const dateRangeInvalid =
+    draftFilters.startDate !== "" &&
+    draftFilters.endDate !== "" &&
+    draftFilters.startDate > draftFilters.endDate;
+
   function applyFilters() {
+    if (dateRangeInvalid) return;
     setFilters(draftFilters);
     setFiltersOpen(false);
   }
@@ -828,6 +834,11 @@ export default function FinancesPage() {
                             />
                           </div>
                         </div>
+                        {dateRangeInvalid ? (
+                          <p className="text-sm text-destructive">
+                            Start date must be on or before the end date.
+                          </p>
+                        ) : null}
                       </FilterSection>
 
                       <div className="border-t border-hairline" />
@@ -861,7 +872,13 @@ export default function FinancesPage() {
                       <Button type="button" variant="text" size="sm" onClick={clearDraftFilters}>
                         Clear all
                       </Button>
-                      <Button type="button" variant="primary" size="sm" onClick={applyFilters}>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        disabled={dateRangeInvalid}
+                        onClick={applyFilters}
+                      >
                         Apply
                       </Button>
                     </div>

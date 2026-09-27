@@ -242,24 +242,20 @@ export default function LabelsPage() {
   }
 
   /**
-   * Exports the ticked bundles, or every unlabelled one when nothing is ticked
-   * — "print what still needs a label" is the common case. Exporting also marks
-   * them labelled server-side, so this changes state rather than previewing.
+   * Print only bundles already marked labelled. Selection is for marking,
+   * not for choosing what goes on the sheet.
    */
   async function handleExport() {
     setActionError(null);
     if (isPending || isError) return; // guarded by the disabled button; defensive here too
-    const bundles: BundleRef[] =
-      selectedBundleIds.size > 0
-        ? [...selectedBundleIds].map(parseBundleKey)
-        : captains.flatMap((captain) =>
-            captain.routes.flatMap((route) =>
-              route.bundles.filter((b) => !b.labelled).map((b) => parseBundleKey(b.id)),
-            ),
-          );
+    const bundles: BundleRef[] = captains.flatMap((captain) =>
+      captain.routes.flatMap((route) =>
+        route.bundles.filter((b) => b.labelled).map((b) => parseBundleKey(b.id)),
+      ),
+    );
 
     if (bundles.length === 0) {
-      setActionError("Nothing to export: every bundle is already labelled.");
+      setActionError("Nothing to export: no bundles are marked labelled.");
       return;
     }
 
