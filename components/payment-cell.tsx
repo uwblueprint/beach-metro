@@ -19,8 +19,8 @@ import type {
 } from "@/app/(dashboard)/finances/data";
 import { formatCurrency } from "@/app/(dashboard)/finances/data";
 
-const HOVER_OPEN_DELAY_MS = 200;
-const HOVER_CLOSE_DELAY_MS = 150;
+const HOVER_OPEN_DELAY_MS = 450;
+const HOVER_CLOSE_DELAY_MS = 120;
 
 function CommentCornerIndicator() {
   return (
@@ -196,6 +196,7 @@ function PaymentAmountPopover({
   onCommentChange,
   readOnly,
   commentEditRequest = 0,
+  dismissRef,
 }: {
   value: number;
   paid: boolean;
@@ -207,6 +208,8 @@ function PaymentAmountPopover({
   onCommentChange?: (comment: string | null) => void;
   readOnly?: boolean;
   commentEditRequest?: number;
+  /** Parent calls this when the pointer moves onto the check or ⋯. */
+  dismissRef?: React.RefObject<() => void>;
 }) {
   const [open, setOpen] = React.useState(false);
   const [editingComment, setEditingComment] = React.useState(false);
@@ -227,6 +230,20 @@ function PaymentAmountPopover({
       closeTimeoutRef.current = null;
     }
   }, []);
+
+  const dismissDetail = React.useCallback(() => {
+    clearOpenTimeout();
+    clearCloseTimeout();
+    setOpen(false);
+  }, [clearOpenTimeout, clearCloseTimeout]);
+
+  React.useEffect(() => {
+    if (!dismissRef) return;
+    dismissRef.current = dismissDetail;
+    return () => {
+      dismissRef.current = () => {};
+    };
+  }, [dismissRef, dismissDetail]);
 
   const handleHoverEnter = React.useCallback(() => {
     clearCloseTimeout();
@@ -467,7 +484,7 @@ function CellActionsMenu({
             type="button"
             aria-label="Cell actions"
             className={cn(
-              "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[opacity,background-color,color] duration-300 ease-out",
+              "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[opacity,background-color,color] duration-150 ease-out",
               "pointer-events-none group-hover/cell:pointer-events-auto group-hover/cell:bg-muted group-hover/cell:text-primary group-hover/cell:opacity-100",
               "data-popup-open:pointer-events-auto data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:opacity-100 data-popup-open:hover:bg-bg-secondary data-popup-open:hover:text-primary",
             )}
@@ -541,6 +558,7 @@ export function PaymentCell({
   const hasComment = Boolean(comment?.trim());
   const nonInteractive = readOnly || isLocked;
   const [commentEditRequest, setCommentEditRequest] = React.useState(0);
+  const dismissDetailRef = React.useRef<() => void>(() => {});
   const skipBlurCancelRef = React.useRef(false);
 
   if (isEditing) {
@@ -612,6 +630,7 @@ export function PaymentCell({
             onCommentChange={onCommentChange}
             readOnly={readOnly}
             commentEditRequest={commentEditRequest}
+            dismissRef={dismissDetailRef}
           />
         ) : (
           <span
@@ -639,7 +658,10 @@ export function PaymentCell({
           <Check aria-hidden className="size-4 shrink-0 text-muted-foreground" strokeWidth={0.5} />
         ) : null
       ) : (
-        <div className={cn("flex shrink-0 items-center justify-end gap-1", paid ? "w-4" : "w-12")}>
+        <div
+          className={cn("flex shrink-0 items-center justify-end gap-1", paid ? "w-4" : "w-12")}
+          onMouseEnter={() => dismissDetailRef.current()}
+        >
           <div className="relative flex size-4 shrink-0 items-center justify-center">
             <button
               type="button"
@@ -647,7 +669,7 @@ export function PaymentCell({
               disabled={paid}
               onClick={onMarkPaid}
               className={cn(
-                "absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 ease-out",
+                "absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-150 ease-out",
                 "pointer-events-none group-hover/cell:pointer-events-auto",
                 !paid && "group-hover/cell:opacity-100",
                 paid && "pointer-events-none",
@@ -659,7 +681,7 @@ export function PaymentCell({
             <Check
               aria-hidden={!paid}
               className={cn(
-                "pointer-events-none size-4 text-muted-foreground transition-all duration-300 ease-out",
+                "pointer-events-none size-4 text-muted-foreground transition-all duration-150 ease-out",
                 paid ? "opacity-100 scale-100" : "opacity-0 scale-75",
               )}
               strokeWidth={0.5}

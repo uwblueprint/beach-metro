@@ -342,10 +342,29 @@ export function useClearOverride(yearId: string | null) {
  * design signing off — otherwise "final" stops being true.
  */
 export function useMarkPaid(yearId: string | null) {
+  const queryClient = useQueryClient();
   const invalidate = useGridInvalidation(yearId);
   return useMutation({
     mutationFn: (payoutId: string) => api.post<PayoutDetail>(`/api/payouts/${payoutId}/mark-paid`),
-    onSuccess: invalidate,
+    onMutate: async (payoutId) => {
+      if (!yearId) return;
+      await queryClient.cancelQueries({ queryKey: financeKeys.year(yearId) });
+      const previous = queryClient.getQueryData<YearDetail>(financeKeys.year(yearId));
+      if (previous) {
+        patchYearCell(queryClient, yearId, payoutId, { paid: true });
+      }
+      return { previous };
+    },
+    onError: (_err, _payoutId, ctx) => {
+      if (yearId && ctx?.previous) {
+        queryClient.setQueryData(financeKeys.year(yearId), ctx.previous);
+      }
+    },
+    onSuccess: (detail, payoutId) => {
+      if (!yearId) return;
+      patchYearCell(queryClient, yearId, payoutId, { paid: detail.paid });
+    },
+    onSettled: invalidate,
   });
 }
 

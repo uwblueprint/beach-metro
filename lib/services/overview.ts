@@ -158,13 +158,27 @@ export async function getOverview(filters: z.infer<typeof periodQuery>): Promise
     const c = captains.find((x) => x.id === id);
     return c ? c.display_name : "Unknown captain";
   };
-  const papersFor = (issueId: string) =>
+  const deliveryPapers = (issueId: string) =>
     deliveries.filter((d) => d.issue_id === issueId).reduce((s, d) => s + d.paper_count, 0);
 
-  // Next scheduled issue. Deliveries may not exist for it yet, in which case the
-  // standing route papers are the number the office would order.
-  const upcoming = allIssues.find((i) => i.date >= date) ?? null;
+  // Standing route papers: what the office would order before deliveries exist.
   const standingPapers = routes.reduce((s, r) => s + r.papers, 0);
+
+  /**
+   * Papers to show for an issue. Prefer recorded delivery actuals; if there are
+   * none yet and the issue is still upcoming, fall back to standing route papers
+   * so "Papers Per Issue" matches "Papers for next issue" for the same row.
+   * Past issues with no deliveries stay at 0 — standing totals may have changed.
+   */
+  const papersForIssue = (issue: IssueRow) => {
+    const actual = deliveryPapers(issue.id);
+    if (actual > 0) return actual;
+    if (issue.date >= date) return standingPapers;
+    return 0;
+  };
+
+  // Next scheduled issue — same paper rule as papersPerIssue for that row.
+  const upcoming = allIssues.find((i) => i.date >= date) ?? null;
 
   // Substitute pay is attributed to whoever covered, and excluded from the
   // covered captain's own line so the two lists don't double-count.
@@ -236,7 +250,7 @@ export async function getOverview(filters: z.infer<typeof periodQuery>): Promise
             id: upcoming.id,
             name: upcoming.name,
             date: upcoming.date,
-            papers: papersFor(upcoming.id) || standingPapers,
+            papers: papersForIssue(upcoming),
           }
         : null,
       // Retiring drops a volunteer from active but keeps them in the total;
@@ -251,7 +265,12 @@ export async function getOverview(filters: z.infer<typeof periodQuery>): Promise
     captainPayments,
     substitutePayments,
     papersPerIssue: inRange
-      .map((i) => ({ issueId: i.id, name: i.name, date: i.date, papers: papersFor(i.id) }))
+      .map((i) => ({
+        issueId: i.id,
+        name: i.name,
+        date: i.date,
+        papers: papersForIssue(i),
+      }))
       .sort((a, b) => b.date.localeCompare(a.date)),
   };
 }
