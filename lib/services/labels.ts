@@ -14,6 +14,7 @@ import type {
   BundleLabelRow,
   CaptainRow,
   CaptainTerritoryRow,
+  DropKind,
   IssueRow,
   RouteDeliveryRow,
   VolunteerRouteRow,
@@ -21,7 +22,7 @@ import type {
 } from "@/types/db";
 
 import { getAddressDetails } from "./addresses";
-import { routeLabel } from "./derive";
+import { labelType, routeLabel } from "./derive";
 import { db, throwDb } from "./shared";
 
 export interface LabelBundle {
@@ -45,14 +46,9 @@ export interface LabelRoute {
   /**
    * Carrier is a normal volunteer route, Commercial a bulk drop at a business,
    * Residential a bulk drop at an apartment or condo. Locked in
-   * docs/design_decisions.md.
-   *
-   * Always "carrier" today, because this service reads `route_deliveries` and
-   * nothing but `volunteer_routes` feeds that table. Widen the union once
-   * commercial and residential drops get a per-issue delivery record of their
-   * own (label_printing_flow.md §7).
+   * docs/design_decisions.md. Derived from the route, never stored twice.
    */
-  type: "carrier";
+  type: "carrier" | DropKind;
 }
 
 export interface LabelGroup {
@@ -175,7 +171,9 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
   const [routesRes, volunteersRes, territoriesRes, captainsRes, labelsRes] = await Promise.all([
     client
       .from("volunteer_routes")
-      .select("id, street_name, assigned_volunteer_id, start_address_id, end_address_id")
+      .select(
+        "id, street_name, assigned_volunteer_id, start_address_id, end_address_id, drop_kind, drop_name",
+      )
       .in(
         "id",
         deliveries.map((d) => d.route_id),
@@ -199,7 +197,13 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
 
   const routes = (routesRes.data ?? []) as Pick<
     VolunteerRouteRow,
-    "id" | "street_name" | "assigned_volunteer_id" | "start_address_id" | "end_address_id"
+    | "id"
+    | "street_name"
+    | "assigned_volunteer_id"
+    | "start_address_id"
+    | "end_address_id"
+    | "drop_kind"
+    | "drop_name"
   >[];
   const volunteers = (volunteersRes.data ?? []) as Pick<
     VolunteerRow,
@@ -257,6 +261,7 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
     }));
 
     const labelledHere = bundles.filter((b) => b.labelled).length;
+    const isDropRoute = route.start_address_id === route.end_address_id;
     const entry: LabelRoute = {
       deliveryId: delivery.id,
       routeId: route.id,
@@ -265,13 +270,20 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
         addresses.get(route.start_address_id)?.formattedAddress ?? null,
         addresses.get(route.end_address_id)?.formattedAddress ?? null,
       ),
-      volunteerName: volunteer ? volunteer.display_name : null,
-      address: volunteer ? (addresses.get(volunteer.address_id)?.formattedAddress ?? null) : null,
+      // A drop is carried by a captain and has no volunteer, so the label's
+      // name line takes the drop's own name and its address line the drop's
+      // address. A street route keeps showing the volunteer and their home.
+      volunteerName: isDropRoute ? route.drop_name : (volunteer?.display_name ?? null),
+      address: isDropRoute
+        ? (addresses.get(route.start_address_id)?.formattedAddress ?? null)
+        : volunteer
+          ? (addresses.get(volunteer.address_id)?.formattedAddress ?? null)
+          : null,
       papers: delivery.paper_count,
       bundles,
       bundleCount: bundles.length,
       labelledCount: labelledHere,
-      type: "carrier",
+      type: labelType({ isDrop: isDropRoute, dropKind: route.drop_kind }),
     };
 
     const key = captain?.id ?? "unassigned";
@@ -413,7 +425,7 @@ export async function exportLabelSheet(
       // than inventing a number that would look authoritative.
       routeCode: rtByDelivery.get(ref.deliveryId) ?? "XX",
       papers: delivery?.bundles[ref.bundleIndex]?.papers ?? 0,
-      name: route?.volunteerName ?? "Vacant route",
+      name: route?.volunteerName ?? (route && route.type !== "carrier" ? "" : "Vacant route"),
       address: route?.address ?? "",
       bundleLine: total > 1 ? `Bundle ${ref.bundleIndex + 1} of ${total}` : "",
     };
