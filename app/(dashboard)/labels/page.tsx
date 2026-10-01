@@ -8,17 +8,20 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PillGroup } from "@/components/ui/pill-group";
 import { SearchBar } from "@/components/ui/search-bar";
+import { Select } from "@/components/ui/select";
 import { useExportLabels, useLabels, useMarkLabels } from "@/features/labels/api";
-import type { BundleRef, LabelSheet } from "@/features/labels/api";
+import type { BundleRef, LabelRoute, LabelSheet } from "@/features/labels/api";
 import { cn } from "@/lib/utils";
 
 /**
- * `[OPEN]` Carrier / Commercial / Residential. Nothing in the schema backs this
- * yet: `Address.type` is only residential|commercial and route endpoints are
- * always stored residential by a locked decision, so it cannot be reused. The
- * pills render but deliberately do not filter — see
- * `docs/flows/label_printing_flow.md` §7. Wire them up once the client confirms
- * what Type means, and delete this comment.
+ * Carrier is a normal volunteer route, Commercial a bulk drop at a business,
+ * Residential a bulk drop at an apartment or condo. Locked in
+ * docs/design_decisions.md.
+ *
+ * Every row this page can show today is Carrier, because commercial and
+ * residential drops have no per-issue delivery record yet
+ * (label_printing_flow.md §7). Those two pills filter to nothing until that
+ * record exists.
  */
 type TypeFilter = "Carrier" | "Commercial" | "Residential" | "all";
 
@@ -58,6 +61,7 @@ interface Route {
   name: string;
   papers: number;
   bundles: Bundle[];
+  type: "Carrier" | "Commercial" | "Residential";
 }
 
 interface Captain {
@@ -65,6 +69,15 @@ interface Captain {
   name: string;
   routes: Route[];
 }
+
+/**
+ * Server casing to the casing the pills and the Type column print. Keyed on the
+ * server's own union, so adding a type there stops this file compiling instead
+ * of leaving every row reading Carrier.
+ */
+const TYPE_LABEL: Record<LabelRoute["type"], Route["type"]> = {
+  carrier: "Carrier",
+};
 
 function toCaptains(sheet: LabelSheet | undefined): Captain[] {
   if (!sheet) return [];
@@ -83,6 +96,7 @@ function toCaptains(sheet: LabelSheet | undefined): Captain[] {
         papers: bundle.papers,
         labelled: bundle.labelled,
       })),
+      type: TYPE_LABEL[route.type],
     })),
   }));
 }
@@ -189,7 +203,10 @@ function HoverCheckbox({
 }
 
 export default function LabelsPage() {
-  const { data: sheet, isPending, isError, error } = useLabels();
+  // undefined = the open issue, which is the everyday case. Setting this points
+  // the screen at a past issue so a jammed or torn run can be reprinted.
+  const [issueId, setIssueId] = useState<string | undefined>(undefined);
+  const { data: sheet, isPending, isError, error } = useLabels(issueId);
   const markLabels = useMarkLabels();
   const exportLabels = useExportLabels();
 
@@ -203,18 +220,33 @@ export default function LabelsPage() {
   const captains = useMemo(() => toCaptains(sheet), [sheet]);
   const totalBundles = sheet?.bundleCount ?? 0;
 
+  // Reprint mode: the chosen issue has already shipped. Everything is normally
+  // labelled already, so "export what is unlabelled" would find nothing.
+  const isReprint = sheet != null && sheet.issue.status !== "open";
+  const issueOptions = useMemo(
+    () =>
+      (sheet?.issues ?? []).map((i) => ({
+        value: i.id,
+        label: i.status === "open" ? `${i.name} (current)` : `${i.name} — ${i.date}`,
+      })),
+    [sheet],
+  );
+
   const searchQuery = search.trim().toLowerCase();
-  // typeFilter is deliberately absent here: the pills do not filter yet.
-  const revealResults = searchQuery.length > 0;
+  const revealResults = searchQuery.length > 0 || typeFilter !== "all";
 
   const visibleCaptains = useMemo(() => {
     return captains
       .map((captain) => ({
         ...captain,
-        routes: captain.routes.filter((route) => routeMatchesSearch(route, searchQuery)),
+        routes: captain.routes.filter(
+          (route) =>
+            (typeFilter === "all" || route.type === typeFilter) &&
+            routeMatchesSearch(route, searchQuery),
+        ),
       }))
       .filter((captain) => captain.routes.length > 0);
-  }, [captains, searchQuery]);
+  }, [captains, searchQuery, typeFilter]);
 
   const selectedCount = selectedBundleIds.size;
   // Sheet still loading/failed counts as busy too, so Export can't run
@@ -242,25 +274,37 @@ export default function LabelsPage() {
   }
 
   /**
-   * Print only bundles already marked labelled. Selection is for marking,
-   * not for choosing what goes on the sheet.
+   * Exports the ticked bundles, or every unlabelled one when nothing is ticked
+   * — "print what still needs a label" is the common case. Exporting also marks
+   * them labelled server-side, so this changes state rather than previewing.
    */
   async function handleExport() {
     setActionError(null);
     if (isPending || isError) return; // guarded by the disabled button; defensive here too
-    const bundles: BundleRef[] = captains.flatMap((captain) =>
-      captain.routes.flatMap((route) =>
-        route.bundles.filter((b) => b.labelled).map((b) => parseBundleKey(b.id)),
-      ),
-    );
+    const bundles: BundleRef[] =
+      selectedBundleIds.size > 0
+        ? [...selectedBundleIds].map(parseBundleKey)
+        : captains.flatMap((captain) =>
+            captain.routes.flatMap((route) =>
+              // Reprinting takes every bundle; a live run takes only what has
+              // not been labelled yet.
+              route.bundles
+                .filter((b) => isReprint || !b.labelled)
+                .map((b) => parseBundleKey(b.id)),
+            ),
+          );
 
     if (bundles.length === 0) {
-      setActionError("Nothing to export: no bundles are marked labelled.");
+      setActionError(
+        isReprint
+          ? "Nothing to export: this issue has no bundles."
+          : "Nothing to export: every bundle is already labelled.",
+      );
       return;
     }
 
     try {
-      await exportLabels.mutateAsync({ bundles });
+      await exportLabels.mutateAsync({ bundles, issueId: sheet?.issue.id });
       clearSelection();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Could not export labels.");
@@ -306,6 +350,21 @@ export default function LabelsPage() {
                 }}
                 className="shrink-0"
               />
+              {issueOptions.length > 1 ? (
+                <Select
+                  aria-label="Issue"
+                  value={sheet?.issue.id ?? ""}
+                  onChange={(value) => {
+                    // Selecting the open issue clears the override, so the screen
+                    // goes back to following whichever issue is current.
+                    const picked = sheet?.issues.find((i) => i.id === value);
+                    setIssueId(picked && picked.status === "open" ? undefined : value);
+                    clearSelection();
+                  }}
+                  options={issueOptions}
+                  className="shrink-0"
+                />
+              ) : null}
             </div>
 
             {actionError ? (
@@ -332,7 +391,9 @@ export default function LabelsPage() {
                 <p className="text-md text-secondary p-2">
                   {search.trim()
                     ? `No routes match “${search.trim()}”.`
-                    : "No bundles to label for this issue."}
+                    : typeFilter !== "all"
+                      ? `No ${typeFilter.toLowerCase()} bundles in this issue.`
+                      : "No bundles to label for this issue."}
                 </p>
               ) : (
                 visibleCaptains.map((captain) => {
@@ -407,10 +468,8 @@ export default function LabelsPage() {
                                   <span className={cn("truncate text-md text-primary", COUNT_COL)}>
                                     {formatBundleCount(route)}
                                   </span>
-                                  {/* `[OPEN]` no Type in the schema yet; see the note at the
-                                      top of this file. */}
                                   <span className={cn("truncate text-md text-secondary", TYPE_COL)}>
-                                    —
+                                    {route.type}
                                   </span>
                                   <span
                                     className={cn("truncate text-md text-secondary", LABELLED_COL)}
