@@ -219,6 +219,34 @@ describe.skipIf(!RUN)("locking an issue", () => {
   });
 });
 
+describe.skipIf(!RUN)("deleting an issue", () => {
+  it("removes an open unpaid issue and its cells from the year grid", async () => {
+    const { yearId, issueId } = await makeYearWithIssue();
+
+    await S().issues.deleteIssue(issueId);
+
+    const grid = await S().years.getYearDetail(yearId);
+    expect(grid.issues.find((i) => i.id === issueId)).toBeUndefined();
+    await expectServiceError(S().issues.getIssue(issueId), 404);
+  });
+
+  it("refuses when any cell is paid", async () => {
+    const { issueId } = await makeYearWithIssue();
+    const [cell] = await S().payouts.listPayouts(issueId);
+    await S().payouts.markPayoutPaid(cell.id);
+
+    await expectServiceError(S().issues.deleteIssue(issueId), 409);
+    expect(await S().issues.getIssue(issueId)).toMatchObject({ id: issueId });
+  });
+
+  it("refuses when the issue is closed", async () => {
+    const { issueId } = await makeYearWithIssue();
+    await S().issues.closeIssue(issueId);
+
+    await expectServiceError(S().issues.deleteIssue(issueId), 409);
+  });
+});
+
 describe.skipIf(!RUN)("marking paid", () => {
   // Settled: paid can be ticked whenever while the issue is open. The ordering is
   // enforced from the other end instead — closing the issue settles everything.

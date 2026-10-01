@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, Filter, MoreHorizontal, Plus } from "lucide-react";
+import { ChevronDown, Filter, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 
 import { PaymentCell } from "@/components/payment-cell";
 import { ArchiveBanner } from "@/components/archive-banner";
@@ -42,6 +42,7 @@ import {
   useAddIssue,
   useArchiveYear,
   useCreateYear,
+  useDeleteIssue,
   useMarkPaid,
   useOverridePayout,
   useRenameIssue,
@@ -151,6 +152,23 @@ function IssueLockButton({ locked, onToggle }: { locked: boolean; onToggle: () =
   );
 }
 
+function IssueDeleteButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label="Delete issue"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onClick();
+      }}
+      className="flex shrink-0 items-center justify-center rounded-[4px] p-2 text-muted-foreground opacity-0 transition-[background-color,color,opacity] duration-100 hover:bg-bg-secondary hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 [&_svg]:pointer-events-none"
+    >
+      <Trash2 className="size-3" strokeWidth={2} />
+    </button>
+  );
+}
+
 type FilterSegmentOption<T extends string> = {
   value: T;
   label: string;
@@ -256,6 +274,10 @@ export default function FinancesPage() {
   const [tableTitleEditValue, setTableTitleEditValue] = React.useState("");
   const [editingIssueId, setEditingIssueId] = React.useState<string | null>(null);
   const [issueNameEditValue, setIssueNameEditValue] = React.useState("");
+  const [deleteIssueTarget, setDeleteIssueTarget] = React.useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const { data: years } = useYears();
   // Default to the newest non-archived year, matching what the overview picks.
@@ -270,6 +292,7 @@ export default function FinancesPage() {
   const unarchiveYear = useUnarchiveYear();
   const addIssue = useAddIssue(activeYearId);
   const renameIssue = useRenameIssue(activeYearId);
+  const deleteIssue = useDeleteIssue(activeYearId);
   const toggleLock = useToggleIssueLock(activeYearId);
   const overridePayout = useOverridePayout(activeYearId);
   const markPaid = useMarkPaid(activeYearId);
@@ -315,14 +338,12 @@ export default function FinancesPage() {
   }, [allIssues]);
 
   /**
-   * Who can be picked as a substitute: every captain with a column, plus "None".
-   * One person may cover several captains, so this is not capped. How the grid
-   * should show that is still open with design; a row shows one covered name.
+   * Who can be picked as a substitute: every other captain, plus "None".
+   * The column owner is excluded per cell at render time — covering yourself is
+   * the same as nobody covering. One person may cover several captains, so this
+   * is not capped. How the grid should show that is still open with design.
    */
-  const substituteOptions = React.useMemo(
-    () => [NO_SUBSTITUTE, ...allCaptains.map((c) => c.name)],
-    [allCaptains],
-  );
+  const otherCaptainNames = React.useMemo(() => allCaptains.map((c) => c.name), [allCaptains]);
 
   function handleFiltersOpenChange(open: boolean) {
     if (open) setDraftFilters(filters);
@@ -457,15 +478,18 @@ export default function FinancesPage() {
   }
 
   /**
-   * The picker offers every other captain plus "None". Choosing the column's own
-   * captain clears the substitute, since a captain covering for themselves is the
-   * same as nobody covering.
+   * The picker offers every other captain plus "None". Choosing "None" (or the
+   * column's own captain, if it were still listed) clears the substitute.
    */
   function handleSubstituteChange(key: CellKey, columnCaptainId: string, nextName: string) {
     const target = allCaptains.find((c) => c.name === nextName);
     const substituteCaptainId =
       nextName === NO_SUBSTITUTE || !target || target.id === columnCaptainId ? null : target.id;
-    setSubstitute.mutate({ payoutId: key, substituteCaptainId });
+    setSubstitute.mutate({
+      payoutId: key,
+      substituteCaptainId,
+      substituteCaptainName: substituteCaptainId ? (target?.name ?? null) : null,
+    });
   }
 
   /** Allowed any time the issue is open. One way: paid is final, there is no untick. */
@@ -522,6 +546,16 @@ export default function FinancesPage() {
   function handleAddIssue() {
     if (isArchivedYear || draftIssue) return;
     setDraftIssue({ label: "" });
+  }
+
+  function closeDeleteIssueDialog() {
+    setDeleteIssueTarget(null);
+  }
+
+  function confirmDeleteIssue() {
+    if (!deleteIssueTarget) return;
+    const { id } = deleteIssueTarget;
+    deleteIssue.mutate(id, { onSettled: closeDeleteIssueDialog });
   }
 
   function commitDraftIssue() {
@@ -940,6 +974,8 @@ export default function FinancesPage() {
                     {visibleIssues.map((issue) => {
                       const isIssueLocked = issue.locked;
                       const isIssueClosed = issue.status === "closed";
+                      const hasPaidCell = issue.cells.some((cell) => cell.paid);
+                      const canDeleteIssue = !isArchivedYear && !isIssueClosed && !hasPaidCell;
 
                       return (
                         <TableRow key={issue.id} className="group border-0 hover:bg-transparent">
@@ -975,10 +1011,19 @@ export default function FinancesPage() {
                                 </span>
                               )}
                               {!isArchivedYear && !isIssueClosed && (
-                                <IssueLockButton
-                                  locked={isIssueLocked}
-                                  onToggle={() => toggleIssueLock(issue.id, isIssueLocked)}
-                                />
+                                <div className="flex shrink-0 items-center">
+                                  {canDeleteIssue && (
+                                    <IssueDeleteButton
+                                      onClick={() =>
+                                        setDeleteIssueTarget({ id: issue.id, name: issue.name })
+                                      }
+                                    />
+                                  )}
+                                  <IssueLockButton
+                                    locked={isIssueLocked}
+                                    onToggle={() => toggleIssueLock(issue.id, isIssueLocked)}
+                                  />
+                                </div>
                               )}
                             </div>
                           </TableCell>
@@ -1030,9 +1075,11 @@ export default function FinancesPage() {
                                   key={cell.payoutId}
                                   value={cell.effectiveAmount}
                                   paid={cell.paid}
-                                  columnCaptain={captain.name}
                                   substituteCaptain={cell.substituteCaptainName ?? NO_SUBSTITUTE}
-                                  substituteOptions={substituteOptions}
+                                  substituteOptions={[
+                                    NO_SUBSTITUTE,
+                                    ...otherCaptainNames.filter((name) => name !== captain.name),
+                                  ]}
                                   onSubstituteChange={(nextName) =>
                                     handleSubstituteChange(key, captain.id, nextName)
                                   }
@@ -1147,6 +1194,39 @@ export default function FinancesPage() {
                     onClick={confirmEdit}
                   >
                     Override
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog
+              open={!!deleteIssueTarget}
+              onOpenChange={(open) => !open && closeDeleteIssueDialog()}
+            >
+              <DialogContent className="gap-0 overflow-hidden p-0">
+                <DialogHeader className="border-b border-border px-6 py-4">
+                  <DialogTitle className="text-md font-medium leading-snug">
+                    Delete {deleteIssueTarget?.name ?? "issue"}?
+                  </DialogTitle>
+                </DialogHeader>
+
+                <div className="flex flex-col gap-3 px-6 py-4">
+                  <DialogDescription className="text-md text-primary">
+                    This removes the issue and its payment cells. You can&apos;t undo this.
+                  </DialogDescription>
+                </div>
+
+                <DialogFooter className="mt-0 gap-2 border-t border-border px-6 py-4">
+                  <Button type="button" variant="default" onClick={closeDeleteIssueDialog}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    disabled={deleteIssue.isPending}
+                    onClick={confirmDeleteIssue}
+                  >
+                    Delete
                   </Button>
                 </DialogFooter>
               </DialogContent>

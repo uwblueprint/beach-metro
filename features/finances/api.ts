@@ -105,6 +105,27 @@ function useGridInvalidation(yearId: string | null) {
   };
 }
 
+/** Patch one payout cell inside the cached year grid (optimistic / onSuccess). */
+function patchYearCell(
+  queryClient: ReturnType<typeof useQueryClient>,
+  yearId: string,
+  payoutId: string,
+  patch: Partial<GridCell>,
+) {
+  queryClient.setQueryData<YearDetail>(financeKeys.year(yearId), (previous) => {
+    if (!previous) return previous;
+    return {
+      ...previous,
+      issues: previous.issues.map((issue) => ({
+        ...issue,
+        cells: issue.cells.map((cell) =>
+          cell.payoutId === payoutId ? { ...cell, ...patch } : cell,
+        ),
+      })),
+    };
+  });
+}
+
 export function useCreateYear() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -176,6 +197,36 @@ export function useRenameIssue(yearId: string | null) {
 }
 
 /**
+ * Remove an open issue that has no paid cells. Payouts and deliveries cascade
+ * away with it — for mistakes/duplicates, not finished runs.
+ */
+export function useDeleteIssue(yearId: string | null) {
+  const queryClient = useQueryClient();
+  const invalidate = useGridInvalidation(yearId);
+  return useMutation({
+    mutationFn: (issueId: string) => api.del(`/api/issues/${issueId}`),
+    onMutate: async (issueId) => {
+      if (!yearId) return;
+      await queryClient.cancelQueries({ queryKey: financeKeys.year(yearId) });
+      const previous = queryClient.getQueryData<YearDetail>(financeKeys.year(yearId));
+      if (previous) {
+        queryClient.setQueryData<YearDetail>(financeKeys.year(yearId), {
+          ...previous,
+          issues: previous.issues.filter((issue) => issue.id !== issueId),
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (yearId && ctx?.previous) {
+        queryClient.setQueryData(financeKeys.year(yearId), ctx.previous);
+      }
+    },
+    onSettled: invalidate,
+  });
+}
+
+/**
  * Lock or unlock a whole issue. Locking means the numbers are settled and a later
  * route edit must not move them; it says nothing about anyone having been paid.
  * Calls a bulk endpoint that freezes every unpaid cell, over the per-cell freeze.
@@ -229,6 +280,7 @@ export function useToggleIssueLock(yearId: string | null) {
 
 /** Manual amount with a required reason. Rejected on a paid cell (409). */
 export function useOverridePayout(yearId: string | null) {
+  const queryClient = useQueryClient();
   const invalidate = useGridInvalidation(yearId);
   return useMutation({
     mutationFn: ({
@@ -240,7 +292,34 @@ export function useOverridePayout(yearId: string | null) {
       amount: number;
       reason: string;
     }) => api.post<PayoutDetail>(`/api/payouts/${payoutId}/override`, { amount, reason }),
-    onSuccess: invalidate,
+    onMutate: async ({ payoutId, amount, reason }) => {
+      if (!yearId) return;
+      await queryClient.cancelQueries({ queryKey: financeKeys.year(yearId) });
+      const previous = queryClient.getQueryData<YearDetail>(financeKeys.year(yearId));
+      if (previous) {
+        patchYearCell(queryClient, yearId, payoutId, {
+          effectiveAmount: amount,
+          calculationStatus: "overridden",
+          overrideReason: reason,
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (yearId && ctx?.previous) {
+        queryClient.setQueryData(financeKeys.year(yearId), ctx.previous);
+      }
+    },
+    onSuccess: (detail, { payoutId }) => {
+      if (!yearId) return;
+      patchYearCell(queryClient, yearId, payoutId, {
+        effectiveAmount: detail.effectiveAmount,
+        calculatedAmount: detail.calculatedAmount,
+        calculationStatus: detail.calculationStatus,
+        overrideReason: detail.overrideReason,
+      });
+    },
+    onSettled: invalidate,
   });
 }
 
@@ -279,6 +358,7 @@ export function useMarkPaid(yearId: string | null) {
  * them all rather than dropping any past the first.
  */
 export function useSetSubstitute(yearId: string | null) {
+  const queryClient = useQueryClient();
   const invalidate = useGridInvalidation(yearId);
   return useMutation({
     mutationFn: ({
@@ -287,11 +367,38 @@ export function useSetSubstitute(yearId: string | null) {
     }: {
       payoutId: string;
       substituteCaptainId: string | null;
+      /** Display name for optimistic grid update; ignored by the API. */
+      substituteCaptainName?: string | null;
     }) =>
       substituteCaptainId === null
         ? api.del<PayoutDetail>(`/api/payouts/${payoutId}/substitute`)
         : api.post<PayoutDetail>(`/api/payouts/${payoutId}/substitute`, { substituteCaptainId }),
-    onSuccess: invalidate,
+    onMutate: async ({ payoutId, substituteCaptainId, substituteCaptainName }) => {
+      if (!yearId) return;
+      await queryClient.cancelQueries({ queryKey: financeKeys.year(yearId) });
+      const previous = queryClient.getQueryData<YearDetail>(financeKeys.year(yearId));
+      if (previous) {
+        patchYearCell(queryClient, yearId, payoutId, {
+          substituteCaptainId,
+          substituteCaptainName: substituteCaptainId ? (substituteCaptainName ?? null) : null,
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (yearId && ctx?.previous) {
+        queryClient.setQueryData(financeKeys.year(yearId), ctx.previous);
+      }
+    },
+    onSuccess: (detail, { payoutId }) => {
+      if (!yearId) return;
+      // Prefer the server payload so a slow/stale refetch cannot wipe the sub.
+      patchYearCell(queryClient, yearId, payoutId, {
+        substituteCaptainId: detail.substituteCaptainId,
+        substituteCaptainName: detail.substituteCaptainName,
+      });
+    },
+    onSettled: invalidate,
   });
 }
 
@@ -301,11 +408,30 @@ export function useSetSubstitute(yearId: string | null) {
  * justification for changing a number. Sending null or blank clears it.
  */
 export function useSetCellComment(yearId: string | null) {
+  const queryClient = useQueryClient();
   const invalidate = useGridInvalidation(yearId);
   return useMutation({
     mutationFn: ({ payoutId, comment }: { payoutId: string; comment: string | null }) =>
       api.patch<PayoutDetail>(`/api/payouts/${payoutId}/comment`, { comment }),
-    onSuccess: invalidate,
+    onMutate: async ({ payoutId, comment }) => {
+      if (!yearId) return;
+      await queryClient.cancelQueries({ queryKey: financeKeys.year(yearId) });
+      const previous = queryClient.getQueryData<YearDetail>(financeKeys.year(yearId));
+      if (previous) {
+        patchYearCell(queryClient, yearId, payoutId, { comment });
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (yearId && ctx?.previous) {
+        queryClient.setQueryData(financeKeys.year(yearId), ctx.previous);
+      }
+    },
+    onSuccess: (detail, { payoutId }) => {
+      if (!yearId) return;
+      patchYearCell(queryClient, yearId, payoutId, { comment: detail.comment });
+    },
+    onSettled: invalidate,
   });
 }
 
