@@ -221,19 +221,28 @@ Commercial/Residential item below).
   feeds it yet. So the Labels page can show `Carrier` as a real, confirmed
   value right now instead of a placeholder; Commercial and Residential rows
   can't appear until the item below is built.
-- **`[OPEN]` Commercial and Residential drops are not labelled yet.** This flow
-  covers bundles on volunteer routes only. A bulk drop — Commercial (business)
-  or Residential (apartment/condo) — is today either an `addresses` row with
-  `type = 'commercial'` and a `standing_bundles` count (business drops), or not
-  modeled in the schema at all (apartment/condo drops have no address-type
-  distinction from an ordinary residential address, per the Type-column
-  resolution above). Neither has a per-issue delivery record to hang a label
-  on — yet the printed sample we have (`Councillor Kandavel, 1230 Kingston
-  Rd.`) **is** a commercial drop. Commercial drops also have no name field, so
-  there is nowhere for "Councillor Kandavel" to live. Needs a per-issue drop
-  record for both kinds, a name field for commercial drops, and a way to tell
-  a residential bulk-drop address apart from a volunteer's home, before either
-  can be built.
+- ~~**`[OPEN]` Commercial and Residential drops are not labelled yet.**~~
+  **Resolved.** A bulk drop is a route whose two endpoints are one address row,
+  carried by a captain instead of a volunteer. That already gives it a per-issue
+  delivery, a bundle split and a label, so the three things this item asked for
+  came down to two nullable columns on `volunteer_routes`.
+
+  `drop_kind` says which kind of building receives it, Commercial or
+  Residential, and a database constraint keeps it off street routes, which are
+  always Carrier. `drop_name` holds what the drop is called, so the printed
+  sample's `Councillor Kandavel` has somewhere to live; it prints on the line a
+  street route gives the volunteer. The labels screen derives the Type from the
+  route through `labelType` in `lib/services/derive.ts` rather than storing it a
+  second time.
+
+  The earlier reading that this needed a third address kind came from before
+  drops existed as routes. An address stays `residential` or `commercial` for
+  what it is, and what a *delivery* is now lives on the route.
+
+  One thing this does not do. The payout rollup runs delivery to route to
+  volunteer to territory to captain, so a drop, which has no volunteer, reaches
+  no payout. A captain paid per drop is therefore owed nothing for one today.
+  Tracked below.
 - **~~`[OPEN]`~~ Territory on the label — RESOLVED 2026-08-24.** The earlier
   reading that "the Word template has no territory field" was wrong. Its *first*
   merge field is `Route` — column A, the RT number — printed as `RT«Route»` in
@@ -241,6 +250,14 @@ Commercial/Residential item below).
   the template agree; the chip is the territory. We already render it, currently
   with the stub `"XX"` ([`lib/pdf/label-sheet.ts:41`](../../lib/pdf/label-sheet.ts:41)),
   so this is now just a matter of feeding it the real RT.
+- **`[OPEN]` A drop earns its captain nothing.** `recalculateIssue` walks
+  delivery to route to volunteer to territory to captain and skips any route
+  with no volunteer, which is every drop. So a captain on `pay_type = 'drop'`
+  calculates to zero however many drops they run. Extending the rollup to follow
+  `assigned_captain_id` as well would fix it, but it moves money, so it wants a
+  deliberate decision and its own change rather than riding along with the
+  labels work.
+
 - **`[OPEN]` Label stock — SKU still needed.** Melinda's written printing steps
   (2026-08-23, see `docs/reference/route_labels_spreadsheet.md` §4) say to
   "remove regular paper from printer and place 2 sheets of labels in printer",

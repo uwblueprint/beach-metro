@@ -28,7 +28,26 @@ async function schemaReady(): Promise<boolean> {
   }
 }
 
+/** The drop_kind migration is newer than the rest of this suite's schema. */
+async function dropKindReady(): Promise<boolean> {
+  if (!HAS_ENV) return false;
+  try {
+    const { error } = await createAdminClient()
+      .from("volunteer_routes")
+      .select("drop_kind")
+      .limit(1);
+    if (error) {
+      console.warn(`[integration] skipping drop-kind tests — ${error.message}.`);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const RUN = await schemaReady();
+const RUN_KIND = RUN && (await dropKindReady());
 
 const services = RUN
   ? {
@@ -52,9 +71,8 @@ const unique = (label: string) => `${TAG}-${label}-${Date.now()}-${++seq}`;
 const created = { routeIds: [] as string[], captainIds: [] as string[] };
 
 /**
- * Inserted straight through the admin client rather than the captains service.
- * The hosted schema carries display_name NOT NULL from an unmerged branch, and
- * the service on this branch does not set it, so a created captain would 422.
+ * Inserted straight through the admin client rather than the captains service,
+ * so the fixture does not depend on the service's own create path staying put.
  */
 async function makeCaptain(label: string) {
   const name = unique(label);
@@ -180,5 +198,109 @@ describe.runIf(RUN)("drops", () => {
         assignedCaptainId: captainId,
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe.runIf(RUN_KIND)("drop kind and name", () => {
+  it("defaults a new drop to commercial, which is where the office's records start", async () => {
+    const captainId = await makeCaptain("KindDefault");
+    const address = dropAddress();
+
+    const drop = await S().routes.createRouteRecord({
+      streetName: "Queen St E",
+      startAddress: address,
+      endAddress: address,
+      houseCount: 0,
+      bundles: [{ papers: 25 }],
+      assignedCaptainId: captainId,
+    });
+    created.routeIds.push(drop.id);
+
+    expect(drop.dropKind).toBe("commercial");
+    expect(drop.dropName).toBeNull();
+  });
+
+  it("keeps the kind and the name it was created with", async () => {
+    const captainId = await makeCaptain("KindGiven");
+    const address = dropAddress();
+
+    const drop = await S().routes.createRouteRecord({
+      streetName: "Queen St E",
+      startAddress: address,
+      endAddress: address,
+      houseCount: 0,
+      bundles: [{ papers: 50 }],
+      assignedCaptainId: captainId,
+      dropKind: "residential",
+      dropName: "Harbourview Apartments",
+    });
+    created.routeIds.push(drop.id);
+
+    expect(drop.dropKind).toBe("residential");
+    expect(drop.dropName).toBe("Harbourview Apartments");
+  });
+
+  it("leaves a street route without either, since it is always Carrier", async () => {
+    const route = await S().routes.createRouteRecord({
+      streetName: "Queen St E",
+      startAddress: dropAddress(),
+      endAddress: dropAddress(),
+      houseCount: 30,
+      bundles: [{ papers: 50 }],
+    });
+    created.routeIds.push(route.id);
+
+    expect(route.isDrop).toBe(false);
+    expect(route.dropKind).toBeNull();
+    expect(route.dropName).toBeNull();
+  });
+
+  it("clears both when a drop is split back into a street route", async () => {
+    const captainId = await makeCaptain("KindSplit");
+    const address = dropAddress();
+
+    const drop = await S().routes.createRouteRecord({
+      streetName: "Queen St E",
+      startAddress: address,
+      endAddress: address,
+      houseCount: 0,
+      bundles: [{ papers: 25 }],
+      assignedCaptainId: captainId,
+      dropName: "Corner store",
+    });
+    created.routeIds.push(drop.id);
+    expect(drop.dropName).toBe("Corner store");
+
+    // Two different endpoints make it an ordinary street route. A kind left
+    // behind here would break the database constraint, not just read oddly.
+    const split = await S().routes.updateRouteRecord(drop.id, {
+      startAddress: dropAddress(),
+      endAddress: dropAddress(),
+    });
+
+    expect(split.isDrop).toBe(false);
+    expect(split.dropKind).toBeNull();
+    expect(split.dropName).toBeNull();
+  });
+
+  it("reclassifies a drop without touching anything else", async () => {
+    const captainId = await makeCaptain("KindEdit");
+    const address = dropAddress();
+
+    const drop = await S().routes.createRouteRecord({
+      streetName: "Queen St E",
+      startAddress: address,
+      endAddress: address,
+      houseCount: 0,
+      bundles: [{ papers: 25 }],
+      assignedCaptainId: captainId,
+    });
+    created.routeIds.push(drop.id);
+
+    const moved = await S().routes.updateRouteRecord(drop.id, { dropKind: "residential" });
+
+    expect(moved.dropKind).toBe("residential");
+    expect(moved.isDrop).toBe(true);
+    expect(moved.startAddress.id).toBe(drop.startAddress.id);
   });
 });

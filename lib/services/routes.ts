@@ -14,6 +14,7 @@ import type {
 import type {
   CaptainRow,
   CaptainTerritoryRow,
+  DropKind,
   RouteBundle,
   RouteSide,
   VolunteerRouteRow,
@@ -45,6 +46,10 @@ export interface RouteSummary {
    * and the client has no coordinates to compare.
    */
   isDrop: boolean;
+  /** Drops only: what kind of building receives it. Null on a street route. */
+  dropKind: DropKind | null;
+  /** Drops only: what it is called, printed on the label. */
+  dropName: string | null;
   lifecycle: "assigned" | "vacant";
   suspended: boolean; // derived: assigned volunteer is on vacation
   needsAttention: boolean; // derived: assigned volunteer retired or past end date
@@ -135,6 +140,8 @@ function toSummary(
     streetName: r.street_name,
     side: r.side,
     isDrop,
+    dropKind: r.drop_kind,
+    dropName: r.drop_name,
     lifecycle: routeLifecycle({
       isDrop,
       assignedVolunteerId: r.assigned_volunteer_id,
@@ -337,6 +344,10 @@ export async function createRouteRecord(input: z.infer<typeof createRoute>): Pro
       house_count: input.houseCount ?? 0,
       papers,
       bundles,
+      // Confined to drops by a database constraint as well, so a street route
+      // cannot pick these up from a caller that sends them by mistake.
+      drop_kind: sameEndpoint ? (input.dropKind ?? "commercial") : null,
+      drop_name: sameEndpoint ? (input.dropName ?? null) : null,
       notes: input.note ?? null,
     })
     .select()
@@ -386,6 +397,25 @@ export async function updateRouteRecord(
     if (input.endAddress !== undefined) {
       patch.end_address_id = (await createAddress(input.endAddress, "residential")).address.id;
     }
+  }
+
+  // The drop fields follow whether the route is a drop AFTER this edit, which an
+  // address change can flip in either direction. Reading them off the patch
+  // keeps them in step with the row the database is about to hold.
+  const startAfter = (patch.start_address_id as string | undefined) ?? existing.start_address_id;
+  const endAfter = (patch.end_address_id as string | undefined) ?? existing.end_address_id;
+  const isDropAfter = startAfter === endAfter;
+
+  if (input.dropKind !== undefined) patch.drop_kind = input.dropKind;
+  if (input.dropName !== undefined) patch.drop_name = input.dropName;
+
+  if (!isDropAfter) {
+    // Split endpoints make it a street route, which is Carrier and has no name
+    // of its own. Leaving a stale kind behind would violate the constraint.
+    patch.drop_kind = null;
+    patch.drop_name = null;
+  } else if (!wasDrop && patch.drop_kind === undefined) {
+    patch.drop_kind = "commercial";
   }
 
   if (input.bundles !== undefined) {

@@ -5,6 +5,9 @@ import { addressInput, boolQuery, noteField, uuid } from "./common";
 
 const routeBundle = z.object({ papers: z.number().int().min(1) });
 
+/** What kind of building a bulk drop serves; see docs/design_decisions.md. */
+const dropKind = z.enum(["commercial", "residential"]);
+
 export const routesQuery = z.object({
   vacancy: z.enum(["vacant", "assigned"]).optional(),
   territoryId: uuid.optional(),
@@ -32,6 +35,12 @@ export const createRoute = z
     houseCount: z.number().int().min(0).default(0), // manual entry for MVP
     papers: z.number().int().min(0).optional(),
     bundles: z.array(routeBundle).optional(),
+    /**
+     * Drops only. Omitted on a drop means commercial, which is where the
+     * office's records start; a street route must leave both of these unset.
+     */
+    dropKind: dropKind.optional(),
+    dropName: z.string().trim().min(1).nullish(),
     note: noteField,
   })
   .refine((o) => o.papers !== undefined || o.bundles !== undefined, {
@@ -58,6 +67,9 @@ export const updateRoute = z
     houseCountOverride: z.number().int().min(0).nullable(),
     papers: z.number().int().min(0),
     bundles: z.array(routeBundle),
+    /** Drops only; reclassifying or renaming a drop after it was created. */
+    dropKind: dropKind,
+    dropName: z.string().trim().min(1).nullable(),
     note: noteField,
     assignedCaptainId: uuid.nullable(),
   })
