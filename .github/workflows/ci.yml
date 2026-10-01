@@ -41,3 +41,80 @@ jobs:
 
       - name: E2E tests
         run: pnpm test:e2e
+
+  # The suites that need a database. They self-skip in `verify` because no
+  # SUPABASE_* vars are set there, so without this job nothing has ever exercised
+  # the service layer, the schema, or the authenticated API in CI.
+  #
+  # The stack is local and disposable: migrations and seed.sql are applied fresh
+  # each run, so results depend only on what is in the repo. Pointing this at the
+  # shared project instead would make runs order-dependent and let a failed run
+  # leave fixtures behind.
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Postgres, PostgREST and Auth
+        run: supabase start
+
+      - name: Apply migrations and seed
+        run: supabase db reset
+
+      # The repo's own scripts read .env.local, so CI fills it the same way a
+      # developer would rather than teaching every script a second code path.
+      # No Google Maps keys: lib/maps falls back to the deterministic fake, which
+      # keeps runs free and offline.
+      - name: Point the app at the local stack
+        run: |
+          set -euo pipefail
+          eval "$(supabase status -o env)"
+          # Fail here rather than write blanks: an empty URL surfaces later as a
+          # confusing fetch error inside a test.
+          for name in API_URL ANON_KEY SERVICE_ROLE_KEY DB_URL; do
+            if [ -z "${!name:-}" ]; then
+              echo "supabase status did not report $name" >&2
+              supabase status -o env >&2
+              exit 1
+            fi
+          done
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY"
+            echo "SUPABASE_SECRET_KEY=$SERVICE_ROLE_KEY"
+            echo "SUPABASE_DB_URL=$DB_URL"
+            echo "SMOKE_ADMIN_EMAIL=smoke-admin@example.com"
+            echo "SMOKE_ADMIN_PASSWORD=$(openssl rand -base64 24)"
+          } >> .env.local
+
+      - name: Create the smoke admin
+        run: |
+          set -a; . ./.env.local; set +a
+          pnpm create-admin "$SMOKE_ADMIN_EMAIL" "$SMOKE_ADMIN_PASSWORD"
+
+      - name: Integration tests
+        run: pnpm test
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E and API smoke
+        run: pnpm test:e2e
+
+      - name: Stop the stack
+        if: always()
+        run: supabase stop

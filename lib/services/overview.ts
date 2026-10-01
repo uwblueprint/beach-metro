@@ -156,7 +156,7 @@ export async function getOverview(filters: z.infer<typeof periodQuery>): Promise
   const date = today();
   const nameOf = (id: string) => {
     const c = captains.find((x) => x.id === id);
-    return c ? `${c.first_name} ${c.last_name}` : "Unknown captain";
+    return c ? c.display_name : "Unknown captain";
   };
   const papersFor = (issueId: string) =>
     deliveries.filter((d) => d.issue_id === issueId).reduce((s, d) => s + d.paper_count, 0);

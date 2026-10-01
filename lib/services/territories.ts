@@ -27,7 +27,13 @@ export interface TerritoryDetail extends Omit<
   TerritorySummary,
   "volunteerCount" | "commercialDropCount"
 > {
-  volunteers: Array<{ id: string; firstName: string; lastName: string; status: VolunteerStatus }>;
+  volunteers: Array<{
+    id: string;
+    displayName: string;
+    firstName: string | null;
+    lastName: string | null;
+    status: VolunteerStatus;
+  }>;
   commercialDrops: AddressDetail[];
 }
 
@@ -51,7 +57,7 @@ export async function listCommercialDropCandidates(): Promise<CommercialDropCand
       .select("id, google_maps_id, territory_id, google_maps_locations(cached_formatted_address)")
       .eq("type", "commercial"),
     client.from("captain_territories").select("id, assigned_captain_id"),
-    client.from("captains").select("id, first_name, last_name"),
+    client.from("captains").select("id, display_name"),
   ]);
   if (aRes.error) throwDb(aRes.error);
   if (tRes.error) throwDb(tRes.error);
@@ -61,10 +67,8 @@ export async function listCommercialDropCandidates(): Promise<CommercialDropCand
     CaptainTerritoryRow,
     "id" | "assigned_captain_id"
   >[];
-  const captains = (cRes.data ?? []) as Pick<CaptainRow, "id" | "first_name" | "last_name">[];
-  const captainNameById = new Map(
-    captains.map((c) => [c.id, `${c.first_name} ${c.last_name}`] as const),
-  );
+  const captains = (cRes.data ?? []) as Pick<CaptainRow, "id" | "display_name">[];
+  const captainNameById = new Map(captains.map((c) => [c.id, c.display_name] as const));
   const badgeByTerritoryId = new Map(
     territories.map((t) => [
       t.id,
@@ -96,7 +100,7 @@ export async function listTerritories(
   const client = db();
   const [tRes, cRes, vRes, aRes] = await Promise.all([
     client.from("captain_territories").select("*"),
-    client.from("captains").select("id, first_name, last_name, retired_at"),
+    client.from("captains").select("id, display_name, retired_at"),
     client.from("volunteers").select("id, captain_territory_id"),
     client.from("addresses").select("id, territory_id").eq("type", "commercial"),
   ]);
@@ -105,10 +109,7 @@ export async function listTerritories(
   if (vRes.error) throwDb(vRes.error);
   if (aRes.error) throwDb(aRes.error);
 
-  const captains = (cRes.data ?? []) as Pick<
-    CaptainRow,
-    "id" | "first_name" | "last_name" | "retired_at"
-  >[];
+  const captains = (cRes.data ?? []) as Pick<CaptainRow, "id" | "display_name" | "retired_at">[];
   const volunteers = (vRes.data ?? []) as Pick<VolunteerRow, "id" | "captain_territory_id">[];
   const drops = (aRes.data ?? []) as Pick<AddressRow, "id" | "territory_id">[];
 
@@ -122,7 +123,7 @@ export async function listTerritories(
       captain: captain
         ? {
             id: captain.id,
-            name: `${captain.first_name} ${captain.last_name}`,
+            name: captain.display_name,
             retired: captain.retired_at !== null,
           }
         : null,
@@ -160,7 +161,7 @@ export async function getTerritory(id: string): Promise<TerritoryDetail> {
     t.assigned_captain_id
       ? client
           .from("captains")
-          .select("id, first_name, last_name, retired_at")
+          .select("id, display_name, retired_at")
           .eq("id", t.assigned_captain_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -171,10 +172,7 @@ export async function getTerritory(id: string): Promise<TerritoryDetail> {
   if (vRes.error) throwDb(vRes.error);
   if (aRes.error) throwDb(aRes.error);
 
-  const captain = cRes.data as Pick<
-    CaptainRow,
-    "id" | "first_name" | "last_name" | "retired_at"
-  > | null;
+  const captain = cRes.data as Pick<CaptainRow, "id" | "display_name" | "retired_at"> | null;
   const date = today();
   const dropIds = ((aRes.data ?? []) as Pick<AddressRow, "id">[]).map((a) => a.id);
   const dropDetails = await getAddressDetails(dropIds);
@@ -185,12 +183,13 @@ export async function getTerritory(id: string): Promise<TerritoryDetail> {
     captain: captain
       ? {
           id: captain.id,
-          name: `${captain.first_name} ${captain.last_name}`,
+          name: captain.display_name,
           retired: captain.retired_at !== null,
         }
       : null,
     volunteers: ((vRes.data ?? []) as VolunteerRow[]).map((v) => ({
       id: v.id,
+      displayName: v.display_name,
       firstName: v.first_name,
       lastName: v.last_name,
       status: volunteerStatus(v, date),

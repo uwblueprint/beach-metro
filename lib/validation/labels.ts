@@ -30,9 +30,19 @@ export const markLabels = z.object({
 export const exportLabels = z.object({
   bundles: z.array(bundleRef).min(1),
   /**
+   * Which issue the bundles belong to. Omitted means the open issue, which is
+   * the everyday case; supplied means a reprint of a past run.
+   */
+  issueId: z.uuid().optional(),
+  /**
    * Mark every exported bundle as labelled once the PDF renders. Defaults on:
    * printing a label IS the act of labelling it, and the office should not have
    * to remember a second click.
    */
   markLabelled: z.boolean().default(true),
+});
+
+/** GET /api/labels — optionally point the screen at a past issue to reprint. */
+export const labelsQuery = z.object({
+  issueId: z.uuid().optional(),
 });

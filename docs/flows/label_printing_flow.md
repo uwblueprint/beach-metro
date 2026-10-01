@@ -71,8 +71,12 @@ Scoping falls out of the schema for free — `bundle_labels.delivery_id` points 
 a `route_deliveries` row, which belongs to exactly one issue — so a new issue
 starts with every bundle unlabelled without any reset step.
 
-`[OPEN]` Reprinting a past issue's labels would need an explicit picker.
-Deliberately not built.
+**Reprinting.** Built 2026-08-24, at the office's request. The screen defaults
+to the open issue — the everyday case — and an issue picker appears once more
+than one issue exists, offering the open one plus the twelve most recent. Picking
+a closed issue puts the screen in **reprint mode**, where "Export" with nothing
+selected takes *every* bundle rather than only the unlabelled ones, since a past
+run is normally fully labelled and the usual default would find nothing.
 
 ---
 
@@ -114,14 +118,22 @@ untouched and the manager can just hit export again.
 
 Every dimension is lifted from `MasterLabelsMELINDA.docx` and lives in
 `lib/pdf/label-geometry.ts`, with the original twip values in comments so the two
-can be diffed if the template ever changes.
+can be diffed if the template ever changes. The template itself is documented in
+[`../reference/label_template_docx.md`](../reference/label_template_docx.md) —
+full geometry tables, the merge-field list, and how to re-extract it. Those
+constants were re-derived from the docx and verified on 2026-08-24.
 
-One thing is **not** from the docx: a hairline cut guide around each label. Word
-prints them borderless because the office runs pre-scored stock; on plain paper
-there is nothing to cut against. Labels stay flush rather than gaining a gutter,
-so neighbours stroke the same coordinate and one scissor pass down a shared line
-separates both. A part-full final sheet only draws guides around the labels that
-exist, leaving the rest of the stock clean for reuse.
+One thing is **not** from the docx: a hairline cut guide around each label.
+Labels stay flush rather than gaining a gutter, so neighbours stroke the same
+coordinate and one scissor pass down a shared line separates both. A part-full
+final sheet only draws guides around the labels that exist.
+
+**`2026-08-24` The guides stay.** They were added on the assumption the office
+cuts plain paper by hand, and that assumption turned out to be wrong — Melinda
+loads real die-cut label stock, two sheets at a time. The guides were reviewed on
+that basis and **kept anyway**: they cost nothing on stock that is already
+scored, and they keep the export usable on plain paper. Only the *dimensions*
+were reconciled against the docx. Not an oversight — a decision.
 
 | | |
 | --- | --- |
@@ -154,47 +166,100 @@ unpredictable length — a long business name would otherwise run off the label.
 
 ### The `Bundles` field
 
-Printed as `Bundle n of m`, and omitted for a single-bundle route. This is an
-interpretation: the field is blank on the printed sample we have, and its purpose
-was never documented. It is the reading most consistent with the per-bundle
-decision in §2.
+Printed as `Bundle n of m`, and omitted for a single-bundle route.
 
-`[OPEN]` Confirm with the client. The alternative readings are the split itself
-("50 + 25") or a free-text per-volunteer instruction — the latter would revive
-the `VolunteerInstruction` placeholder deferred in `docs/schema/data_model.md` §8.
+**Resolved 2026-08-23** by reading `RouteLabelsFileBMN.xlsx` directly. The
+office's own `Bundles` column confirms this reading for Carrier rows: over 150
+values follow the exact `N of M` pattern, on ordinary volunteer-route rows.
+It carries something different on bulk-drop rows — the 5 free-text values
+found ("Tie Loosely", "Open and leave in lobby", "Leave close to door", "Give
+to Hope") appear **only** on rows categorized Building or Business, never on a
+Carrier row. So `N of M` for Carrier deliveries is confirmed as-built; a
+free-text handling instruction for Commercial/Residential bulk drops is a
+real, separate field the office already uses — worth reviving the
+`VolunteerInstruction` placeholder (`docs/schema/data_model.md` §8) once
+those drop types get a per-issue delivery record of their own (see the
+Commercial/Residential item below).
 
 ---
 
 ## 7. Open items
 
-- **`[OPEN]` The RT number — blocking, asked.** The black chip prints the literal
-  stub `RTXX`. The number comes from a `Route` column in the office's
-  `RouteLabelsFile.xlsx` and **nothing in our schema corresponds to it**: routes
-  are identified by street name plus start/end address, and have no code.
-  Emailed the client asking what it is, whether it is stable across issues, how
-  it is assigned, and who uses it. A stub prints rather than a generated sequence
-  on purpose — invented numbers would look authoritative and stable when they are
-  neither, and the gap is obvious on paper.
-- **`[OPEN]` The Type column (Carrier / Commercial / Residential).** In the design
-  but absent from this PR: nothing in the schema backs it. `Address.type` is only
-  `residential | commercial`, and route endpoints are always stored `residential`
-  by a locked decision (`docs/design_decisions.md`), so it cannot be reused.
-  Every row in the design is a street-segment route, which suggests Type is a
-  property *of the route* rather than a route-vs-drop distinction — but that is a
-  guess. Deferred to its own small PR once confirmed.
-- **`[OPEN]` Commercial drops are not labelled yet.** This flow covers bundles on
-  volunteer routes. Commercial drops are `addresses` rows with `type =
-  'commercial'` and a `standing_bundles` count, and have no per-issue delivery
-  record to hang a label on — yet the printed sample we have (`Councillor
-  Kandavel, 1230 Kingston Rd.`) **is** a commercial drop. They also have no name
-  field, so there is nowhere for "Councillor Kandavel" to live. Needs both a
-  per-issue drop record and a name before it can be built.
-- **`[OPEN]` Territory on the label.** The PRD says a label shows the territory.
-  The Word template has no territory field, so ours does not either. Dropped
-  intentionally, or an omission?
-- **`[OPEN]` Label stock.** The sample looks like plain paper cut by hand, and
-  2.8125 × 1.5" with zero gutters is not a standard Avery SKU. If it is really
-  peel-and-stick stock we need the SKU, and probably cut guides.
+- ~~**`[OPEN]` The RT number.**~~ **Resolved 2026-08-24.** It is a designation
+  carried by the **captain** — confirmed by the team after reading the office's
+  own sheet, where `Payments2026` keys one row per captain by the same code that
+  groups the `LABELS` rows, and `SKIP HOUSES` keys by it too. Numbering has gaps
+  (05, 11, 13, 16, 19, 21, 27-29 are all absent) because absorbing another
+  captain's area retires the absorbed number.
+
+  Now `captains.rt_number` — text, not an integer, since the office prints the
+  leading zero of `01` and one captain's designation is the span `31-71`. Unique
+  where set, so a chip is never ambiguous, and nullable, so a captain can exist
+  before being given one. The label prints `RTXX` when it is unset or the route
+  has no captain, which is the same visible gap as before rather than an invented
+  number.
+
+  One divergence worth remembering: the file keeps a *separate* payment row per
+  RT, and twelve captains cover 22 carrier RTs between them (one holds eight).
+  We are deliberately modelling one RT per captain and ignoring that case — see
+  `docs/reference/route_labels_spreadsheet.md` §7.
+- ~~**The Type column (Carrier / Commercial / Residential).**~~ **Resolved
+  2026-08-23** (Kristen, Slack). It confirms the guess this item used to make:
+  Type is a property of the *delivery*, not a route-vs-drop split of one thing.
+  **Carrier** = a normal volunteer route (a person walking a street segment).
+  **Commercial** = a bulk drop at a business (the `Councillor Kandavel, 1230
+  Kingston Rd.` sample). **Residential** = a bulk drop at an apartment or condo
+  — a bulk drop-off, same mechanically as Commercial, just categorized by what
+  kind of building receives it. This is **not** the same thing as
+  `Address.type = 'residential'`, which today just means "an ordinary
+  volunteer's home or a route endpoint" — a residential *bulk drop* location is
+  a third kind of address our schema has never modeled. Locked in
+  `design_decisions.md`.
+
+  Practically: every row `listLabels()` can produce today is `Carrier`, because
+  `route_deliveries` only ever sources from `volunteer_routes` — nothing else
+  feeds it yet. So the Labels page can show `Carrier` as a real, confirmed
+  value right now instead of a placeholder; Commercial and Residential rows
+  can't appear until the item below is built.
+- **`[OPEN]` Commercial and Residential drops are not labelled yet.** This flow
+  covers bundles on volunteer routes only. A bulk drop — Commercial (business)
+  or Residential (apartment/condo) — is today either an `addresses` row with
+  `type = 'commercial'` and a `standing_bundles` count (business drops), or not
+  modeled in the schema at all (apartment/condo drops have no address-type
+  distinction from an ordinary residential address, per the Type-column
+  resolution above). Neither has a per-issue delivery record to hang a label
+  on — yet the printed sample we have (`Councillor Kandavel, 1230 Kingston
+  Rd.`) **is** a commercial drop. Commercial drops also have no name field, so
+  there is nowhere for "Councillor Kandavel" to live. Needs a per-issue drop
+  record for both kinds, a name field for commercial drops, and a way to tell
+  a residential bulk-drop address apart from a volunteer's home, before either
+  can be built.
+- **~~`[OPEN]`~~ Territory on the label — RESOLVED 2026-08-24.** The earlier
+  reading that "the Word template has no territory field" was wrong. Its *first*
+  merge field is `Route` — column A, the RT number — printed as `RT«Route»` in
+  the reversed black chip, the most prominent element on the label. The PRD and
+  the template agree; the chip is the territory. We already render it, currently
+  with the stub `"XX"` ([`lib/pdf/label-sheet.ts:41`](../../lib/pdf/label-sheet.ts:41)),
+  so this is now just a matter of feeding it the real RT.
+- **`[OPEN]` Label stock — SKU still needed.** Melinda's written printing steps
+  (2026-08-23, see `docs/reference/route_labels_spreadsheet.md` §4) say to
+  "remove regular paper from printer and place 2 sheets of labels in printer",
+  about 10 sheets for a ~220-label run. The office confirmed on 2026-08-24:
+  **real die-cut label stock, never plain paper.** The cut guides stay regardless
+  (§6).
+
+  The SKU is still outstanding, and it matters more than it looks: 2.8125 × 1.5"
+  is the *cell pitch*, not the label face. Cells butt with no gutter, so the
+  physical label is smaller and sits inside its cell — by how much, only the
+  product number can tell us. See `docs/reference/label_template_docx.md` §4.
+- **Nice-to-have: bundle-size filters on the selection list.** The office's own
+  practice is to label only remainder bundles and hand over whole 50s and 25s
+  unlabelled as a count (`route_labels_spreadsheet.md` §3), but they *sometimes*
+  want the whole ones labelled too — so selection stays manual. Two things would
+  make it quicker, neither urgent:
+  1. A filter to show/hide whole 50s and 25s.
+  2. A one-click "select every non-50/25 bundle", which reproduces their default
+     in a single action. Derivable from `greedySplit`; no schema change.
 
 ---
 
