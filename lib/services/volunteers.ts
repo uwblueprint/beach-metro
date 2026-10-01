@@ -287,7 +287,6 @@ export async function setVolunteerVacation(
   return getVolunteer(id);
 }
 
-/** Soft retire; detaches carried routes, which become Vacant (people flow §4f). */
 /**
  * Undo a retirement. Clears `retired_at` and nothing else.
  *
@@ -310,6 +309,7 @@ export async function reactivateVolunteer(id: string): Promise<VolunteerDetail> 
   return getVolunteer(id);
 }
 
+/** Soft retire; detaches carried routes, which become Vacant (people flow §4f). */
 export async function retireVolunteer(
   id: string,
   input: z.infer<typeof retireMember> = {},

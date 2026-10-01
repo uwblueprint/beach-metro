@@ -224,7 +224,6 @@ export async function deleteCaptain(id: string): Promise<void> {
   }
 }
 
-/** Soft retire; the territory becomes captain-less and awaits reassignment (§4k). */
 /**
  * Undo a retirement. Clears `retired_at` and nothing else.
  *
@@ -246,6 +245,7 @@ export async function reactivateCaptain(id: string): Promise<CaptainSummary> {
   return getCaptain(id);
 }
 
+/** Soft retire; the territory becomes captain-less and awaits reassignment (§4k). */
 export async function retireCaptain(
   id: string,
   input: z.infer<typeof retireMember> = {},

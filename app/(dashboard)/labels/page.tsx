@@ -10,17 +10,18 @@ import { PillGroup } from "@/components/ui/pill-group";
 import { SearchBar } from "@/components/ui/search-bar";
 import { Select } from "@/components/ui/select";
 import { useExportLabels, useLabels, useMarkLabels } from "@/features/labels/api";
-import type { BundleRef, LabelSheet } from "@/features/labels/api";
+import type { BundleRef, LabelRoute, LabelSheet } from "@/features/labels/api";
 import { cn } from "@/lib/utils";
 
 /**
- * Confirmed by design (Kristen, Slack, 2026-08-23; see design_decisions.md):
- * Carrier = a normal volunteer route, Commercial = a bulk drop at a business,
- * Residential = a bulk drop at an apartment/condo. Every row this page can
- * show today is Carrier — commercial/residential drops have no per-issue
- * delivery record yet (label_printing_flow.md §7) — so Commercial and
- * Residential correctly filter to nothing until that's built, not because
- * the filter is broken.
+ * Carrier is a normal volunteer route, Commercial a bulk drop at a business,
+ * Residential a bulk drop at an apartment or condo. Locked in
+ * docs/design_decisions.md.
+ *
+ * Every row this page can show today is Carrier, because commercial and
+ * residential drops have no per-issue delivery record yet
+ * (label_printing_flow.md §7). Those two pills filter to nothing until that
+ * record exists.
  */
 type TypeFilter = "Carrier" | "Commercial" | "Residential" | "all";
 
@@ -69,6 +70,15 @@ interface Captain {
   routes: Route[];
 }
 
+/**
+ * Server casing to the casing the pills and the Type column print. Keyed on the
+ * server's own union, so adding a type there stops this file compiling instead
+ * of leaving every row reading Carrier.
+ */
+const TYPE_LABEL: Record<LabelRoute["type"], Route["type"]> = {
+  carrier: "Carrier",
+};
+
 function toCaptains(sheet: LabelSheet | undefined): Captain[] {
   if (!sheet) return [];
   return sheet.groups.map((group) => ({
@@ -86,11 +96,7 @@ function toCaptains(sheet: LabelSheet | undefined): Captain[] {
         papers: bundle.papers,
         labelled: bundle.labelled,
       })),
-      // The server type is a literal "carrier" today (see LabelRoute in
-      // lib/services/labels.ts) — capitalized here to match the pill labels
-      // and the Type column's display casing. Widen this mapping once
-      // commercial/residential drops get their own delivery records.
-      type: "Carrier",
+      type: TYPE_LABEL[route.type],
     })),
   }));
 }
@@ -385,7 +391,9 @@ export default function LabelsPage() {
                 <p className="text-md text-secondary p-2">
                   {search.trim()
                     ? `No routes match “${search.trim()}”.`
-                    : "No bundles to label for this issue."}
+                    : typeFilter !== "all"
+                      ? `No ${typeFilter.toLowerCase()} bundles in this issue.`
+                      : "No bundles to label for this issue."}
                 </p>
               ) : (
                 visibleCaptains.map((captain) => {

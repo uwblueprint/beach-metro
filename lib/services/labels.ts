@@ -43,12 +43,14 @@ export interface LabelRoute {
   bundleCount: number;
   labelledCount: number;
   /**
-   * Confirmed by design (Kristen, Slack, 2026-08-23): Carrier = a normal
-   * volunteer route; Commercial = a bulk drop at a business; Residential =
-   * a bulk drop at an apartment/condo. Always "carrier" today — this service
-   * only reads `route_deliveries`, which only ever comes from
-   * `volunteer_routes`. Widen this union once commercial/residential drops
-   * get a per-issue delivery record of their own (label_printing_flow.md §7).
+   * Carrier is a normal volunteer route, Commercial a bulk drop at a business,
+   * Residential a bulk drop at an apartment or condo. Locked in
+   * docs/design_decisions.md.
+   *
+   * Always "carrier" today, because this service reads `route_deliveries` and
+   * nothing but `volunteer_routes` feeds that table. Widen the union once
+   * commercial and residential drops get a per-issue delivery record of their
+   * own (label_printing_flow.md §7).
    */
   type: "carrier";
 }
@@ -111,9 +113,9 @@ export async function listLabelIssues(): Promise<IssueRow[]> {
  *
  * Defaults to the most recent OPEN one, because the flow is inherently "this
  * run" — you label the bundles you are about to send out. An explicit id lets
- * the office reprint a past issue after a printer jam or a torn sheet, which
- * they asked for on 2026-08-24. Reprinting is read-only in spirit: nothing about
- * a closed issue changes except the `labelled` flags the caller opts into.
+ * the office reprint a past issue after a printer jam or a torn sheet.
+ * Reprinting is read-only in spirit, so nothing about a closed issue changes
+ * except the `labelled` flags the caller opts into.
  */
 export async function resolveLabelIssue(issueId?: string): Promise<IssueRow> {
   const client = db();
