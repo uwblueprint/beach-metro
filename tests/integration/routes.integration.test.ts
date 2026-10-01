@@ -255,8 +255,8 @@ describe.runIf(RUN_KIND)("drop kind and name", () => {
     expect(route.dropName).toBeNull();
   });
 
-  it("clears both when a drop is split back into a street route", async () => {
-    const captainId = await makeCaptain("KindSplit");
+  it("carries the kind and the name along when the drop moves", async () => {
+    const captainId = await makeCaptain("KindMove");
     const address = dropAddress();
 
     const drop = await S().routes.createRouteRecord({
@@ -269,18 +269,41 @@ describe.runIf(RUN_KIND)("drop kind and name", () => {
       dropName: "Corner store",
     });
     created.routeIds.push(drop.id);
-    expect(drop.dropName).toBe("Corner store");
 
-    // Two different endpoints make it an ordinary street route. A kind left
-    // behind here would break the database constraint, not just read oddly.
-    const split = await S().routes.updateRouteRecord(drop.id, {
+    // Two different endpoints do not split a drop in two. Both ends take the
+    // first of them, so the drop moves and stays one place with one name.
+    const moved = await S().routes.updateRouteRecord(drop.id, {
       startAddress: dropAddress(),
       endAddress: dropAddress(),
     });
 
-    expect(split.isDrop).toBe(false);
-    expect(split.dropKind).toBeNull();
-    expect(split.dropName).toBeNull();
+    expect(moved.isDrop).toBe(true);
+    expect(moved.startAddress.id).toBe(moved.endAddress.id);
+    expect(moved.dropKind).toBe("commercial");
+    expect(moved.dropName).toBe("Corner store");
+  });
+
+  it("classifies a street route that becomes a drop", async () => {
+    const route = await S().routes.createRouteRecord({
+      streetName: "Queen St E",
+      startAddress: dropAddress(),
+      endAddress: dropAddress(),
+      houseCount: 12,
+      bundles: [{ papers: 25 }],
+    });
+    created.routeIds.push(route.id);
+    expect(route.dropKind).toBeNull();
+
+    // Both endpoints named as one place: the route collapses to a drop, and a
+    // drop must carry a kind for the labels screen to have anything to show.
+    const sameAddress = dropAddress();
+    const collapsed = await S().routes.updateRouteRecord(route.id, {
+      startAddress: sameAddress,
+      endAddress: sameAddress,
+    });
+
+    expect(collapsed.isDrop).toBe(true);
+    expect(collapsed.dropKind).toBe("commercial");
   });
 
   it("reclassifies a drop without touching anything else", async () => {

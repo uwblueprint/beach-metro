@@ -399,24 +399,17 @@ export async function updateRouteRecord(
     }
   }
 
-  // The drop fields follow whether the route is a drop AFTER this edit, which an
-  // address change can flip in either direction. Reading them off the patch
-  // keeps them in step with the row the database is about to hold.
+  // A drop can only ever move, never split: the branch above gives both
+  // endpoints the same new row whenever one is touched. So the single
+  // transition to handle here is the other direction, a street route whose two
+  // endpoints are set to one place and which therefore becomes a drop.
   const startAfter = (patch.start_address_id as string | undefined) ?? existing.start_address_id;
   const endAfter = (patch.end_address_id as string | undefined) ?? existing.end_address_id;
-  const isDropAfter = startAfter === endAfter;
+  const becomesDrop = !wasDrop && startAfter === endAfter;
 
   if (input.dropKind !== undefined) patch.drop_kind = input.dropKind;
   if (input.dropName !== undefined) patch.drop_name = input.dropName;
-
-  if (!isDropAfter) {
-    // Split endpoints make it a street route, which is Carrier and has no name
-    // of its own. Leaving a stale kind behind would violate the constraint.
-    patch.drop_kind = null;
-    patch.drop_name = null;
-  } else if (!wasDrop && patch.drop_kind === undefined) {
-    patch.drop_kind = "commercial";
-  }
+  if (becomesDrop && patch.drop_kind === undefined) patch.drop_kind = "commercial";
 
   if (input.bundles !== undefined) {
     patch.bundles = input.bundles;
