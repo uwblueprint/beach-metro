@@ -179,10 +179,11 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
       .in(
         "id",
         deliveries.map((d) => d.route_id),
-      ),
+      )
+      .is("deleted_at", null),
     client.from("volunteers").select("id, display_name, address_id, captain_territory_id"),
     client.from("captain_territories").select("id, assigned_captain_id"),
-    client.from("captains").select("id, display_name, rt_number"),
+    client.from("captains").select("id, display_name, rt_number, retired_at"),
     client
       .from("bundle_labels")
       .select("delivery_id, bundle_index")
@@ -211,7 +212,7 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
   >[];
   const captains = (captainsRes.data ?? []) as Pick<
     CaptainRow,
-    "id" | "display_name" | "rt_number"
+    "id" | "display_name" | "rt_number" | "retired_at"
   >[];
 
   const routeById = new Map(routes.map((r) => [r.id, r]));
@@ -237,7 +238,9 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
 
   for (const delivery of deliveries) {
     const route = routeById.get(delivery.route_id);
-    if (!route) continue; // deleted route with a delivery still attached
+    // Soft-deleted routes are excluded from the query, so a delivery left behind
+    // after delete does not keep showing.
+    if (!route) continue;
 
     const volunteer = route.assigned_volunteer_id
       ? (volunteerById.get(route.assigned_volunteer_id) ?? null)
@@ -245,9 +248,11 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
     const territory = volunteer?.captain_territory_id
       ? (territoryById.get(volunteer.captain_territory_id) ?? null)
       : null;
-    const captain = territory?.assigned_captain_id
+    const assigned = territory?.assigned_captain_id
       ? (captainById.get(territory.assigned_captain_id) ?? null)
       : null;
+    // A captain who retired after the issue was created must not still head the group.
+    const captain = assigned && assigned.retired_at === null ? assigned : null;
 
     const bundles: LabelBundle[] = delivery.bundles.map((b, i) => ({
       deliveryId: delivery.id,
