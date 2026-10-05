@@ -6,8 +6,9 @@
 -- Contents: 3 captains (one zero-rate) + their territories, 5 volunteers (one on
 -- vacation, one retired, one unassigned), 8 street routes (assigned / vacant /
 -- suspended-by-vacation / soft-deleted) plus 2 captain-carried drops (one
--- commercial, one residential), 1 commercial drop address, 1 financial year. Issues are NOT
--- seeded — create them through the API so the auto-population logic is exercised.
+-- commercial, one residential), 2 commercial drop addresses, 1 financial year.
+-- Issues are NOT seeded — create them through the API so the auto-population
+-- logic is exercised.
 --
 -- Geography: coordinates are hand-placed in the Beaches so each route is a short,
 -- coherent segment ALONG its named street (start and end on the same street, a few
@@ -17,9 +18,10 @@
 
 -- Google Maps rows (seed-stable stand-ins for geocoded locations).
 insert into google_maps_locations (id, cached_latitude, cached_longitude, cached_formatted_address, cached_at, street_number, street_name, locality, sublocality, administrative_area, postal_code, country_code, location_type) values
-  -- Volunteer homes (clustered near their routes in the Beaches).
+  -- Where the two captain-carried drops are dropped.
   ('seed-place-drop-rt-1', 43.6812, -79.2874, '1230 Kingston Rd, Toronto, ON M1N 1P3, Canada', now(), '1230', 'Kingston Rd',  'Toronto', 'The Beaches', 'ON', 'M1N 1P3', 'CA', 'ROOFTOP'),
   ('seed-place-drop-rt-2', 43.6723, -79.2901, '2075 Queen St E, Toronto, ON M4L 1J2, Canada',   now(), '2075', 'Queen St E',   'Toronto', 'The Beaches', 'ON', 'M4L 1J2', 'CA', 'ROOFTOP'),
+  -- Volunteer homes (clustered near their routes in the Beaches).
   ('seed-place-vol-1',  43.6696, -79.2946, '12 Willow Ave, Toronto, ON M4E 3K1, Canada',      now(), '12',  'Willow Ave',    'Toronto', 'The Beaches', 'ON', 'M4E 3K1', 'CA', 'ROOFTOP'),
   ('seed-place-vol-2',  43.6699, -79.2936, '48 Beech Ave, Toronto, ON M4E 3H6, Canada',       now(), '48',  'Beech Ave',     'Toronto', 'The Beaches', 'ON', 'M4E 3H6', 'CA', 'ROOFTOP'),
   ('seed-place-vol-3',  43.6701, -79.2955, '155 Lee Ave, Toronto, ON M4E 2P2, Canada',        now(), '155', 'Lee Ave',       'Toronto', 'The Beaches', 'ON', 'M4E 2P2', 'CA', 'ROOFTOP'),
@@ -94,13 +96,13 @@ insert into addresses (id, google_maps_id, type, territory_id) values
   ('b0000000-0000-4000-8000-000000000114', 'seed-rt7e', 'residential', null),
   ('b0000000-0000-4000-8000-000000000115', 'seed-rt8s', 'residential', null),
   ('b0000000-0000-4000-8000-000000000116', 'seed-rt8e', 'residential', null),
-  -- One commercial drop in Emily's territory, with a standing bundle count, plus
-  -- one with an UNKNOWN count so the panel's empty state is exercised too.
-  -- Endpoints of the two drop routes below. Stored 'residential' like every
+  -- Endpoints of the two captain-carried drops. Stored 'residential' like every
   -- other route endpoint; what kind of building a drop serves lives on the
   -- route, not on the address (docs/design_decisions.md).
   ('b0000000-0000-4000-8000-000000000201', 'seed-place-drop-rt-1', 'residential', null),
   ('b0000000-0000-4000-8000-000000000202', 'seed-place-drop-rt-2', 'residential', null),
+  -- Two commercial drops in Emily's territory, one with a standing bundle count
+  -- and one with an UNKNOWN count so the panel's empty state is exercised too.
   ('b0000000-0000-4000-8000-000000000021', 'seed-place-drop-1', 'commercial', 'a0000000-0000-4000-8000-000000000001'),
   ('b0000000-0000-4000-8000-000000000022', 'seed-place-drop-2', 'commercial', 'a0000000-0000-4000-8000-000000000001');
 

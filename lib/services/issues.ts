@@ -113,9 +113,13 @@ export async function createIssuesBatch(
   const [routesRes, volunteersRes, captainsRes] = await Promise.all([
     client
       .from("volunteer_routes")
-      .select("id, papers, assigned_volunteer_id")
-      .is("deleted_at", null)
-      .not("assigned_volunteer_id", "is", null),
+      // `bundles` is selected because the standing split is what the office
+      // edited; without it every issue would reseed the greedy split and quietly
+      // undo a hand-made split like [30, 20].
+      .select(
+        "id, papers, bundles, assigned_volunteer_id, assigned_captain_id, start_address_id, end_address_id",
+      )
+      .is("deleted_at", null),
     client.from("volunteers").select("id, retired_at, vacation_start, vacation_end"),
     client.from("captains").select("id, retired_at"),
   ]);
@@ -128,19 +132,35 @@ export async function createIssuesBatch(
     VolunteerRow,
     "id" | "retired_at" | "vacation_start" | "vacation_end"
   >[];
+  const activeCaptainIds = ((captainsRes.data ?? []) as Pick<CaptainRow, "id" | "retired_at">[])
+    .filter((c) => c.retired_at === null)
+    .map((c) => c.id);
+  const activeCaptains = new Set(activeCaptainIds);
+
+  // Which routes go out this issue, by the same carrier rule routeLifecycle
+  // applies. A street route is walked by its volunteer, so it needs an active
+  // one. A drop is carried by a captain and holds no volunteer, so it needs an
+  // active captain instead; filtering on the volunteer alone left every drop
+  // without a delivery, and so off the label sheet entirely.
   const carriableRoutes = (
     (routesRes.data ?? []) as Pick<
       VolunteerRouteRow,
-      "id" | "papers" | "bundles" | "assigned_volunteer_id"
+      | "id"
+      | "papers"
+      | "bundles"
+      | "assigned_volunteer_id"
+      | "assigned_captain_id"
+      | "start_address_id"
+      | "end_address_id"
     >[]
   ).filter((r) => {
+    if (r.start_address_id === r.end_address_id) {
+      return r.assigned_captain_id !== null && activeCaptains.has(r.assigned_captain_id);
+    }
     const v = volunteers.find((x) => x.id === r.assigned_volunteer_id);
     // Skip suspended (volunteer on vacation) and defensive: retired carriers.
     return v !== undefined && volunteerStatus(v, date) === "active";
   });
-  const activeCaptainIds = ((captainsRes.data ?? []) as Pick<CaptainRow, "id" | "retired_at">[])
-    .filter((c) => c.retired_at === null)
-    .map((c) => c.id);
 
   const created: IssueSummary[] = [];
   for (const item of input.issues) {

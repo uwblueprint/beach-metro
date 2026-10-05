@@ -60,6 +60,13 @@ const DROP_KIND_OPTIONS = [
   { value: "residential", label: "Residential" },
 ];
 
+/** An unset kind reads as commercial, matching what the server derives. */
+const DEFAULT_DROP_KIND = "commercial";
+
+function dropKindLabel(value: string): string {
+  return DROP_KIND_OPTIONS.find((o) => o.value === value)?.label ?? "Commercial";
+}
+
 const SIDE_OPTIONS = [
   { value: "", label: "— none —" },
   { value: "NORTH", label: "North" },
@@ -1435,7 +1442,7 @@ function RouteDetailPanel({
     volunteerId !== null && r && volunteerId !== (r.assignedVolunteer?.id ?? "");
   const dirtyCaptain = captainId !== null && r && captainId !== (r.captain?.id ?? "");
   const dirtySide = side !== null && r && (side || null) !== (r.side || null);
-  const dirtyDropKind = dropKind !== null && r && dropKind !== (r.dropKind ?? "");
+  const dirtyDropKind = dropKind !== null && r && dropKind !== (r.dropKind ?? DEFAULT_DROP_KIND);
   const dirtyDropName = dropName !== null && r && (dropName || null) !== (r.dropName || null);
   const dirtyBundles =
     papersRows !== null && r && papersRowsDiffer(papersRows, papersRowsFromRoute(r));
@@ -1531,7 +1538,7 @@ function RouteDetailPanel({
   const currentVolunteerId = volunteerId ?? r.assignedVolunteer?.id ?? "";
   const currentCaptainId = captainId ?? r.captain?.id ?? "";
   const currentSide = side ?? r.side ?? "";
-  const currentDropKind = dropKind ?? r.dropKind ?? "commercial";
+  const currentDropKind = dropKind ?? r.dropKind ?? DEFAULT_DROP_KIND;
   const currentDropName = dropName ?? r.dropName ?? "";
   const currentPapersRows = papersRows ?? papersRowsFromRoute(r);
   const asDrop = isDropRoute(r);
@@ -1607,9 +1614,7 @@ function RouteDetailPanel({
             <DropdownField
               label="Type"
               value={currentDropKind}
-              display={
-                DROP_KIND_OPTIONS.find((o) => o.value === currentDropKind)?.label ?? "Commercial"
-              }
+              display={dropKindLabel(currentDropKind)}
               options={DROP_KIND_OPTIONS}
               onChange={setDropKind}
             />
@@ -1906,7 +1911,7 @@ function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) =
   const [papersRows, setPapersRows] = useState<number[]>([0]);
   const [papersValid, setPapersValid] = useState(true);
   const [unitCount, setUnitCount] = useState("0");
-  const [dropKind, setDropKind] = useState("commercial");
+  const [dropKind, setDropKind] = useState<string>(DEFAULT_DROP_KIND);
   const [dropName, setDropName] = useState("");
   const [note, setNote] = useState("");
 
@@ -1997,7 +2002,7 @@ function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) =
         <DropdownField
           label="Type"
           value={dropKind}
-          display={DROP_KIND_OPTIONS.find((o) => o.value === dropKind)?.label ?? "Commercial"}
+          display={dropKindLabel(dropKind)}
           options={DROP_KIND_OPTIONS}
           onChange={setDropKind}
         />

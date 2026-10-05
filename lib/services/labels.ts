@@ -172,7 +172,7 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
     client
       .from("volunteer_routes")
       .select(
-        "id, street_name, assigned_volunteer_id, start_address_id, end_address_id, drop_kind, drop_name",
+        "id, street_name, assigned_volunteer_id, assigned_captain_id, start_address_id, end_address_id, drop_kind, drop_name",
       )
       .in(
         "id",
@@ -201,6 +201,7 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
     | "id"
     | "street_name"
     | "assigned_volunteer_id"
+    | "assigned_captain_id"
     | "start_address_id"
     | "end_address_id"
     | "drop_kind"
@@ -246,15 +247,20 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
     // after delete does not keep showing.
     if (!route) continue;
 
+    const isDropRoute = route.start_address_id === route.end_address_id;
     const volunteer = route.assigned_volunteer_id
       ? (volunteerById.get(route.assigned_volunteer_id) ?? null)
       : null;
     const territory = volunteer?.captain_territory_id
       ? (territoryById.get(volunteer.captain_territory_id) ?? null)
       : null;
-    const assigned = territory?.assigned_captain_id
-      ? (captainById.get(territory.assigned_captain_id) ?? null)
-      : null;
+    // Who carries this, by the same rule routeLifecycle applies. A drop names a
+    // captain directly and holds no volunteer; a street route reaches one
+    // through the territory its volunteer belongs to.
+    const carrierId = isDropRoute
+      ? route.assigned_captain_id
+      : (territory?.assigned_captain_id ?? null);
+    const assigned = carrierId ? (captainById.get(carrierId) ?? null) : null;
     // A captain who retired after the issue was created must not still head the group.
     const captain = assigned && assigned.retired_at === null ? assigned : null;
 
@@ -266,7 +272,6 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
     }));
 
     const labelledHere = bundles.filter((b) => b.labelled).length;
-    const isDropRoute = route.start_address_id === route.end_address_id;
     const entry: LabelRoute = {
       deliveryId: delivery.id,
       routeId: route.id,
@@ -401,6 +406,13 @@ async function assertBundlesExist(
  * Marking happens AFTER the bytes render, so a failed render leaves the flags
  * untouched and the office can just hit export again.
  */
+/** The label's name line, blank for an unnamed drop and never "Vacant" for one. */
+function labelName(route: LabelRoute | undefined): string {
+  if (route?.volunteerName) return route.volunteerName;
+  if (route && route.type !== "carrier") return "";
+  return "Vacant route";
+}
+
 export async function exportLabelSheet(
   input: z.infer<typeof exportLabels>,
 ): Promise<{ filename: string; bytes: Uint8Array; labelCount: number }> {
@@ -430,7 +442,10 @@ export async function exportLabelSheet(
       // than inventing a number that would look authoritative.
       routeCode: rtByDelivery.get(ref.deliveryId) ?? "XX",
       papers: delivery?.bundles[ref.bundleIndex]?.papers ?? 0,
-      name: route?.volunteerName ?? (route && route.type !== "carrier" ? "" : "Vacant route"),
+      // "Vacant route" is a statement about a street route nobody carries. A
+      // drop is carried by a captain, so an unnamed one leaves the line empty
+      // rather than calling itself vacant.
+      name: labelName(route),
       address: route?.address ?? "",
       bundleLine: total > 1 ? `Bundle ${ref.bundleIndex + 1} of ${total}` : "",
     };

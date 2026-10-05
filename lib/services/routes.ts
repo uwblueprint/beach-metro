@@ -405,11 +405,16 @@ export async function updateRouteRecord(
   // endpoints are set to one place and which therefore becomes a drop.
   const startAfter = (patch.start_address_id as string | undefined) ?? existing.start_address_id;
   const endAfter = (patch.end_address_id as string | undefined) ?? existing.end_address_id;
-  const becomesDrop = !wasDrop && startAfter === endAfter;
+  const isDropAfter = startAfter === endAfter;
 
-  if (input.dropKind !== undefined) patch.drop_kind = input.dropKind;
-  if (input.dropName !== undefined) patch.drop_name = input.dropName;
-  if (becomesDrop && patch.drop_kind === undefined) patch.drop_kind = "commercial";
+  // Only a drop carries these. Ignoring them on a street route matches what
+  // create does with the same input, instead of letting the write reach the
+  // database constraint and come back as a Postgres message.
+  if (isDropAfter) {
+    if (input.dropKind !== undefined) patch.drop_kind = input.dropKind;
+    if (input.dropName !== undefined) patch.drop_name = input.dropName;
+    if (!wasDrop && patch.drop_kind === undefined) patch.drop_kind = "commercial";
+  }
 
   if (input.bundles !== undefined) {
     patch.bundles = input.bundles;

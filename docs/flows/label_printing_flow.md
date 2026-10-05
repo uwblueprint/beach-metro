@@ -310,10 +310,13 @@ Route names come from the shared `routeLabel` helper in `lib/services/derive.ts`
 a route reads identically everywhere. It degrades to the bare street name when an
 endpoint has not been geocoded yet.
 
-Rows are grouped by captain because that is the physical workflow: labels come
-off the printer and get sorted into one pile per captain. A route whose volunteer
-has no territory still needs labelling, so it lands in a single "Unassigned"
-group rather than being dropped.
+Rows are grouped by captain because that is the physical workflow, labels come
+off the printer and get sorted into one pile per captain. Which captain is the
+same question `routeLifecycle` answers. A street route reaches one through its
+volunteer's territory, and a drop names one directly and holds no volunteer. A
+route that reaches no captain either way still needs labelling, so it lands in a
+single "Unassigned" group rather than being dropped, and so does one whose
+captain has since retired.
 
 ## 10. Code map
 

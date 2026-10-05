@@ -63,9 +63,9 @@ export function routeLifecycle(r: {
  */
 export function labelType(r: { isDrop: boolean; dropKind: DropKind | null }): "carrier" | DropKind {
   if (!r.isDrop) return "carrier";
-  // A drop written before the kind existed has none. Commercial is where the
-  // office's own records start, and the apartment and condo ones are told apart
-  // by hand from there.
+  // The column permits a null kind on a drop, so a row written outside the
+  // service can arrive without one. Commercial is where the office's records
+  // start, and the apartment and condo ones get told apart by hand from there.
   return r.dropKind ?? "commercial";
 }
 
