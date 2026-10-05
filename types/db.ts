@@ -94,6 +94,8 @@ export interface MemberNoteRow {
   updated_at: string | null;
 }
 
+export type DropKind = "commercial" | "residential";
+
 export interface VolunteerRouteRow {
   id: string;
   start_address_id: string;
@@ -108,6 +110,10 @@ export interface VolunteerRouteRow {
   papers: number;
   /** Standing per-bundle breakdown; sum must equal papers. */
   bundles: RouteBundle[];
+  /** Drops only: what kind of building receives the bulk drop. */
+  drop_kind: DropKind | null;
+  /** Drops only: what the drop is called, such as the business at the address. */
+  drop_name: string | null;
   notes: string | null;
   deleted_at: string | null;
 }

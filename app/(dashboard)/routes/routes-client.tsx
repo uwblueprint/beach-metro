@@ -54,6 +54,19 @@ import {
 } from "./route-map";
 import { RouteStateTag, RouteTag } from "./route-tag";
 
+/** What kind of building a drop serves; see docs/design_decisions.md. */
+const DROP_KIND_OPTIONS = [
+  { value: "commercial", label: "Commercial" },
+  { value: "residential", label: "Residential" },
+];
+
+/** An unset kind reads as commercial, matching what the server derives. */
+const DEFAULT_DROP_KIND = "commercial";
+
+function dropKindLabel(value: string): string {
+  return DROP_KIND_OPTIONS.find((o) => o.value === value)?.label ?? "Commercial";
+}
+
 const SIDE_OPTIONS = [
   { value: "", label: "— none —" },
   { value: "NORTH", label: "North" },
@@ -141,6 +154,9 @@ interface RouteSummary {
   endLabel: string | null;
 }
 interface RouteDetail extends RouteSummary {
+  /** Drops only: what kind of building receives it, and what it is called. */
+  dropKind: "commercial" | "residential" | null;
+  dropName: string | null;
   notes: string | null;
   bundles: Array<{ papers: number }>;
   startAddress: { formattedAddress: string | null };
@@ -1371,6 +1387,8 @@ function RouteDetailPanel({
   });
 
   const [streetName, setStreetName] = useState<string | null>(null);
+  const [dropKind, setDropKind] = useState<string | null>(null);
+  const [dropName, setDropName] = useState<string | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
   const [volunteerId, setVolunteerId] = useState<string | null>(null);
   const [captainId, setCaptainId] = useState<string | null>(null);
@@ -1424,6 +1442,8 @@ function RouteDetailPanel({
     volunteerId !== null && r && volunteerId !== (r.assignedVolunteer?.id ?? "");
   const dirtyCaptain = captainId !== null && r && captainId !== (r.captain?.id ?? "");
   const dirtySide = side !== null && r && (side || null) !== (r.side || null);
+  const dirtyDropKind = dropKind !== null && r && dropKind !== (r.dropKind ?? DEFAULT_DROP_KIND);
+  const dirtyDropName = dropName !== null && r && (dropName || null) !== (r.dropName || null);
   const dirtyBundles =
     papersRows !== null && r && papersRowsDiffer(papersRows, papersRowsFromRoute(r));
   const dirtyLabels = labelledRows !== null && !labelledArraysEqual(labelledRows, baselineLabelled);
@@ -1433,6 +1453,8 @@ function RouteDetailPanel({
     dirtyVolunteer ||
     dirtyCaptain ||
     dirtySide ||
+    dirtyDropKind ||
+    dirtyDropName ||
     dirtyBundles ||
     dirtyLabels;
 
@@ -1443,6 +1465,8 @@ function RouteDetailPanel({
       if (dirtyNotes) body.note = notes ?? "";
       if (dirtyCaptain) body.assignedCaptainId = captainId || null;
       if (dirtySide) body.side = side || null;
+      if (dirtyDropKind) body.dropKind = dropKind;
+      if (dirtyDropName) body.dropName = dropName?.trim() || null;
       if (dirtyBundles && papersRows) {
         const bundles = toBundles(papersRows);
         if (bundles.length === 0) {
@@ -1514,6 +1538,8 @@ function RouteDetailPanel({
   const currentVolunteerId = volunteerId ?? r.assignedVolunteer?.id ?? "";
   const currentCaptainId = captainId ?? r.captain?.id ?? "";
   const currentSide = side ?? r.side ?? "";
+  const currentDropKind = dropKind ?? r.dropKind ?? DEFAULT_DROP_KIND;
+  const currentDropName = dropName ?? r.dropName ?? "";
   const currentPapersRows = papersRows ?? papersRowsFromRoute(r);
   const asDrop = isDropRoute(r);
 
@@ -1577,13 +1603,28 @@ function RouteDetailPanel({
         )}
 
         {asDrop && (
-          <DropdownField
-            label="Captain"
-            value={currentCaptainId}
-            display={captainDisplay}
-            options={captainOptions}
-            onChange={setCaptainId}
-          />
+          <>
+            <DropdownField
+              label="Captain"
+              value={currentCaptainId}
+              display={captainDisplay}
+              options={captainOptions}
+              onChange={setCaptainId}
+            />
+            <DropdownField
+              label="Type"
+              value={currentDropKind}
+              display={dropKindLabel(currentDropKind)}
+              options={DROP_KIND_OPTIONS}
+              onChange={setDropKind}
+            />
+            <InputField
+              label="Business Name"
+              value={currentDropName}
+              onChange={setDropName}
+              placeholder="Optional"
+            />
+          </>
         )}
 
         <InputField label="Name" value={streetName ?? r.streetName} onChange={setStreetName} />
@@ -1870,6 +1911,8 @@ function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) =
   const [papersRows, setPapersRows] = useState<number[]>([0]);
   const [papersValid, setPapersValid] = useState(true);
   const [unitCount, setUnitCount] = useState("0");
+  const [dropKind, setDropKind] = useState<string>(DEFAULT_DROP_KIND);
+  const [dropName, setDropName] = useState("");
   const [note, setNote] = useState("");
 
   const address = (line: string, pickedPlaceId: string | null) =>
@@ -1896,6 +1939,8 @@ function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) =
         houseCount: unitCountValue,
         bundles,
         assignedCaptainId: captainId,
+        dropKind,
+        ...(dropName.trim() ? { dropName: dropName.trim() } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
       });
     },
@@ -1952,6 +1997,21 @@ function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) =
             setPlaceId(pickedPlaceId);
             setAddressLine(text);
           }}
+        />
+
+        <DropdownField
+          label="Type"
+          value={dropKind}
+          display={dropKindLabel(dropKind)}
+          options={DROP_KIND_OPTIONS}
+          onChange={setDropKind}
+        />
+
+        <InputField
+          label="Business Name"
+          value={dropName}
+          onChange={setDropName}
+          placeholder="Optional"
         />
 
         <InputField

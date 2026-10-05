@@ -11,15 +11,20 @@ Type is a property of the delivery, not a route-vs-drop split.
 
 - **Carrier** = a normal volunteer route.
 - **Commercial** = a bulk drop at a business.
-- **Residential** = a bulk drop at an apartment or condo — mechanically the
+- **Residential** = a bulk drop at an apartment or condo, mechanically the
   same as Commercial (one address, one bulk quantity per issue), just a
   different kind of building. **Not** the same thing as `Address.type =
   'residential'`, which means an ordinary volunteer home or route endpoint.
-  A residential bulk-drop location is a third address kind the schema has
-  never modeled; see `label_printing_flow.md` §7.
-- Every row the labels feature can currently show is `Carrier` — commercial
-  and residential drops have no per-issue delivery record yet, so this is a
-  fact today, not a display choice.
+- **Where it lives.** A bulk drop is a route whose two endpoints are one
+  address row, carried by a captain. `volunteer_routes.drop_kind` holds which
+  of the two kinds it is and is null on a street route, which is always
+  Carrier. An address keeps describing what it is; what a delivery is belongs
+  to the route. The labels screen derives Type through `labelType` in
+  `lib/services/derive.ts` and stores it nowhere.
+- **Unclassified drops read as Commercial.** It is where the office's own
+  records start, and the apartment and condo ones get told apart by hand. A
+  per-row guess during import would bury a wrong answer in a record nobody
+  re-reads.
 
 ## Finances data layer (2026-08)
 
