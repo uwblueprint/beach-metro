@@ -2,10 +2,10 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowUpRight, Check, ChevronDown } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Check, ChevronDown } from "lucide-react";
 
 import { ArchiveBanner } from "@/components/archive-banner";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
   Dialog,
@@ -36,15 +36,42 @@ import {
 } from "./data";
 
 const PAPERS_PREVIEW_COUNT = 3;
-const CHART_BAR_MAX_HEIGHT = 100;
-const CHART_BAR_GAP = 8;
+/** Column is 130px; the 14px label (line-height 1.3) plus the 4px gap sit under the bar. */
+const CHART_COLUMN_HEIGHT = 130;
+const CHART_LABEL_BLOCK = 22;
+const CHART_BAR_MAX_HEIGHT = CHART_COLUMN_HEIGHT - CHART_LABEL_BLOCK;
+const CHART_BAR_GAP = 20;
 
 const CHART_COLORS = {
-  past: "#B8E4F5",
-  pastHover: "#3BAFDA",
+  past: "#b1e6fb",
+  pastHover: "#7ec8ee",
+  empty: "#e8eaef",
 } as const;
 
+function labelCase(value: string) {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
+
 type MonthlyCost = Overview["monthlyCosts"][number];
+
+/** Round up to 1/2/5 × 10ⁿ so axis ticks stay even ($500, $1,000) instead of the raw max. */
+function niceAxisMax(value: number) {
+  if (value <= 0) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const normalized = value / magnitude;
+  const nice = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return nice * magnitude;
+}
+
+function formatAxisCurrency(amount: number) {
+  if (amount === 0) return "$0";
+  if (amount >= 1000) {
+    const compact = amount / 1000;
+    const digits = Number.isInteger(compact) ? 0 : 1;
+    return `$${compact.toFixed(digits)}k`;
+  }
+  return `$${Math.round(amount).toLocaleString("en-US")}`;
+}
 
 function getTodayLineLeft(monthIndex: number, monthCount: number) {
   const gapTotal = (monthCount - 1) * CHART_BAR_GAP;
@@ -55,24 +82,48 @@ function getTodayLineLeft(monthIndex: number, monthCount: number) {
   return `calc(${monthIndex + 1} * (100% - ${gapTotal}px) / ${monthCount} + ${monthIndex} * ${CHART_BAR_GAP}px + ${CHART_BAR_GAP / 2}px)`;
 }
 
+/**
+ * Shell uses the sidebar fill. 4px pad + 16px inner radius → 20px outer,
+ * so the gray rim stays thin instead of a heavy frame.
+ */
+function OverviewSection({ children }: { children: React.ReactNode }) {
+  return (
+    <section className="flex w-full min-w-0 flex-col gap-1 rounded-[20px] bg-sidebar p-1 pt-2.5">
+      {children}
+    </section>
+  );
+}
+
+function OverviewPanel({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={cn("w-full rounded-[16px] border border-hairline bg-bg shadow-xs", className)}>
+      {children}
+    </div>
+  );
+}
+
 function StatCard({ label, value, sub }: { label: string; value: string; sub: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-border bg-bg px-4 py-3.5">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-1.5 text-2xl font-semibold text-primary">{value}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{sub}</p>
-    </div>
+    <OverviewSection>
+      <p className="px-2 text-sm font-medium text-secondary">{label}</p>
+      <OverviewPanel className="px-4 py-2.5">
+        <div className="flex flex-col gap-1">
+          <p className="text-3xl font-semibold text-primary tabular-nums">{value}</p>
+          <div className="text-sm font-medium text-secondary">{sub}</div>
+        </div>
+      </OverviewPanel>
+    </OverviewSection>
   );
 }
 
 function PaymentRow({ name, meta, amount }: { name: string; meta: string; amount: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-3.5">
-      <div className="min-w-0">
-        <span className="text-md font-semibold text-primary">{name}</span>
-        <span className="ml-2 text-md text-muted-foreground">{meta}</span>
+    <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="shrink-0 text-md font-medium text-primary">{name}</span>
+        <span className="truncate text-sm font-medium text-secondary">{meta}</span>
       </div>
-      <span className="shrink-0 text-md font-medium tabular-nums text-primary">{amount}</span>
+      <span className="shrink-0 text-md font-medium text-primary tabular-nums">{amount}</span>
     </div>
   );
 }
@@ -112,69 +163,104 @@ function YtdRunningCostChart({
     [],
   );
 
-  const chartMax = Math.max(...months.map((m) => m.amount), 1);
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  const axisMax = niceAxisMax(Math.max(...months.map((m) => m.amount), 0));
+  const axisTicks = [axisMax, axisMax / 2, 0];
+  const currentMonth = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto" })
+    .format(new Date())
+    .slice(0, 7);
   const todayMonthIndex = months.findIndex((m) => m.month === currentMonth);
   const todayLineLeft =
     todayMonthIndex >= 0 ? getTodayLineLeft(todayMonthIndex, months.length) : null;
 
   return (
-    <div className="relative w-full pt-5">
-      <div className="relative w-full" style={{ height: CHART_BAR_MAX_HEIGHT }}>
-        {todayLineLeft !== null && (
-          <div
-            className="pointer-events-none absolute z-10 flex -translate-x-1/2 flex-col items-center"
-            style={{ left: todayLineLeft, top: "-1.25rem", bottom: 0 }}
+    <div className="flex w-full items-start gap-2">
+      <div
+        className="relative w-10 shrink-0 text-right text-sm font-medium text-secondary tabular-nums"
+        style={{ height: CHART_BAR_MAX_HEIGHT }}
+      >
+        {axisTicks.map((tick) => (
+          <span
+            key={tick}
+            className="absolute right-0 -translate-y-1/2"
+            style={{ top: `${((axisMax - tick) / axisMax) * 100}%` }}
           >
-            <span className="mb-1 text-xs text-muted-foreground">Today</span>
-            <div className="w-px flex-1 bg-hairline" />
-          </div>
-        )}
-
-        <div className="flex h-full items-end" style={{ gap: CHART_BAR_GAP }}>
-          {months.map((month, index) => {
-            const isEmpty = month.amount === 0;
-            const isPast = month.month <= currentMonth;
-            const height = isEmpty
-              ? 4
-              : Math.max((month.amount / chartMax) * CHART_BAR_MAX_HEIGHT, 8);
-            const isHovered = hoveredBarIndex === index;
-
-            return (
-              <div
-                key={month.month}
-                className="relative flex-1"
-                onMouseEnter={() => handleHover(index)}
-                onMouseLeave={() => handleHover(null)}
-              >
-                {isHovered && isPast && (
-                  <div className="absolute -top-7 left-1/2 z-20 -translate-x-1/2 rounded-md bg-primary px-2 py-1 text-xs whitespace-nowrap text-bg">
-                    {formatCurrency(month.amount)}
-                  </div>
-                )}
-                <div
-                  className="w-full rounded-t-md transition-[background-color] duration-200"
-                  style={{
-                    height,
-                    backgroundColor: !isPast
-                      ? "#E5E7EB"
-                      : isHovered
-                        ? CHART_COLORS.pastHover
-                        : CHART_COLORS.past,
-                  }}
-                />
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="mt-2 flex" style={{ gap: CHART_BAR_GAP }}>
-        {months.map((month) => (
-          <span key={month.month} className="flex-1 text-center text-xs text-muted-foreground">
-            {monthLabel(month.month)}
+            {formatAxisCurrency(tick)}
           </span>
         ))}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="relative" style={{ height: CHART_BAR_MAX_HEIGHT }}>
+          {axisTicks.map((tick) => (
+            <div
+              key={tick}
+              aria-hidden
+              className="pointer-events-none absolute right-0 left-0 z-0 h-px bg-hairline"
+              style={{ top: `${((axisMax - tick) / axisMax) * 100}%` }}
+            />
+          ))}
+
+          {todayLineLeft !== null && (
+            <div
+              className="pointer-events-none absolute top-0 z-10 flex -translate-x-1/2 flex-col items-center"
+              style={{ left: todayLineLeft, height: CHART_BAR_MAX_HEIGHT }}
+            >
+              <span className="text-sm font-medium text-secondary">Today</span>
+              <div className="w-px flex-1 bg-secondary/50" />
+            </div>
+          )}
+
+          <div className="absolute inset-0 z-[1] flex items-end" style={{ gap: CHART_BAR_GAP }}>
+            {months.map((month, index) => {
+              // Gray only means "hasn't happened." A past or current month at $0 is a real result.
+              const isFuture = month.month > currentMonth;
+              const isPlaceholder = month.amount === 0 && isFuture;
+              const height = Math.max((month.amount / axisMax) * 100, 8);
+              const isHovered = hoveredBarIndex === index;
+
+              return (
+                <div
+                  key={month.month}
+                  className="relative flex h-full min-w-0 flex-1 items-end"
+                  onMouseEnter={() => handleHover(index)}
+                  onMouseLeave={() => handleHover(null)}
+                >
+                  <div
+                    className="relative w-full"
+                    style={{ height: month.amount === 0 ? 4 : `${height}%` }}
+                  >
+                    {isHovered && !isPlaceholder && (
+                      <div className="absolute bottom-full left-1/2 z-20 mb-1 -translate-x-1/2 rounded-md bg-primary px-2 py-1 text-xs font-medium whitespace-nowrap text-bg">
+                        {formatCurrency(month.amount)}
+                      </div>
+                    )}
+                    <div
+                      className="h-full w-full rounded-t-[4px] transition-[background-color] duration-200"
+                      style={{
+                        backgroundColor: isPlaceholder
+                          ? CHART_COLORS.empty
+                          : isHovered
+                            ? CHART_COLORS.pastHover
+                            : CHART_COLORS.past,
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-2 flex" style={{ gap: CHART_BAR_GAP }}>
+          {months.map((month) => (
+            <span
+              key={month.month}
+              className="min-w-0 flex-1 text-center text-md font-medium text-primary"
+            >
+              {monthLabel(month.month)}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -296,7 +382,7 @@ export default function OverviewPage() {
             }
           />
 
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6">
+          <div className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto p-4">
             {showArchiveBanner && selectedYearOption?.archived && (
               <ArchiveBanner
                 dateRange={yearDateRange(selectedYearOption.startDate)}
@@ -313,7 +399,7 @@ export default function OverviewPage() {
             ) : (
               <>
                 {/* Stats row */}
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-4 gap-4">
                   <StatCard
                     label="Papers for next issue"
                     value={formatCount(overview.stats.nextIssue?.papers ?? 0)}
@@ -334,10 +420,10 @@ export default function OverviewPage() {
                     sub={
                       <Link
                         href="/routes"
-                        className="inline-flex items-center gap-0.5 text-muted-foreground hover:text-primary"
+                        className="inline-flex items-center gap-0.5 text-secondary transition-colors duration-150 hover:text-primary"
                       >
                         View routes
-                        <ArrowUpRight className="size-3.5" strokeWidth={2} />
+                        <ArrowUpRight className="size-3" strokeWidth={2} />
                       </Link>
                     }
                   />
@@ -348,11 +434,10 @@ export default function OverviewPage() {
                   />
                 </div>
 
-                {/* YTD Running Cost chart */}
-                <div className="rounded-lg border border-border bg-bg px-6 py-5">
-                  <div className="mb-6 flex items-center justify-between gap-4">
-                    <h2 className="text-md font-semibold text-primary">YTD Running Cost</h2>
-                    <p className="text-md text-muted-foreground transition-opacity duration-300">
+                <OverviewSection>
+                  <div className="flex items-center justify-between gap-4 px-2 text-md font-medium">
+                    <h2 className="text-secondary">YTD Running Cost</h2>
+                    <p className="text-secondary">
                       {hoveredChartIndex !== null ? (
                         <>
                           {monthYearLabel(overview.monthlyCosts[hoveredChartIndex].month)}{" "}
@@ -373,178 +458,168 @@ export default function OverviewPage() {
                     </p>
                   </div>
 
-                  <YtdRunningCostChart
-                    months={overview.monthlyCosts}
-                    onHover={setHoveredChartIndex}
-                  />
-                </div>
+                  <OverviewPanel className="px-4 py-5">
+                    <YtdRunningCostChart
+                      months={overview.monthlyCosts}
+                      onHover={setHoveredChartIndex}
+                    />
+                  </OverviewPanel>
+                </OverviewSection>
 
-                {/* Captain Payments */}
-                <div className="rounded-lg border border-border bg-bg px-6 py-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h2 className="text-md font-semibold text-primary">Captain Payments</h2>
-                      {captainOverview && (
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {formatIssueDate(captainOverview.range.from)} –{" "}
-                          {formatIssueDate(captainOverview.range.to)}
-                        </p>
-                      )}
-                    </div>
+                <OverviewSection>
+                  <div className="flex flex-col gap-2 px-2">
+                    <h2 className="text-md font-medium text-primary">Captain Payments</h2>
+                    <div className="flex items-center justify-between gap-4">
+                      <p className="min-w-0 flex-1 text-sm font-medium text-secondary">
+                        {captainOverview
+                          ? captainMode === "ytd"
+                            ? `${monthYearLabel(captainOverview.range.from)} – ${monthYearLabel(captainOverview.range.to)} (full year)`
+                            : `${formatIssueDate(captainOverview.range.from)} – ${formatIssueDate(captainOverview.range.to)}`
+                          : null}
+                      </p>
 
-                    <Popover open={periodOpen} onOpenChange={handlePeriodOpenChange}>
-                      <PopoverTrigger
-                        render={
+                      <Popover open={periodOpen} onOpenChange={handlePeriodOpenChange}>
+                        <PopoverTrigger
+                          render={
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 rounded-[4px] bg-sidebar-active px-2 py-1 text-sm font-medium text-primary transition-transform duration-150 ease-out active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100"
+                            >
+                              {periodLabel}
+                              <ChevronDown className="size-3" strokeWidth={2} />
+                            </button>
+                          }
+                        />
+                        <PopoverContent
+                          align="end"
+                          side="bottom"
+                          sideOffset={4}
+                          className="w-[280px] gap-0 p-1"
+                        >
                           <button
                             type="button"
-                            className={cn(
-                              buttonVariants({ variant: "outline", size: "sm" }),
-                              "gap-1.5 font-medium",
+                            onClick={() => {
+                              setCaptainMode("ytd");
+                              setPeriodOpen(false);
+                            }}
+                            className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-bg-secondary"
+                          >
+                            <span className={cn(captainMode === "ytd" && "font-medium")}>YTD</span>
+                            {captainMode === "ytd" && (
+                              <Check className="size-3.5 text-active" strokeWidth={2.5} />
                             )}
-                          >
-                            {periodLabel}
-                            <ChevronDown
-                              className="size-3.5 text-muted-foreground"
-                              strokeWidth={2}
-                            />
                           </button>
-                        }
-                      />
-                      <PopoverContent
-                        align="end"
-                        side="bottom"
-                        sideOffset={4}
-                        className="w-[280px] gap-0 p-1"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCaptainMode("ytd");
-                            setPeriodOpen(false);
-                          }}
-                          className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-bg-secondary"
-                        >
-                          <span className={cn(captainMode === "ytd" && "font-medium")}>YTD</span>
-                          {captainMode === "ytd" && (
-                            <Check className="size-3.5 text-active" strokeWidth={2.5} />
-                          )}
-                        </button>
 
-                        <div className="my-1 h-px bg-hairline" />
+                          <div className="my-1 h-px bg-hairline" />
 
-                        <div className="flex flex-col gap-2 px-1.5 pt-1 pb-1.5">
-                          <p className="text-xs font-medium text-muted-foreground">Custom range</p>
-                          <div className="flex items-center gap-2">
-                            <div className="min-w-0 flex-1">
-                              <DatePicker
-                                label="Start Date"
-                                value={draftStart}
-                                onChange={setDraftStart}
-                              />
+                          <div className="flex flex-col gap-2 px-1.5 pt-1 pb-1.5">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Custom range
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <div className="min-w-0 flex-1">
+                                <DatePicker
+                                  label="Start Date"
+                                  value={draftStart}
+                                  onChange={setDraftStart}
+                                />
+                              </div>
+                              <span aria-hidden className="shrink-0 text-sm text-muted-foreground">
+                                →
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <DatePicker
+                                  label="End Date"
+                                  value={draftEnd}
+                                  onChange={setDraftEnd}
+                                />
+                              </div>
                             </div>
-                            <span aria-hidden className="shrink-0 text-sm text-muted-foreground">
-                              →
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <DatePicker
-                                label="End Date"
-                                value={draftEnd}
-                                onChange={setDraftEnd}
-                              />
-                            </div>
+                            <Button
+                              type="button"
+                              variant="primary"
+                              size="sm"
+                              disabled={!canApplyCustomRange}
+                              onClick={applyCustomRange}
+                            >
+                              Apply
+                            </Button>
                           </div>
-                          <Button
-                            type="button"
-                            variant="primary"
-                            size="sm"
-                            disabled={!canApplyCustomRange}
-                            onClick={applyCustomRange}
-                          >
-                            Apply
-                          </Button>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                   </div>
 
-                  <div className="mt-4">
-                    {(captainOverview?.captainPayments.length ?? 0) === 0 ? (
-                      <p className="py-3.5 text-md text-muted-foreground">
+                  <OverviewPanel>
+                    {(captainOverview?.captainPayments.length ?? 0) === 0 &&
+                    (captainOverview?.substitutePayments.length ?? 0) === 0 ? (
+                      <p className="px-4 py-3 text-md font-medium text-secondary">
                         No captain payments in this period.
                       </p>
                     ) : (
-                      captainOverview!.captainPayments.map((captain) => (
-                        <PaymentRow
-                          key={captain.captainId}
-                          name={captain.captainName}
-                          meta={`${captain.payType} • ${captain.payCadence}`}
-                          amount={formatCurrency(captain.amount)}
-                        />
-                      ))
+                      <>
+                        {captainOverview!.captainPayments.map((captain) => (
+                          <PaymentRow
+                            key={`captain-${captain.captainId}`}
+                            name={captain.captainName}
+                            meta={`${labelCase(captain.payType)} • ${labelCase(captain.payCadence)}`}
+                            amount={formatCurrency(captain.amount)}
+                          />
+                        ))}
+                        {captainOverview!.substitutePayments.map((sub) => (
+                          <PaymentRow
+                            key={`substitute-${sub.captainId}`}
+                            name={sub.captainName}
+                            meta={`Covered ${sub.coveredFor.map((c) => c.captainName).join(", ")} • ${sub.issueCount} ${sub.issueCount === 1 ? "issue" : "issues"}`}
+                            amount={formatCurrency(sub.amount)}
+                          />
+                        ))}
+                      </>
                     )}
-                  </div>
+                  </OverviewPanel>
+                </OverviewSection>
 
-                  {(captainOverview?.substitutePayments.length ?? 0) > 0 && (
-                    <>
-                      <p className="mt-6 mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                        Substitute Payments
-                      </p>
-                      {captainOverview!.substitutePayments.map((sub) => (
-                        <PaymentRow
-                          key={sub.captainId}
-                          name={sub.captainName}
-                          // One person may cover several captains, so list them
-                          // all rather than silently dropping any past the first.
-                          meta={`Covered ${sub.coveredFor.map((c) => c.captainName).join(", ")} • ${sub.issueCount} ${sub.issueCount === 1 ? "issue" : "issues"}`}
-                          amount={formatCurrency(sub.amount)}
-                        />
-                      ))}
-                    </>
-                  )}
-                </div>
+                <OverviewSection>
+                  <h2 className="px-2 text-md font-medium text-primary">Papers Per Issue</h2>
 
-                {/* Papers Per Issue */}
-                <div className="rounded-lg border border-border bg-bg px-6 py-5">
-                  <h2 className="text-md font-semibold text-primary">Papers Per Issue</h2>
-
-                  <div className="mt-4">
+                  <OverviewPanel>
                     {papersPerIssue.length === 0 ? (
-                      <p className="py-3.5 text-md text-muted-foreground">
+                      <p className="px-4 py-3 text-md font-medium text-secondary">
                         No issues in this period yet.
                       </p>
                     ) : (
                       papersPerIssue.slice(0, PAPERS_PREVIEW_COUNT).map((issue) => (
                         <div
                           key={issue.issueId}
-                          className="flex items-center justify-between gap-4 py-3.5"
+                          className="flex items-center justify-between gap-4 px-4 py-3"
                         >
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-md font-semibold text-primary">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <span className="text-md font-medium text-primary">
                               {issue.name.split(",")[0]}
                             </span>
-                            <span className="text-sm text-muted-foreground">
+                            <span className="text-sm font-medium text-secondary">
                               {formatIssueDate(issue.date)}
                             </span>
                           </div>
-                          <span className="text-md font-medium tabular-nums text-primary">
+                          <span className="text-md font-medium text-primary tabular-nums">
                             {formatCount(issue.papers)}
                           </span>
                         </div>
                       ))
                     )}
-                  </div>
 
-                  {papersPerIssue.length > PAPERS_PREVIEW_COUNT && (
-                    <button
-                      type="button"
-                      onClick={() => setPapersDialogOpen(true)}
-                      className="mt-3 inline-flex items-center gap-0.5 text-sm text-active hover:text-active-hover"
-                    >
-                      View all {papersPerIssue.length} issues
-                      <ArrowUpRight className="size-3.5" strokeWidth={2} />
-                    </button>
-                  )}
-                </div>
+                    {papersPerIssue.length > PAPERS_PREVIEW_COUNT && (
+                      <button
+                        type="button"
+                        onClick={() => setPapersDialogOpen(true)}
+                        className="inline-flex items-center gap-1 px-4 py-3 text-md font-medium text-primary"
+                      >
+                        View all {papersPerIssue.length} issues
+                        <ArrowRight className="size-3" strokeWidth={2} />
+                      </button>
+                    )}
+                  </OverviewPanel>
+                </OverviewSection>
               </>
             )}
           </div>

@@ -304,3 +304,40 @@ export async function unlockIssue(id: string): Promise<IssueSummary> {
   await recalculateIssue(id);
   return getIssue(id);
 }
+
+/**
+ * Hard-delete an issue and (via FK cascade) its payouts and deliveries.
+ *
+ * Only for open, unpaid mistakes / duplicates. Closed runs and anything with a
+ * paid cell stay — paid history must not vanish, and closed issues are finished
+ * runs rather than drafts.
+ */
+export async function deleteIssue(id: string): Promise<void> {
+  const issue = await fetchIssue(id);
+  if (issue.status === "closed") {
+    throw conflict("Closed issues cannot be deleted.");
+  }
+
+  const { data: yearData, error: yearError } = await db()
+    .from("financial_years")
+    .select("archived")
+    .eq("id", issue.financial_year_id)
+    .maybeSingle();
+  if (yearError) throwDb(yearError);
+  if ((yearData as { archived: boolean } | null)?.archived) {
+    throw conflict("This financial year is archived — issues can no longer be deleted.");
+  }
+
+  const { data: payoutData, error: payoutError } = await db()
+    .from("captain_payouts")
+    .select("id, paid")
+    .eq("issue_id", id);
+  if (payoutError) throwDb(payoutError);
+  const paid = ((payoutData ?? []) as Pick<CaptainPayoutRow, "id" | "paid">[]).some((p) => p.paid);
+  if (paid) {
+    throw conflict("Cannot delete an issue that has paid cells.");
+  }
+
+  const { error } = await db().from("issues").delete().eq("id", id);
+  if (error) throwDb(error);
+}
