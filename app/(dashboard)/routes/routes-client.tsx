@@ -759,11 +759,11 @@ function RoutesFilterSection(props: {
   );
 }
 
-export function RoutesClient() {
+export function RoutesClient({ initialRouteId = null }: { initialRouteId?: string | null }) {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [showHomes] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialRouteId);
   const [detailMemberHome, setDetailMemberHome] = useState<SelectedMemberHome | null>(null);
   const [creating, setCreating] = useState(false);
   const [creatingDrop, setCreatingDrop] = useState(false);
