@@ -43,6 +43,17 @@ Product overrides in `AGENTS.md` and `docs/design_decisions.md` still win
 
 - Start scale entrances at 0.95, never 0.
 - Use 0.97 as the default pressed scale when the shared primitive does not already provide feedback.
+- Buttons scale only for transient input: hover 0.98, press 0.97. Persistent states (open, selected / `aria-pressed`) render at scale 1, even while hovered.
+
+## Interaction fills
+
+Steps count along the bg scale in `app/globals.css` (`bg` → `bg-secondary` → … → `bg-senary`).
+
+- Hover = +1, active / selected / open = +2 from the surface the control rests on. This includes the sidebar.
+- Hovering an active or open control keeps the active fill — never step back toward the resting fill.
+- A control revealed on a hovered row steps from the hovered row's fill, not the page.
+- Coloured fills (`active`, `destructive`, `tag-active`, chart bars) step darker: hover = `*-hover`, selected = `*-selected`.
+- No hex, raw Tailwind palette colours, or arbitrary `bg-[#…]`. Add a token in `globals.css` instead; non-CSS consumers (Google Maps) read tokens at runtime.
 - Make trigger-anchored surfaces use the transform origin exposed by the shared primitive. Centered dialogs remain centered.
 
 ### Stagger

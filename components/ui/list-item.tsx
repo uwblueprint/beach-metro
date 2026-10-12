@@ -32,9 +32,9 @@ const listItemVariants = cva(
           "hover:bg-bg-secondary data-[active=true]:bg-bg-tertiary data-[active=true]:text-primary data-[active=true]:hover:bg-bg-tertiary",
         tertiary:
           "hover:bg-bg-quaternary data-[active=true]:bg-bg-quinary data-[active=true]:text-primary data-[active=true]:hover:bg-bg-quinary",
-        /** Sidebar shell — hover +2 / active +3; radius matches members rows. */
+        /** Sidebar shell (bg-secondary) — hover +1 / active +2 (same rule); radius matches members rows. */
         sidebar:
-          "rounded-md hover:bg-sidebar-hover data-[active=true]:bg-sidebar-active data-[active=true]:text-primary data-[active=true]:hover:bg-sidebar-active",
+          "rounded-md hover:bg-bg-tertiary data-[active=true]:bg-bg-quaternary data-[active=true]:text-primary data-[active=true]:hover:bg-bg-quaternary",
       },
     },
     defaultVariants: {

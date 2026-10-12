@@ -1215,9 +1215,10 @@ function RouteActionsMenu(props: {
             variant="default"
             size="icon"
             className={cn(
-              "shrink-0 bg-transparent text-secondary hover:bg-bg-quaternary data-popup-open:bg-bg-quaternary",
-              props.revealOnRowHover &&
-                "opacity-0 transition-[opacity,background-color,transform,color] group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100",
+              "shrink-0 bg-transparent text-secondary",
+              props.revealOnRowHover
+                ? "opacity-0 transition-[opacity,background-color,transform,scale,color] group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100 hover:bg-bg-tertiary data-popup-open:bg-bg-quaternary"
+                : "hover:bg-bg-secondary data-popup-open:bg-bg-tertiary",
             )}
             onClick={stopRowClick}
           />

@@ -8,7 +8,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 cursor-pointer items-center justify-center border border-transparent bg-clip-padding text-md font-normal whitespace-nowrap outline-none select-none transition-[color,background-color,border-color,box-shadow,opacity,transform] duration-150 ease-out hover:scale-[0.97] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed motion-reduce:transition-none motion-reduce:hover:scale-100 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 shadow-[var(--stroke-inner)]",
+  "group/button inline-flex shrink-0 cursor-pointer items-center justify-center border border-transparent bg-clip-padding text-md font-normal whitespace-nowrap outline-none select-none transition-[color,background-color,border-color,box-shadow,opacity,transform,scale] duration-150 ease-out hover:scale-[0.98] active:scale-[0.97] aria-pressed:hover:scale-100 aria-pressed:active:scale-[0.97] data-popup-open:hover:scale-100 data-popup-open:active:scale-[0.97] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed motion-reduce:transition-none motion-reduce:hover:scale-100 motion-reduce:active:scale-100 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 shadow-[var(--stroke-inner)]",
   {
     variants: {
       variant: {
