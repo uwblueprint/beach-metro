@@ -311,7 +311,7 @@ function BundlePapersTable({
         );
       })}
 
-      <p className="px-2 pt-1 text-md text-secondary">A checked bundle row will be labelled</p>
+      <p className="px-2 pt-1 text-md text-tertiary">A checked bundle row will be labelled</p>
     </div>
   );
 }

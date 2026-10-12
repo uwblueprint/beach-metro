@@ -1163,7 +1163,9 @@ function DropdownField(props: {
           disabled={isDisabled}
           render={<button type="button" className={inputTriggerClassName} />}
         >
-          <span className={cn("min-w-0 truncate", isDisabled && "text-secondary")}>
+          <span
+            className={cn("min-w-0 truncate", (isDisabled || !props.value) && "text-secondary")}
+          >
             {props.display}
           </span>
           <ChevronDown className={cn("size-3 shrink-0", !isDisabled && "text-primary")} />
@@ -1188,14 +1190,14 @@ function RouteVolunteerCaptainHint(props: {
   volunteers: VolunteerSummary[] | undefined;
 }) {
   if (!props.volunteerId) {
-    return <p className="text-md text-secondary">Select a volunteer for this route</p>;
+    return <p className="text-md text-tertiary">Select a volunteer for this route</p>;
   }
 
   const captainName =
     props.volunteers?.find((v) => v.id === props.volunteerId)?.territory?.captainName ?? null;
 
   return (
-    <p className="text-md text-secondary">
+    <p className="text-md text-tertiary">
       The captain responsible for this volunteer, thus this route is{" "}
       <span className="font-semibold text-primary">{captainName ?? "no captain"}</span>
     </p>
