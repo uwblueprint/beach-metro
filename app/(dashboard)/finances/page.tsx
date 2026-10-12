@@ -725,7 +725,7 @@ export default function FinancesPage() {
                         variant="text"
                         size="icon"
                         aria-label="More actions"
-                        className="text-secondary"
+                        className="text-secondary data-popup-open:bg-bg-tertiary"
                       />
                     }
                   >

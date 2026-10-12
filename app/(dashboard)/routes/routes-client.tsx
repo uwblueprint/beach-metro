@@ -52,7 +52,7 @@ import {
   type SelectedMemberHome,
   type VacancyFilter,
 } from "./route-map";
-import { RouteStateTag, RouteTag } from "./route-tag";
+import { RouteStateTag, RouteTag, type RouteState } from "./route-tag";
 
 const SIDE_OPTIONS = [
   { value: "", label: "— none —" },
@@ -68,12 +68,14 @@ const inputTriggerClassName =
   "flex h-auto w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-hairline bg-bg px-3 py-2 text-left text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-bg-tertiary disabled:text-disabled disabled:opacity-50";
 
 /**
- * Attention flag for a row, or null when the route is healthy (route flow
- * §4f/§4g). The two are not exclusive — a carrier on vacation can also be past
- * their end date — so needs-attention wins: suspension clears itself when the
+ * State tag for a row, or null when the route is healthy (route flow §3a,
+ * §4f/§4g). Vacant routes have no volunteer, so they can't carry either flag.
+ * The flags are not exclusive — a carrier on vacation can also be past their
+ * end date — so needs-attention wins: suspension clears itself when the
  * vacation window ends, a passed end date needs the manager to act.
  */
-function routeState(r: RouteSummary): "attention" | "suspended" | null {
+function routeState(r: RouteSummary): RouteState | null {
+  if (r.lifecycle === "vacant") return "vacant";
   if (r.needsAttention) return "attention";
   if (r.suspended) return "suspended";
   return null;
@@ -1065,7 +1067,6 @@ function RouteList(props: {
   return (
     <div className="flex flex-col gap-3">
       {props.routes.map((r) => {
-        const isVacant = r.lifecycle === "vacant";
         const captainName = r.captain?.name ?? "No captain";
         const state = routeState(r);
 
@@ -1088,7 +1089,7 @@ function RouteList(props: {
           >
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <div className="flex min-w-0 items-center gap-2">
-                <RouteTag label={deliveryListLabel(r)} vacant={isVacant} />
+                <RouteTag label={deliveryListLabel(r)} />
                 {state && <RouteStateTag state={state} />}
               </div>
               <span className="truncate pl-2 text-md font-normal text-secondary">
@@ -1212,10 +1213,10 @@ function RouteActionsMenu(props: {
         aria-label="Route actions"
         render={
           <Button
-            variant="default"
-            size="icon"
+            variant="text"
+            size={props.revealOnRowHover ? "icon-sm" : "icon"}
             className={cn(
-              "shrink-0 bg-transparent text-secondary",
+              "shrink-0 text-secondary",
               props.revealOnRowHover
                 ? "opacity-0 transition-[opacity,background-color,transform,scale,color] group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100 hover:bg-bg-tertiary data-popup-open:bg-bg-quaternary"
                 : "hover:bg-bg-secondary data-popup-open:bg-bg-tertiary",
@@ -1224,7 +1225,7 @@ function RouteActionsMenu(props: {
           />
         }
       >
-        <MoreHorizontal />
+        <MoreHorizontal className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {showRouteDetails ? (

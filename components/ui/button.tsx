@@ -18,7 +18,7 @@ const buttonVariants = cva(
         outline:
           "border-hairline text-primary hover:border-transparent hover:bg-bg-secondary disabled:text-disabled",
         danger: "bg-destructive text-bg hover:bg-destructive-hover disabled:bg-destructive/50",
-        text: "text-primary hover:bg-bg-secondary disabled:text-disabled",
+        text: "text-primary shadow-none hover:bg-bg-secondary disabled:text-disabled",
         link: "text-active underline-offset-4 shadow-none hover:underline",
         /** Circular icon for toolbars (map chrome, filter toggles). Pair with size=toolbar shape=rounded. */
         toolbar: toolbarIconButtonClass,
@@ -26,11 +26,12 @@ const buttonVariants = cva(
       size: {
         default: "h-8 gap-2 px-3 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
         xs: "h-5 gap-1 px-1.5 text-xs [&_svg:not([class*='size-'])]:size-2.5",
-        sm: "h-6 gap-1 px-2 text-sm [&_svg:not([class*='size-'])]:size-3",
+        /** 26px — same height as a tag (RouteTag, RoleTag) so they sit flush in a row. */
+        sm: "h-[26px] gap-1 px-2 text-sm [&_svg:not([class*='size-'])]:size-3",
         lg: "h-9 gap-2 px-4 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5",
         icon: "size-8 p-2",
         "icon-xs": "size-5 p-1 [&_svg:not([class*='size-'])]:size-2.5",
-        "icon-sm": "size-6 p-1.5 [&_svg:not([class*='size-'])]:size-3",
+        "icon-sm": "size-[26px] p-1.5 [&_svg:not([class*='size-'])]:size-3",
         "icon-lg": "size-9 p-2.5",
         /** Matches SearchBar height (36px). Use with variant=toolbar shape=rounded. */
         toolbar: "size-9 shrink-0 p-0 [&_svg:not([class*='size-'])]:size-4",

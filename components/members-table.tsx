@@ -131,7 +131,7 @@ function RowActions({
           <Button
             variant="text"
             size="icon"
-            className="text-secondary"
+            className="text-secondary hover:bg-bg-tertiary data-popup-open:bg-bg-quaternary"
             onClick={(e) => e.stopPropagation()}
           />
         }

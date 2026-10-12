@@ -112,11 +112,11 @@
      Coloured fills step darker instead: hover = −0.02 L, selected = −0.04 L.
      Quinary/senary exist so tertiary (and deeper) surfaces can still +2. */
   --bg: oklch(1 0 0);
-  --bg-secondary: oklch(0.989 0.003 67.8);
-  --bg-tertiary: oklch(0.972 0.005 67.8);
-  --bg-quaternary: oklch(0.956 0.006 75.4);
-  --bg-quinary: oklch(0.941 0.006 75.4);
-  --bg-senary: oklch(0.926 0.006 75.4);
+  --bg-secondary: oklch(0.98 0.006 84.6);
+  --bg-tertiary: oklch(0.965 0.007 80.7);
+  --bg-quaternary: oklch(0.948 0.007 67.7);
+  --bg-quinary: oklch(0.933 0.007 67.7);
+  --bg-senary: oklch(0.917 0.005 67.8);
   --foreground: #23201a;
   --card: var(--bg);
   --card-foreground: var(--foreground);
@@ -146,26 +146,28 @@
   --destructive-hover: oklch(0.644 0.224 32.3);
   --destructive-selected: oklch(0.624 0.224 32.3);
   --success: oklch(0.68 0.215 144.9);
-  --warning: oklch(0.818 0.169 77.5);
+  /* Text on bg-tag-warning: 4.88:1 */
+  --warning: oklch(0.53 0.125 58);
   --disabled: oklch(0.845 0 0);
 
   /* border styles */
   --border: oklch(0.925 0 0);
   --hairline: oklch(0.961 0 0);
   --active-border: oklch(0.946 0.045 212.1);
-  --success-border: oklch(0.957 0.08 140.1);
-  --warning-border: oklch(0.964 0.052 92.9);
+  --success-border: oklch(0.946 0.045 140.1);
+  --warning-border: oklch(0.9 0.07 75);
   --destructive-border: oklch(0.923 0.044 50.4);
   --input: var(--border);
   --ring: oklch(0.605 0.186 257.6);
 
-  /* Pills at tertiary → hover +1 = quaternary */
-  --tag: var(--bg-tertiary);
-  --tag-hover: var(--bg-quaternary);
-  --tag-success: oklch(0.985 0.027 140.2);
+  /* Pills at secondary → hover +1 = tertiary */
+  --tag: var(--bg-secondary);
+  --tag-hover: var(--bg-tertiary);
+  --tag-success: oklch(0.98 0.04 140.2);
   --tag-active: oklch(0.98 0.04 220.6);
   --tag-active-hover: oklch(0.964 0.06 220.6);
-  --tag-warning: oklch(0.988 0.018 92.7);
+  /* Near sRGB max chroma for this lightness — raising C clips the red channel */
+  --tag-warning: oklch(0.96 0.032 75);
   --tag-destructive: oklch(0.974 0.014 50.8);
 
   /* Inner highlight stroke — buttons, pills */

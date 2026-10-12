@@ -223,8 +223,6 @@ export function RouteHoverCard(props: {
 
   const volunteer = snapshot.route.volunteerName ?? "vacant";
   const counts = `${snapshot.route.bundleCount}B, ${snapshot.route.papers}P`;
-  const isVacant = snapshot.route.lifecycle === "vacant";
-
   return (
     <MapHtmlOverlay position={snapshot.position}>
       {/* ~25% tighter than prior h-8 bridge: h-6 gap under the pointer tip. */}
@@ -239,7 +237,7 @@ export function RouteHoverCard(props: {
               "text-md",
             )}
           >
-            <RouteTag label={snapshot.route.label} vacant={isVacant} />
+            <RouteTag label={snapshot.route.label} />
             <span className="flex w-full items-center justify-between gap-3 px-2 text-md text-secondary">
               <span className="min-w-0 truncate">{volunteer}</span>
               <span className="shrink-0 tabular-nums">{counts}</span>
