@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
  */
 const inputFieldClassName = cn(
   "w-full min-w-0 rounded-[8px] border border-hairline bg-bg px-3 py-2 text-md text-primary transition-colors outline-none",
-  "placeholder:text-secondary",
+  "placeholder:text-quaternary",
   "focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40",
   "disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-bg-tertiary disabled:text-disabled disabled:opacity-50",
   "aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20",

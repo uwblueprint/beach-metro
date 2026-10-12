@@ -284,6 +284,9 @@
   html {
     @apply font-sans;
   }
+  ::placeholder {
+    @apply text-quaternary;
+  }
 
   /* Clickable affordances always show a pointer (unless explicitly overridden, e.g. cursor-text). */
   button:not(:disabled),

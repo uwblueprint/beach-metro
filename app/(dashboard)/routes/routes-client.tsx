@@ -570,7 +570,7 @@ function MultiSelectFilterPill({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={searchPlaceholder}
-              className="min-w-0 flex-1 bg-transparent text-md text-primary outline-none placeholder:text-secondary"
+              className="min-w-0 flex-1 bg-transparent text-md text-primary outline-none placeholder:text-quaternary"
             />
           </div>
         </div>
@@ -922,7 +922,7 @@ export function RoutesClient({ initialRouteId = null }: { initialRouteId?: strin
         <div className="page-header-container">
           <div className="flex items-center gap-2">
             <h1 className="text-md text-primary">Routes</h1>
-            <p className="text-md text-secondary">
+            <p className="text-md text-tertiary">
               {routes.data ? `Showing ${listRoutes.length}` : "Loading…"}
             </p>
           </div>
