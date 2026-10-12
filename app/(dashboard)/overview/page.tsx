@@ -42,12 +42,6 @@ const CHART_LABEL_BLOCK = 22;
 const CHART_BAR_MAX_HEIGHT = CHART_COLUMN_HEIGHT - CHART_LABEL_BLOCK;
 const CHART_BAR_GAP = 20;
 
-const CHART_COLORS = {
-  past: "#b1e6fb",
-  pastHover: "#7ec8ee",
-  empty: "#e8eaef",
-} as const;
-
 function labelCase(value: string) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 }
@@ -88,7 +82,7 @@ function getTodayLineLeft(monthIndex: number, monthCount: number) {
  */
 function OverviewSection({ children }: { children: React.ReactNode }) {
   return (
-    <section className="flex w-full min-w-0 flex-col gap-1 rounded-[20px] bg-sidebar p-1 pt-2.5">
+    <section className="flex w-full min-w-0 flex-col gap-1 rounded-[20px] bg-bg-secondary p-1 pt-2.5">
       {children}
     </section>
   );
@@ -235,14 +229,14 @@ function YtdRunningCostChart({
                       </div>
                     )}
                     <div
-                      className="h-full w-full rounded-t-[4px] transition-[background-color] duration-200"
-                      style={{
-                        backgroundColor: isPlaceholder
-                          ? CHART_COLORS.empty
+                      className={cn(
+                        "h-full w-full rounded-t-[4px] transition-[background-color] duration-200",
+                        isPlaceholder
+                          ? "bg-chart-bar-empty"
                           : isHovered
-                            ? CHART_COLORS.pastHover
-                            : CHART_COLORS.past,
-                      }}
+                            ? "bg-chart-bar-hover"
+                            : "bg-chart-bar",
+                      )}
                     />
                   </div>
                 </div>
@@ -483,7 +477,7 @@ export default function OverviewPage() {
                           render={
                             <button
                               type="button"
-                              className="inline-flex items-center gap-1 rounded-[4px] bg-sidebar-active px-2 py-1 text-sm font-medium text-primary transition-transform duration-150 ease-out active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100"
+                              className="inline-flex items-center gap-1 rounded-[4px] px-2 py-1 text-sm font-medium text-primary transition-[background-color,scale] duration-150 ease-out hover:scale-[0.98] hover:bg-bg-tertiary active:scale-[0.97] data-popup-open:bg-bg-quaternary data-popup-open:hover:scale-100 data-popup-open:active:scale-[0.97] motion-reduce:transition-none motion-reduce:hover:scale-100 motion-reduce:active:scale-100"
                             >
                               {periodLabel}
                               <ChevronDown className="size-3" strokeWidth={2} />

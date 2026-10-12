@@ -295,7 +295,6 @@ function VolunteerContent({ id }: { id: string }) {
                   variant="primary"
                   onClick={() => void saveInfo()}
                   disabled={updateVolunteer.isPending}
-                  className="active:scale-[0.96]"
                 >
                   {updateVolunteer.isPending ? "Saving…" : "Save"}
                 </Button>
@@ -616,7 +615,6 @@ function CaptainContent({ id }: { id: string }) {
                   variant="primary"
                   onClick={() => void saveInfo()}
                   disabled={updateCaptain.isPending}
-                  className="active:scale-[0.96]"
                 >
                   {updateCaptain.isPending ? "Saving…" : "Save"}
                 </Button>
@@ -1129,13 +1127,7 @@ function MemberSidePanel({ member, creating, onClose, onCreated }: MemberSidePan
             <Button variant="default" onClick={onClose} disabled={createBusy}>
               Cancel
             </Button>
-            <Button
-              variant="primary"
-              form="cm-form"
-              type="submit"
-              disabled={createBusy}
-              className="active:scale-[0.96]"
-            >
+            <Button variant="primary" form="cm-form" type="submit" disabled={createBusy}>
               {createBusy ? "Creating…" : "Create Member"}
             </Button>
           </div>

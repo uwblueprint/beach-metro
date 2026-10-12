@@ -19,12 +19,12 @@ export function ActiveFilterPill({ label, onClear }: { label: string; onClear: (
     <Pill
       selected
       onClick={onClear}
-      className="group/filter-pill relative w-max shrink-0 overflow-hidden hover:bg-tag-active active:scale-[0.96]"
+      className="group/filter-pill relative w-max shrink-0 overflow-hidden transition-[color,background-color,scale] duration-150 ease-out hover:scale-[0.98] active:scale-[0.97] motion-reduce:hover:scale-100 motion-reduce:active:scale-100"
     >
       <span className="relative z-0">{label}</span>
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 right-0 z-[1] w-[80%] bg-gradient-to-l from-tag-active from-50% to-transparent opacity-0 transition-opacity duration-200 ease-[cubic-bezier(0.2,0,0,1)] group-hover/filter-pill:opacity-100"
+        className="pointer-events-none absolute inset-y-0 right-0 z-[1] w-[80%] bg-gradient-to-l from-tag-active-hover from-50% to-transparent opacity-0 transition-opacity duration-200 ease-[cubic-bezier(0.2,0,0,1)] group-hover/filter-pill:opacity-100"
       />
       <X
         aria-hidden="true"

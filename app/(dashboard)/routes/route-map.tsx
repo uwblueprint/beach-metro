@@ -64,87 +64,73 @@ export type CaptainFilterOption = { value: string; label: string };
 /** pills = new sidebar default; legacy = prior sidebar; map = overlay on map. */
 export type FilterPlacement = "pills" | "legacy" | "map";
 
-// Basemap + overlays use hex snapshots of app tokens (Maps JS can't read CSS vars).
-// Source: app/globals.css :root — re-convert if tokens change.
-const MAP_HEX = {
-  bg: "#ffffff", // --bg
-  bgSecondary: "#fdfbf9", // --bg-secondary
-  bgTertiary: "#faf8f5", // --bg-tertiary
-  bgQuaternary: "#f6f5f2", // --bg-quaternary
-  bgSenary: "#f0eeeb", // --bg-senary
-  border: "#e6e6e6", // --border
-  hairline: "#f2f2f2", // --hairline
-  secondary: "#6b6b6b", // --secondary (text)
-  disabled: "#cccccc", // --disabled
-  // Road hierarchy — prominent but not harsh on warm land
-  roadLocal: "#c9c9c9",
-  roadArterial: "#c9c9c9",
-  roadHighway: "#c9c9c9",
-  roadStroke: "##c9c9c9",
-  tagSuccess: "#f1ffee", // --tag-success (parks)
-  water: "#e3edf2", // cool wash toward --active hue
-  waterLabel: "#a2b1b8",
-  active: "#0cb1f2", // --active
-  activeHover: "#00abeb", // --active-hover
-  activeSelected: "#0099db",
-  destructive: "#ff4828", // --destructive
-  destructiveHover: "#f8401f", // --destructive-hover
-  destructiveSelected: "#e21a00",
+// Basemap + overlays read app/globals.css tokens at runtime. Maps JS only takes hex,
+// so each token is resolved through a 1px canvas (handles oklch and var() chains).
+const MAP_TOKENS = {
+  bg: "--bg",
+  bgSecondary: "--bg-secondary",
+  border: "--border",
+  primary: "--primary",
+  secondary: "--secondary",
+  tagSuccess: "--tag-success",
+  road: "--map-road",
+  water: "--map-water",
+  waterLabel: "--map-water-label",
+  active: "--active",
+  activeHover: "--active-hover",
+  activeSelected: "--active-selected",
+  destructive: "--destructive",
+  destructiveHover: "--destructive-hover",
+  destructiveSelected: "--destructive-selected",
 } as const;
+
+type MapColors = Record<keyof typeof MAP_TOKENS, string>;
+
+let mapColorsCache: MapColors | null = null;
+/** Browser-only — call from effects / client state, never at module scope. */
+function mapColors(): MapColors {
+  if (mapColorsCache) return mapColorsCache;
+  const style = getComputedStyle(document.documentElement);
+  const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+  const toHex = (cssColor: string) => {
+    if (!ctx) return "#000000";
+    ctx.clearRect(0, 0, 1, 1);
+    ctx.fillStyle = "#000000";
+    ctx.fillStyle = cssColor;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+    return `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+  };
+  mapColorsCache = Object.fromEntries(
+    Object.entries(MAP_TOKENS).map(([key, name]) => [
+      key,
+      toHex(style.getPropertyValue(name).trim()),
+    ]),
+  ) as MapColors;
+  return mapColorsCache;
+}
 
 // Warm land; roads are the dominant basemap signal. POI/transit off.
 // (Legacy JSON styling; works because we don't set a cloud `mapId`.)
-const MAP_STYLE: google.maps.MapTypeStyle[] = [
-  { elementType: "geometry", stylers: [{ color: MAP_HEX.bgSecondary }] },
-  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: MAP_HEX.secondary }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: MAP_HEX.bg }] },
-  { featureType: "administrative", elementType: "geometry", stylers: [{ visibility: "off" }] },
-  { featureType: "poi", stylers: [{ visibility: "off" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: MAP_HEX.tagSuccess }] },
-  { featureType: "poi.park", elementType: "labels", stylers: [{ visibility: "off" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: MAP_HEX.roadLocal }] },
-  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: MAP_HEX.roadStroke }] },
-  {
-    featureType: "road.arterial",
-    elementType: "geometry",
-    stylers: [{ color: MAP_HEX.roadArterial }],
-  },
-  {
-    featureType: "road.highway",
-    elementType: "geometry",
-    stylers: [{ color: MAP_HEX.roadHighway }],
-  },
-  {
-    featureType: "road.highway",
-    elementType: "geometry.stroke",
-    stylers: [{ color: MAP_HEX.roadStroke }],
-  },
-  { featureType: "road.local", elementType: "geometry", stylers: [{ color: MAP_HEX.roadLocal }] },
-  { featureType: "road.local", elementType: "labels", stylers: [{ visibility: "on" }] },
-  { featureType: "transit", stylers: [{ visibility: "off" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: MAP_HEX.water }] },
-  {
-    featureType: "water",
-    elementType: "labels.text.fill",
-    stylers: [{ color: MAP_HEX.waterLabel }],
-  },
-  { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: MAP_HEX.bg }] },
-];
-
-/** Route overlays — vacant = destructive, assigned = active (hover/selected steps). */
-const ROUTE_COLORS = {
-  vacant: {
-    base: MAP_HEX.destructive,
-    hover: MAP_HEX.destructiveHover,
-    selected: MAP_HEX.destructiveSelected,
-  },
-  assigned: {
-    base: MAP_HEX.active,
-    hover: MAP_HEX.activeHover,
-    selected: MAP_HEX.activeSelected,
-  },
-} as const;
+function buildMapStyle(c: MapColors): google.maps.MapTypeStyle[] {
+  return [
+    { elementType: "geometry", stylers: [{ color: c.bgSecondary }] },
+    { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+    { elementType: "labels.text.fill", stylers: [{ color: c.secondary }] },
+    { elementType: "labels.text.stroke", stylers: [{ color: c.bg }] },
+    { featureType: "administrative", elementType: "geometry", stylers: [{ visibility: "off" }] },
+    { featureType: "poi", stylers: [{ visibility: "off" }] },
+    { featureType: "poi.park", elementType: "geometry", stylers: [{ color: c.tagSuccess }] },
+    { featureType: "poi.park", elementType: "labels", stylers: [{ visibility: "off" }] },
+    { featureType: "road", elementType: "geometry", stylers: [{ color: c.road }] },
+    { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: c.road }] },
+    { featureType: "road.local", elementType: "labels", stylers: [{ visibility: "on" }] },
+    { featureType: "transit", stylers: [{ visibility: "off" }] },
+    { featureType: "water", elementType: "geometry", stylers: [{ color: c.water }] },
+    { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: c.waterLabel }] },
+    { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: c.bg }] },
+  ];
+}
 
 /** Google Maps circle symbol `scale` is the radius in px. */
 const ROUTE_ENDPOINT_DOT_SCALE = 3.5;
@@ -153,14 +139,9 @@ const HOME_PIN_SIZE_MULTIPLIER = 5;
 /** Diameter of the home pin — always 5× the default route endpoint dot. */
 const HOME_PIN_DIAMETER_PX = ROUTE_ENDPOINT_DOT_SCALE * 2 * HOME_PIN_SIZE_MULTIPLIER;
 
-/** Toolbar icon-button tokens as hex (see components/ui/toolbar-control.ts). */
-const HOME_PIN_STYLE = {
-  bg: "#ffffff",
-  border: "#e8e8e8", // --border
-  icon: "#1a1a1a", // --foreground / --primary
-} as const;
-
+/** Matches the toolbar icon button (components/ui/toolbar-control.ts): bg / border / primary. */
 function homePinMarkerIcon(): google.maps.Icon {
+  const c = mapColors();
   const d = HOME_PIN_DIAMETER_PX;
   const r = d / 2;
   const inset = 8;
@@ -168,10 +149,10 @@ function homePinMarkerIcon(): google.maps.Icon {
   const houseScale = iconBox / 24;
   const svg = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${d}" height="${d}" viewBox="0 0 ${d} ${d}">`,
-    `<circle cx="${r}" cy="${r}" r="${r - 1}" fill="${HOME_PIN_STYLE.bg}" stroke="${HOME_PIN_STYLE.border}" stroke-width="1"/>`,
+    `<circle cx="${r}" cy="${r}" r="${r - 1}" fill="${c.bg}" stroke="${c.border}" stroke-width="1"/>`,
     `<g transform="translate(${inset},${inset}) scale(${houseScale})">`,
-    `<path fill="none" stroke="${HOME_PIN_STYLE.icon}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/>`,
-    `<path fill="none" stroke="${HOME_PIN_STYLE.icon}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`,
+    `<path fill="none" stroke="${c.primary}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/>`,
+    `<path fill="none" stroke="${c.primary}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`,
     `</g></svg>`,
   ].join("");
   return {
@@ -181,11 +162,13 @@ function homePinMarkerIcon(): google.maps.Icon {
   };
 }
 
+/** Route overlays — vacant = destructive, assigned = active (hover / selected steps). */
 function routeColor(route: MapRoute, selected: boolean, hovered: boolean): string {
-  const palette = ROUTE_COLORS[route.lifecycle];
-  if (selected) return palette.selected;
-  if (hovered) return palette.hover;
-  return palette.base;
+  const c = mapColors();
+  if (route.lifecycle === "vacant") {
+    return selected ? c.destructiveSelected : hovered ? c.destructiveHover : c.destructive;
+  }
+  return selected ? c.activeSelected : hovered ? c.activeHover : c.active;
 }
 
 /**
@@ -253,7 +236,7 @@ function RouteOverlay(props: {
           scale: ROUTE_ENDPOINT_DOT_SCALE,
           fillColor: color,
           fillOpacity: 1,
-          strokeColor: MAP_HEX.bg,
+          strokeColor: mapColors().bg,
           strokeWeight: 1.5,
         },
         zIndex: 3,
@@ -371,7 +354,7 @@ function RouteOverlay(props: {
           scale,
           fillColor: color,
           fillOpacity: 1,
-          strokeColor: MAP_HEX.bg,
+          strokeColor: mapColors().bg,
           strokeWeight: 1.5,
         },
       });
@@ -393,9 +376,9 @@ function HomeMarker({ home }: { home: MapHome }) {
       icon: {
         path: google.maps.SymbolPath.CIRCLE,
         scale: 5,
-        fillColor: MAP_HEX.bg,
+        fillColor: mapColors().bg,
         fillOpacity: 1,
-        strokeColor: MAP_HEX.active,
+        strokeColor: mapColors().active,
         strokeWeight: 2,
       },
       zIndex: 1,
@@ -1036,6 +1019,9 @@ export function RouteMap(props: {
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [hoverPosition, setHoverPosition] = useState<google.maps.LatLngLiteral | null>(null);
+  const [mapStyle] = useState(() =>
+    typeof document === "undefined" ? undefined : buildMapStyle(mapColors()),
+  );
   const defaultBoundsRef = useRef<google.maps.LatLngBounds | null>(null);
   const handleInitialFit = useCallback((bounds: google.maps.LatLngBounds) => {
     defaultBoundsRef.current = bounds;
@@ -1080,7 +1066,7 @@ export function RouteMap(props: {
           rotateControl={false}
           keyboardShortcuts={false}
           clickableIcons={false}
-          styles={MAP_STYLE}
+          styles={mapStyle}
           className="h-full w-full"
         >
           {props.routes.map((r) => (

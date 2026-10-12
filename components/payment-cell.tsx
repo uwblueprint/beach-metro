@@ -485,8 +485,8 @@ function CellActionsMenu({
             aria-label="Cell actions"
             className={cn(
               "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[opacity,background-color,color] duration-150 ease-out",
-              "pointer-events-none group-hover/cell:pointer-events-auto group-hover/cell:bg-muted group-hover/cell:text-primary group-hover/cell:opacity-100",
-              "data-popup-open:pointer-events-auto data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:opacity-100 data-popup-open:hover:bg-bg-secondary data-popup-open:hover:text-primary",
+              "pointer-events-none group-hover/cell:pointer-events-auto group-hover/cell:opacity-100 hover:bg-bg-tertiary hover:text-primary",
+              "data-popup-open:pointer-events-auto data-popup-open:bg-bg-quaternary data-popup-open:text-primary data-popup-open:opacity-100",
             )}
             onClick={(event) => event.stopPropagation()}
           >

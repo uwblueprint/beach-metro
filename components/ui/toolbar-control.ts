@@ -6,7 +6,7 @@ export const toolbarControlHeightClass = "h-9";
 /** Circular toolbar icon button — fill hover; focus ring only when selected. */
 export const toolbarIconButtonClass = cn(
   "rounded-full border border-border bg-bg text-primary",
-  "hover:bg-bg-tertiary",
+  "hover:bg-bg-secondary",
   "focus-visible:border-border focus-visible:ring-0",
   "disabled:pointer-events-none disabled:opacity-50",
 );
