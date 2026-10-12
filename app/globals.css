@@ -123,11 +123,11 @@
   --popover: var(--bg);
   --popover-foreground: var(--foreground);
 
-  /* text colors — primary/secondary unchanged; tertiary/quaternary continue ΔL ≈ 0.312 */
+  /* text colors — values match Figma text-* swatches */
   --primary: var(--foreground);
-  --secondary: #38342e;
-  --tertiary: #58534b;
-  --quaternary: #777269;
+  --secondary: #433e37;
+  --tertiary: #777169;
+  --quaternary: #a9a49e;
 
   /* Neutral fills — hover +1 / active +2 from resting surface.
      On primary: hover secondary, active tertiary. On tertiary: hover quaternary, active quinary. */
