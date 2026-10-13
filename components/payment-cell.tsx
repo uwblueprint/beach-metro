@@ -88,7 +88,7 @@ function PopoverComment({
         ref={textareaRef}
         rows={2}
         value={draft}
-        disabled={readOnly}
+        readOnly={readOnly}
         placeholder="Add a note"
         aria-label={displayComment.trim() ? "Edit comment" : "Add comment"}
         className="min-h-16 resize-none"
@@ -304,6 +304,7 @@ function PaymentAmountPopover({
           align: "shift",
           fallbackAxisSide: "end",
         }}
+        initialFocus={false}
         className="box-border w-max min-w-[200px] max-w-[400px] gap-3 overflow-visible rounded-lg bg-bg p-3 text-md smooth-shadow-ring-sm!"
         onMouseEnter={handleHoverEnter}
         onMouseLeave={handleHoverLeave}
@@ -354,13 +355,18 @@ function PaymentAmountPopover({
           )}
 
           {override && (
-            <div className="rounded-lg bg-amber-50 p-3">
-              <p className="shrink-0 text-md font-medium text-amber-700">Manually overridden</p>
-              <p className="mt-0.5 shrink-0 text-md text-primary">
+            <div className="flex w-full min-w-0 flex-col gap-1 whitespace-normal">
+              <p className="text-md text-secondary">Manually overridden</p>
+              <p className="text-md text-primary">
                 {formatCurrency(override.originalValue)} → {formatCurrency(value)}
               </p>
-              <p className="mt-2 shrink-0 text-md font-medium text-amber-700">Note</p>
-              <p className="mt-0.5 shrink-0 text-md text-primary">{override.note}</p>
+              <Textarea
+                readOnly
+                rows={2}
+                value={override.note}
+                aria-label="Override note"
+                className="min-h-16 resize-none"
+              />
             </div>
           )}
         </div>
