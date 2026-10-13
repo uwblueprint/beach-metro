@@ -1,15 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { Check, ArrowLeftRight, MoreHorizontal, Pencil } from "lucide-react";
+import { Check, ArrowLeftRight, MoreHorizontal } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useOriginalLook } from "@/components/dev-look-toggle";
 import { cn } from "@/lib/utils";
 
 import type {
@@ -47,10 +49,10 @@ function PopoverComment({
 }) {
   // Optimistic cache updates the `comment` prop quickly; keep a short-lived local
   // override so the note stays visible if the parent is a frame behind.
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const skipCommitRef = React.useRef(false);
   const [pendingComment, setPendingComment] = React.useState<string | undefined>(undefined);
-  const [draft, setDraft] = React.useState(comment);
-  const [editSession, setEditSession] = React.useState(false);
-  const [actionTaken, setActionTaken] = React.useState(false);
+  const [focused, setFocused] = React.useState(false);
 
   const displayComment = pendingComment !== undefined ? pendingComment : comment;
 
@@ -59,100 +61,63 @@ function PopoverComment({
     setPendingComment(undefined);
   }
 
-  // Entering an edit session (pencil or ⋯ → Add comment) seeds the draft once.
-  if (editing && !editSession) {
-    setEditSession(true);
-    setActionTaken(false);
+  const [draft, setDraft] = React.useState(displayComment);
+  if (!focused && draft !== displayComment) {
     setDraft(displayComment);
-  } else if (!editing && editSession) {
-    setEditSession(false);
   }
 
-  function startEditing() {
-    setActionTaken(false);
-    setDraft(displayComment);
-    onEditingChange(true);
-  }
+  React.useEffect(() => {
+    if (!editing) return;
+    textareaRef.current?.focus();
+  }, [editing]);
 
   function commit(raw: string) {
-    if (actionTaken) return;
-    setActionTaken(true);
     const next = raw.trim() || null;
-    setPendingComment(next ?? "");
-    onSave?.(next);
+    const current = displayComment.trim() || null;
+    if (next !== current) {
+      setPendingComment(next ?? "");
+      onSave?.(next);
+    }
     onEditingChange(false);
   }
-
-  function cancel() {
-    setActionTaken(true);
-    setDraft(displayComment);
-    onEditingChange(false);
-  }
-
-  const isEmpty = !displayComment.trim();
-  const commentRowClassName =
-    "relative flex min-h-6 w-full min-w-0 items-center overflow-visible outline-none focus:outline-none focus-visible:outline-none";
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-1 overflow-visible whitespace-normal rounded-lg bg-bg-tertiary p-2">
-      <p className="shrink-0 text-md text-primary">Note</p>
-      {editing ? (
-        <div className={commentRowClassName}>
-          <input
-            autoFocus
-            type="text"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              event.stopPropagation();
-              if (event.nativeEvent.isComposing) return;
-              if (event.key === "Enter") {
-                event.preventDefault();
-                commit(event.currentTarget.value);
-              } else if (event.key === "Escape") {
-                event.preventDefault();
-                cancel();
-              }
-            }}
-            onBlur={(event) => commit(event.currentTarget.value)}
-            onFocus={(event) => event.target.select()}
-            aria-label={isEmpty ? "Add comment" : "Edit comment"}
-            placeholder="Add a note…"
-            className="h-6 min-h-6 w-full min-w-0 appearance-none border-0 bg-transparent p-0 text-md leading-[1.3] text-primary outline-none placeholder:text-quaternary"
-          />
-        </div>
-      ) : (
-        <div className={cn("group/comment-row gap-1", commentRowClassName)}>
-          {!readOnly && isEmpty ? (
-            <button
-              type="button"
-              className="flex h-6 min-w-0 flex-1 cursor-text items-center text-left text-md leading-[1.3] break-words text-muted-foreground outline-none focus:outline-none focus-visible:outline-none"
-              onClick={startEditing}
-            >
-              Add a note…
-            </button>
-          ) : (
-            <p className="flex min-h-6 min-w-0 flex-1 items-center text-md leading-[1.3] break-words text-primary">
-              {displayComment}
-            </p>
-          )}
-          {!readOnly && (
-            <div className="flex h-6 shrink-0 items-center self-center opacity-0 transition-opacity group-hover/comment-row:opacity-100 group-focus-within/comment-row:opacity-100">
-              <button
-                type="button"
-                aria-label={isEmpty ? "Add comment" : "Edit comment"}
-                className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[4px] border-0 bg-transparent text-muted-foreground outline-none transition-colors hover:bg-bg-secondary focus:outline-none focus-visible:outline-none [&_svg]:block [&_svg]:fill-none [&_svg]:stroke-current"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  startEditing();
-                }}
-              >
-                <Pencil className="size-3 fill-none" />
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+    <div className="flex w-full min-w-0 flex-col gap-1 whitespace-normal">
+      <p className="text-md text-secondary">Note</p>
+      <Textarea
+        ref={textareaRef}
+        rows={2}
+        value={draft}
+        disabled={readOnly}
+        placeholder="Add a note"
+        aria-label={displayComment.trim() ? "Edit comment" : "Add comment"}
+        className="min-h-16 resize-none"
+        onChange={(event) => setDraft(event.target.value)}
+        onFocus={() => {
+          setFocused(true);
+          onEditingChange(true);
+        }}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.nativeEvent.isComposing) return;
+          if (event.key === "Escape") {
+            event.preventDefault();
+            skipCommitRef.current = true;
+            setDraft(displayComment);
+            onEditingChange(false);
+            event.currentTarget.blur();
+          }
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          if (skipCommitRef.current) {
+            skipCommitRef.current = false;
+            return;
+          }
+          if (readOnly) return;
+          commit(event.currentTarget.value);
+        }}
+      />
     </div>
   );
 }
@@ -211,6 +176,7 @@ function PaymentAmountPopover({
   /** Parent calls this when the pointer moves onto the check or ⋯. */
   dismissRef?: React.RefObject<() => void>;
 }) {
+  const original = useOriginalLook();
   const [open, setOpen] = React.useState(false);
   const [editingComment, setEditingComment] = React.useState(false);
   const openTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -315,10 +281,10 @@ function PaymentAmountPopover({
             onMouseLeave={handleHoverLeave}
             onClick={(event) => event.preventDefault()}
           >
-            {hasComment && <CommentCornerIndicator />}
+            {(hasComment || (!original && overridden)) && <CommentCornerIndicator />}
             <span className="max-w-full truncate">
               ${value.toFixed(2)}
-              {overridden && <span aria-hidden>*</span>}
+              {original && overridden ? <span aria-hidden>*</span> : null}
             </span>
             {hasSubstitute && (
               <span className="max-w-full truncate text-xs leading-tight text-muted-foreground">
@@ -373,7 +339,7 @@ function PaymentAmountPopover({
             </span>
             <span className="shrink-0 text-md tabular-nums text-primary">
               {formatCurrency(calculatedValue)}
-              {overridden && <span aria-hidden>*</span>}
+              {original && overridden ? <span aria-hidden>*</span> : null}
             </span>
           </div>
 
@@ -554,6 +520,8 @@ export function PaymentCell({
   isLocked = false,
   className,
 }: PaymentCellProps) {
+  const original = useOriginalLook();
+  const cellHeight = original ? "h-12" : "h-10";
   const hasSubstitute = substituteCaptain !== "None";
   const hasComment = Boolean(comment?.trim());
   const nonInteractive = readOnly || isLocked;
@@ -565,7 +533,8 @@ export function PaymentCell({
     return (
       <div
         className={cn(
-          "relative z-10 flex h-12 w-full min-w-0 items-center bg-bg px-3 outline outline-2 outline-active -outline-offset-2",
+          "relative z-10 flex w-full min-w-0 items-center bg-bg px-3 outline outline-2 outline-active -outline-offset-2",
+          cellHeight,
           className,
         )}
       >
@@ -608,7 +577,8 @@ export function PaymentCell({
   return (
     <div
       className={cn(
-        "group/cell relative flex h-12 w-full min-w-0 items-center gap-1 overflow-hidden px-3 outline-none transition-colors focus:outline-none focus-visible:outline-none",
+        "group/cell relative flex w-full min-w-0 items-center gap-1 overflow-hidden px-3 outline-none transition-colors focus:outline-none focus-visible:outline-none",
+        cellHeight,
         !readOnly && "hover:bg-bg-secondary",
         flashTrigger > 0 && "payment-cell-flash",
         className,
@@ -639,10 +609,10 @@ export function PaymentCell({
               paid ? "text-muted-foreground opacity-40" : "text-primary",
             )}
           >
-            {hasComment && <CommentCornerIndicator />}
+            {(hasComment || (!original && overridden)) && <CommentCornerIndicator />}
             <span className="max-w-full truncate">
               ${value.toFixed(2)}
-              {overridden && <span aria-hidden>*</span>}
+              {original && overridden ? <span aria-hidden>*</span> : null}
             </span>
             {hasSubstitute && (
               <span className="max-w-full truncate text-xs leading-tight text-muted-foreground">
