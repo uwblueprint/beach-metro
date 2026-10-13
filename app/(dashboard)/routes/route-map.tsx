@@ -68,14 +68,16 @@ export type FilterPlacement = "pills" | "legacy" | "map";
 // so each token is resolved through a 1px canvas (handles oklch and var() chains).
 const MAP_TOKENS = {
   bg: "--bg",
-  bgSecondary: "--bg-secondary",
   border: "--border",
   primary: "--primary",
-  secondary: "--secondary",
-  tagSuccess: "--tag-success",
+  tertiary: "--tertiary",
+  land: "--map-land",
   road: "--map-road",
+  park: "--map-park",
   water: "--map-water",
   waterLabel: "--map-water-label",
+  label: "--map-label",
+  labelStroke: "--map-label-stroke",
   active: "--active",
   activeHover: "--active-hover",
   activeSelected: "--active-selected",
@@ -90,9 +92,18 @@ let mapColorsCache: MapColors | null = null;
 /** Browser-only — call from effects / client state, never at module scope. */
 function mapColors(): MapColors {
   if (mapColorsCache) return mapColorsCache;
-  const style = getComputedStyle(document.documentElement);
+  const root = document.documentElement;
+  // Resolve var() aliases (e.g. --map-road → --disabled) through a real property
+  // so the canvas always gets a concrete colour, not an unresolved custom-property string.
+  const probe = document.createElement("span");
+  probe.style.position = "absolute";
+  probe.style.visibility = "hidden";
+  probe.style.pointerEvents = "none";
+  root.appendChild(probe);
   const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
-  const toHex = (cssColor: string) => {
+  const toHex = (token: string) => {
+    probe.style.color = `var(${token})`;
+    const cssColor = getComputedStyle(probe).color;
     if (!ctx) return "#000000";
     ctx.clearRect(0, 0, 1, 1);
     ctx.fillStyle = "#000000";
@@ -102,25 +113,23 @@ function mapColors(): MapColors {
     return `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
   };
   mapColorsCache = Object.fromEntries(
-    Object.entries(MAP_TOKENS).map(([key, name]) => [
-      key,
-      toHex(style.getPropertyValue(name).trim()),
-    ]),
+    Object.entries(MAP_TOKENS).map(([key, name]) => [key, toHex(name)]),
   ) as MapColors;
+  probe.remove();
   return mapColorsCache;
 }
 
-// Warm land; roads are the dominant basemap signal. POI/transit off.
+// White land; roads are the dominant basemap signal. POI/transit off.
 // (Legacy JSON styling; works because we don't set a cloud `mapId`.)
 function buildMapStyle(c: MapColors): google.maps.MapTypeStyle[] {
   return [
-    { elementType: "geometry", stylers: [{ color: c.bgSecondary }] },
+    { elementType: "geometry", stylers: [{ color: c.land }] },
     { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-    { elementType: "labels.text.fill", stylers: [{ color: c.secondary }] },
-    { elementType: "labels.text.stroke", stylers: [{ color: c.bg }] },
+    { elementType: "labels.text.fill", stylers: [{ color: c.label }] },
+    { elementType: "labels.text.stroke", stylers: [{ color: c.labelStroke }] },
     { featureType: "administrative", elementType: "geometry", stylers: [{ visibility: "off" }] },
     { featureType: "poi", stylers: [{ visibility: "off" }] },
-    { featureType: "poi.park", elementType: "geometry", stylers: [{ color: c.tagSuccess }] },
+    { featureType: "poi.park", elementType: "geometry", stylers: [{ color: c.park }] },
     { featureType: "poi.park", elementType: "labels", stylers: [{ visibility: "off" }] },
     { featureType: "road", elementType: "geometry", stylers: [{ color: c.road }] },
     { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: c.road }] },
@@ -128,47 +137,94 @@ function buildMapStyle(c: MapColors): google.maps.MapTypeStyle[] {
     { featureType: "transit", stylers: [{ visibility: "off" }] },
     { featureType: "water", elementType: "geometry", stylers: [{ color: c.water }] },
     { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: c.waterLabel }] },
-    { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: c.bg }] },
+    {
+      featureType: "water",
+      elementType: "labels.text.stroke",
+      stylers: [{ color: c.labelStroke }],
+    },
   ];
 }
 
 /** Google Maps circle symbol `scale` is the radius in px. */
 const ROUTE_ENDPOINT_DOT_SCALE = 3.5;
 const ROUTE_ENDPOINT_DOT_SCALE_SELECTED = 5;
+/** Drops draw as a square 1.5× the endpoint dot (side = 2 × scale). */
+const DROP_SCALE_MULTIPLIER = 1.5;
+const SQUARE_PATH = "M -1,-1 1,-1 1,1 -1,1 z";
+
+function pointIcon(
+  drop: boolean,
+  selected: boolean,
+  color: string,
+  opacity: number,
+): google.maps.Symbol {
+  const scale = selected ? ROUTE_ENDPOINT_DOT_SCALE_SELECTED : ROUTE_ENDPOINT_DOT_SCALE;
+  return {
+    path: drop ? SQUARE_PATH : google.maps.SymbolPath.CIRCLE,
+    scale: drop ? scale * DROP_SCALE_MULTIPLIER : scale,
+    fillColor: color,
+    fillOpacity: opacity,
+    strokeColor: mapColors().bg,
+    strokeWeight: 1.5,
+  };
+}
+
+const ROUTE_LINE_WEIGHT = 4;
+const ROUTE_LINE_WEIGHT_SELECTED = 6;
+/** Hover/click target is 3x the visible stroke: one extra stroke-width on each side. */
+const ROUTE_HIT_MULTIPLIER = 3;
 const HOME_PIN_SIZE_MULTIPLIER = 5;
 /** Diameter of the home pin — always 5× the default route endpoint dot. */
 const HOME_PIN_DIAMETER_PX = ROUTE_ENDPOINT_DOT_SCALE * 2 * HOME_PIN_SIZE_MULTIPLIER;
 
-/** Matches the toolbar icon button (components/ui/toolbar-control.ts): bg / border / primary. */
-function homePinMarkerIcon(): google.maps.Icon {
+/**
+ * Filled in the selected-route colour (blue, or red when vacant) with a white
+ * house, ringed in bg like the endpoint dots.
+ */
+function homePinMarkerIcon(vacant: boolean): google.maps.Icon {
   const c = mapColors();
+  const fill = vacant ? c.destructiveSelected : c.activeSelected;
   const d = HOME_PIN_DIAMETER_PX;
   const r = d / 2;
   const inset = 8;
   const iconBox = d - inset * 2;
   const houseScale = iconBox / 24;
+  // Room around the circle so the drop shadow isn't clipped by the image bounds.
+  const pad = 6;
+  const size = d + pad * 2;
   const svg = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${d}" height="${d}" viewBox="0 0 ${d} ${d}">`,
-    `<circle cx="${r}" cy="${r}" r="${r - 1}" fill="${c.bg}" stroke="${c.border}" stroke-width="1"/>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`,
+    `<defs><filter id="s" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.25"/></filter></defs>`,
+    `<g transform="translate(${pad},${pad})">`,
+    `<circle cx="${r}" cy="${r}" r="${r - 1}" fill="${fill}" stroke="${c.bg}" stroke-width="1.5" filter="url(#s)"/>`,
     `<g transform="translate(${inset},${inset}) scale(${houseScale})">`,
-    `<path fill="none" stroke="${c.primary}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/>`,
-    `<path fill="none" stroke="${c.primary}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`,
-    `</g></svg>`,
+    `<path fill="none" stroke="${c.bg}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/>`,
+    `<path fill="none" stroke="${c.bg}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`,
+    `</g></g></svg>`,
   ].join("");
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new google.maps.Size(d, d),
-    anchor: new google.maps.Point(r, r),
+    scaledSize: new google.maps.Size(size, size),
+    anchor: new google.maps.Point(pad + r, pad + r),
   };
 }
 
-/** Route overlays — vacant = destructive, assigned = active (hover / selected steps). */
-function routeColor(route: MapRoute, selected: boolean, hovered: boolean): string {
+/**
+ * Route overlays — vacant = destructive, assigned = tertiary grey.
+ * Selected is the only state that switches to active blue (or stronger red).
+ */
+function routeColor(route: MapRoute, selected: boolean): string {
   const c = mapColors();
   if (route.lifecycle === "vacant") {
-    return selected ? c.destructiveSelected : hovered ? c.destructiveHover : c.destructive;
+    return selected ? c.destructiveSelected : c.destructive;
   }
-  return selected ? c.activeSelected : hovered ? c.activeHover : c.active;
+  return selected ? c.activeSelected : c.tertiary;
+}
+
+/** Resting routes sit back at half strength; hover lifts to 80%; selected draws at full. */
+function routeOpacity(selected: boolean, hovered: boolean): number {
+  if (selected) return 1;
+  return hovered ? 0.8 : 0.5;
 }
 
 /**
@@ -188,6 +244,7 @@ function RouteOverlay(props: {
   const map = useMap();
   const { route, selected, hovered, onSelect, onRouteHover, onRouteLeave } = props;
   const lineRef = useRef<google.maps.Polyline | null>(null);
+  const hitLineRef = useRef<google.maps.Polyline | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
 
   const routeRef = useRef(route);
@@ -219,7 +276,8 @@ function RouteOverlay(props: {
     if (!map || !route.start || !route.end) return;
     const from = { lat: route.start.latitude, lng: route.start.longitude };
     const to = { lat: route.end.latitude, lng: route.end.longitude };
-    const color = routeColor(routeRef.current, false, false);
+    const color = routeColor(routeRef.current, false);
+    const opacity = routeOpacity(false, false);
 
     const emitHoverAt = (cursor: google.maps.LatLngLiteral) => {
       const r = routeRef.current;
@@ -231,14 +289,7 @@ function RouteOverlay(props: {
         map,
         position,
         clickable: true,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: ROUTE_ENDPOINT_DOT_SCALE,
-          fillColor: color,
-          fillOpacity: 1,
-          strokeColor: mapColors().bg,
-          strokeWeight: 1.5,
-        },
+        icon: pointIcon(asDrop, false, color, opacity),
         zIndex: 3,
       });
 
@@ -249,6 +300,7 @@ function RouteOverlay(props: {
       marker.addListener("mouseout", () => onRouteLeaveRef.current());
       markersRef.current = [marker];
       lineRef.current = null;
+      hitLineRef.current = null;
 
       return () => {
         google.maps.event.clearInstanceListeners(marker);
@@ -263,16 +315,17 @@ function RouteOverlay(props: {
     const line = new google.maps.Polyline({
       map,
       path: linePath,
+      clickable: false,
       strokeColor: color,
-      strokeWeight: 4,
-      strokeOpacity: dashed ? 0 : 0.95,
+      strokeWeight: ROUTE_LINE_WEIGHT,
+      strokeOpacity: dashed ? 0 : opacity,
       ...(dashed && {
         icons: [
           {
             icon: {
               path: "M 0,-1 0,1",
               strokeColor: color,
-              strokeOpacity: 1,
+              strokeOpacity: opacity,
               scale: 3,
             },
             offset: "0",
@@ -282,15 +335,25 @@ function RouteOverlay(props: {
       }),
       zIndex: 2,
     });
-    line.addListener("click", () => onSelectRef.current());
+    lineRef.current = line;
+
+    const hitLine = new google.maps.Polyline({
+      map,
+      path: linePath,
+      strokeColor: color,
+      strokeOpacity: 0,
+      strokeWeight: ROUTE_LINE_WEIGHT * ROUTE_HIT_MULTIPLIER,
+      zIndex: 3,
+    });
+    hitLine.addListener("click", () => onSelectRef.current());
     const onLineMove = (e: google.maps.MapMouseEvent) => {
       if (!e.latLng) return;
       emitHoverAt({ lat: e.latLng.lat(), lng: e.latLng.lng() });
     };
-    line.addListener("mouseover", onLineMove);
-    line.addListener("mousemove", onLineMove);
-    line.addListener("mouseout", () => onRouteLeaveRef.current());
-    lineRef.current = line;
+    hitLine.addListener("mouseover", onLineMove);
+    hitLine.addListener("mousemove", onLineMove);
+    hitLine.addListener("mouseout", () => onRouteLeaveRef.current());
+    hitLineRef.current = hitLine;
 
     const markers = [endpoint(from), endpoint(to)];
     markers.forEach((m, i) => {
@@ -302,9 +365,11 @@ function RouteOverlay(props: {
     markersRef.current = markers;
 
     return () => {
-      google.maps.event.clearInstanceListeners(line);
       line.setMap(null);
       lineRef.current = null;
+      google.maps.event.clearInstanceListeners(hitLine);
+      hitLine.setMap(null);
+      hitLineRef.current = null;
       markers.forEach((m) => {
         google.maps.event.clearInstanceListeners(m);
         m.setMap(null);
@@ -328,20 +393,30 @@ function RouteOverlay(props: {
 
   // Restyle in place so hover/selection doesn't remount and flicker mouseout.
   useEffect(() => {
-    const color = routeColor(route, selected, hovered);
-    const weight = selected ? 6 : 4;
+    const color = routeColor(route, selected);
+    const opacity = routeOpacity(selected, hovered);
+    const weight = selected ? ROUTE_LINE_WEIGHT_SELECTED : ROUTE_LINE_WEIGHT;
     const zLine = selected ? 20 : hovered ? 12 : 2;
     const zMark = selected ? 21 : hovered ? 13 : 3;
-    const scale = selected ? ROUTE_ENDPOINT_DOT_SCALE_SELECTED : ROUTE_ENDPOINT_DOT_SCALE;
     const line = lineRef.current;
     if (line) {
-      line.setOptions({ strokeColor: color, strokeWeight: weight, zIndex: zLine });
       const icons = line.get("icons") as google.maps.IconSequence[] | undefined;
-      if (icons?.[0]?.icon) {
+      const dashed = Boolean(icons?.[0]?.icon);
+      line.setOptions({
+        strokeColor: color,
+        strokeOpacity: dashed ? 0 : opacity,
+        strokeWeight: weight,
+        zIndex: zLine,
+      });
+      hitLineRef.current?.setOptions({
+        strokeWeight: weight * ROUTE_HIT_MULTIPLIER,
+        zIndex: zLine + 1,
+      });
+      if (dashed) {
         line.set("icons", [
           {
-            ...icons[0],
-            icon: { ...icons[0].icon, strokeColor: color },
+            ...icons![0],
+            icon: { ...icons![0].icon!, strokeColor: color, strokeOpacity: opacity },
           },
         ]);
       }
@@ -349,17 +424,10 @@ function RouteOverlay(props: {
     for (const m of markersRef.current) {
       m.setOptions({
         zIndex: zMark,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale,
-          fillColor: color,
-          fillOpacity: 1,
-          strokeColor: mapColors().bg,
-          strokeWeight: 1.5,
-        },
+        icon: pointIcon(asDrop, selected, color, opacity),
       });
     }
-  }, [route, selected, hovered]);
+  }, [route, selected, hovered, asDrop]);
 
   return null;
 }
@@ -503,13 +571,17 @@ function FitSelection(props: { route: MapRoute | null; memberHome: SelectedMembe
   return null;
 }
 
-let homePinMarkerIconCache: google.maps.Icon | null = null;
-function getHomePinMarkerIcon(): google.maps.Icon {
-  homePinMarkerIconCache ??= homePinMarkerIcon();
-  return homePinMarkerIconCache;
+const homePinMarkerIconCache = new globalThis.Map<boolean, google.maps.Icon>();
+function getHomePinMarkerIcon(vacant: boolean): google.maps.Icon {
+  let icon = homePinMarkerIconCache.get(vacant);
+  if (!icon) {
+    icon = homePinMarkerIcon(vacant);
+    homePinMarkerIconCache.set(vacant, icon);
+  }
+  return icon;
 }
 
-function HomePinMarker(props: { home: SelectedMemberHome | null }) {
+function HomePinMarker(props: { home: SelectedMemberHome | null; vacant: boolean }) {
   const map = useMap("routes-map");
   const markerRef = useRef<google.maps.Marker | null>(null);
 
@@ -522,23 +594,32 @@ function HomePinMarker(props: { home: SelectedMemberHome | null }) {
       return;
     }
     const position = { lat: props.home.latitude, lng: props.home.longitude };
+    const icon = getHomePinMarkerIcon(props.vacant);
     if (markerRef.current) {
       markerRef.current.setPosition(position);
       markerRef.current.setTitle(props.home.name);
+      markerRef.current.setIcon(icon);
       return;
     }
     markerRef.current = new google.maps.Marker({
       map,
       position,
       title: props.home.name,
-      icon: getHomePinMarkerIcon(),
+      icon,
       zIndex: 30,
     });
     return () => {
       markerRef.current?.setMap(null);
       markerRef.current = null;
     };
-  }, [map, props.home?.latitude, props.home?.longitude, props.home?.name, props.home]);
+  }, [
+    map,
+    props.home?.latitude,
+    props.home?.longitude,
+    props.home?.name,
+    props.home,
+    props.vacant,
+  ]);
 
   return null;
 }
@@ -755,7 +836,7 @@ function MapControls(props: {
             shape="rounded"
             aria-label="Toggle filters"
             aria-expanded={props.filterOpen}
-            selected={props.filterOpen || filterClosing}
+            selected={props.filterOpen || filterClosing || hasActivePills}
             onClick={props.onFilterToggle}
           >
             <Filter />
@@ -843,7 +924,10 @@ function MapControls(props: {
           </div>
         </div>
 
-        <div className="t-resize overflow-hidden" style={{ height: filterHeight }}>
+        <div
+          className="t-resize overflow-hidden"
+          style={{ height: filterVisible ? filterHeight : 0 }}
+        >
           {filterVisible && (
             <div
               ref={filterInnerRef}
@@ -1103,7 +1187,10 @@ export function RouteMap(props: {
             }
             memberHome={props.selectedMemberHome}
           />
-          <HomePinMarker home={props.selectedMemberHome} />
+          <HomePinMarker
+            home={props.selectedMemberHome}
+            vacant={props.routes.find((r) => r.id === props.selectedId)?.lifecycle === "vacant"}
+          />
         </Map>
         {props.filterPlacement === "map" ? (
           <MapControls

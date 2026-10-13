@@ -183,10 +183,15 @@
   --chart-bar-hover: oklch(0.875 0.061 224.2);
   --chart-bar-empty: var(--bg-quinary);
 
-  /* Basemap-only colours (route-map reads these at runtime; Maps JS needs hex) */
-  --map-road: oklch(0.836 0 0);
-  --map-water: oklch(0.94 0.013 228.9);
-  --map-water-label: oklch(0.751 0.02 227.4);
+  /* Basemap — aliases of design tokens so the map tracks palette retunes.
+     route-map resolves these to hex at runtime (Maps JS can't read CSS vars). */
+  --map-land: var(--bg);
+  --map-road: var(--border);
+  --map-park: var(--tag-success);
+  --map-water: var(--active-border);
+  --map-water-label: var(--tertiary);
+  --map-label: var(--tertiary);
+  --map-label-stroke: var(--bg);
 
   /* misc styles */
   --radius: 0.625rem;
