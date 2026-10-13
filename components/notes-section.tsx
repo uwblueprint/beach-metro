@@ -103,7 +103,7 @@ function NotesSection({ role, memberId }: NotesSectionProps) {
         // An optimistic row has no server id yet, so editing it would 404.
         onEdit={note.id.startsWith("optimistic-") ? undefined : () => setEditingId(note.id)}
       >
-        <span className="text-secondary">{note.text}</span>
+        {note.text}
       </SidePanelRow>
     );
   }

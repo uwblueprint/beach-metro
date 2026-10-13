@@ -24,7 +24,7 @@ function SidePanelField({
     <div className={cn("flex flex-col gap-2", className)}>
       <label htmlFor={htmlFor} className="text-md font-normal text-secondary">
         {label}
-        {labelSuffix ? <span className="text-tertiary"> {labelSuffix}</span> : null}
+        {labelSuffix ? ` ${labelSuffix}` : null}
       </label>
       {children}
     </div>

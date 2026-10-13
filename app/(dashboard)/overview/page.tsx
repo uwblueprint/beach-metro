@@ -341,7 +341,7 @@ export default function OverviewPage() {
                     />
                   }
                 >
-                  <span className="text-md">{selectedYearOption?.name ?? "…"}</span>
+                  <span className="text-md text-tertiary">{selectedYearOption?.name ?? "…"}</span>
                   <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent

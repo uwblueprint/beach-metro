@@ -29,7 +29,7 @@ function SearchBar({
   return (
     <div
       className={cn(
-        "@container flex w-full items-center gap-3 px-3",
+        "flex w-full items-center gap-3 px-3",
         toolbarControlHeightClass,
         toolbarSearchBarShellClass,
         disabled && "pointer-events-none opacity-50",
@@ -46,7 +46,7 @@ function SearchBar({
         placeholder={placeholder}
         disabled={disabled}
         aria-label={placeholder}
-        className="min-w-0 flex-1 bg-transparent text-md text-primary outline-none placeholder:text-transparent @[10rem]:placeholder:text-secondary"
+        className="min-w-0 flex-1 bg-transparent text-md text-ellipsis text-primary outline-none placeholder:text-quaternary"
       />
       {value.length > 0 && (
         <button

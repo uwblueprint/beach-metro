@@ -32,7 +32,7 @@ const SIDEBAR_WIDTH_COLLAPSED = SIDEBAR_GUTTER + SIDEBAR_ICON_RAIL;
 
 const NAV_ITEMS: { label: string; href: string; icon: LucideIcon }[] = [
   { label: "Overview", href: "/overview", icon: LayoutGrid },
-  { label: "Routes", href: "/routes", icon: MapPin },
+  { label: "Deliveries", href: "/routes", icon: MapPin },
   { label: "Members", href: "/members", icon: Users },
   { label: "Finances", href: "/finances", icon: Briefcase },
   { label: "Labels", href: "/labels", icon: Clipboard },
@@ -105,13 +105,13 @@ export function AppSidebar({ userEmail }: { userEmail: string | null }) {
           {/* Expand — centered in the square tile when collapsed */}
           <Button
             type="button"
-            variant="default"
+            variant="text"
             size="icon"
             aria-label="Expand sidebar"
             aria-expanded={!collapsed}
             tabIndex={collapsed ? 0 : -1}
             className={cn(
-              "absolute top-1/2 left-1/2 z-10 size-8 -translate-x-1/2 -translate-y-1/2 text-secondary",
+              "absolute top-1/2 left-1/2 z-10 size-8 -translate-x-1/2 -translate-y-1/2 rounded-[14px] text-secondary",
               "transition-opacity duration-150 ease-out",
               collapsed ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0",
             )}
@@ -120,24 +120,18 @@ export function AppSidebar({ userEmail }: { userEmail: string | null }) {
             <SidebarIcon aria-hidden strokeWidth={1.75} />
           </Button>
 
-          {/* Collapse — right side, hover-reveal when expanded (4px inset = equal to tile pad) */}
+          {/* Collapse — right side when expanded (4px inset = equal to tile pad) */}
           <Button
             type="button"
-            variant="default"
+            variant="text"
             size="icon"
             aria-label="Collapse sidebar"
             aria-expanded={!collapsed}
             tabIndex={collapsed ? -1 : 0}
             className={cn(
-              "absolute top-1/2 right-1 z-10 size-8 -translate-y-1/2 text-secondary",
+              "absolute top-1/2 right-1 z-10 size-8 -translate-y-1/2 rounded-[14px] text-secondary",
               "transition-opacity duration-150 ease-out",
-              collapsed
-                ? "pointer-events-none opacity-0"
-                : [
-                    "pointer-events-none opacity-0",
-                    "group-hover/brand:pointer-events-auto group-hover/brand:opacity-100",
-                    "group-focus-within/brand:pointer-events-auto group-focus-within/brand:opacity-100",
-                  ],
+              collapsed ? "pointer-events-none opacity-0" : "pointer-events-auto opacity-100",
             )}
             onClick={() => setCollapsed(true)}
           >
