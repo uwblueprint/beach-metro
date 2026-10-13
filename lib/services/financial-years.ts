@@ -100,7 +100,7 @@ export async function getYearDetail(id: string): Promise<YearDetail> {
     .from("issues")
     .select("*")
     .eq("financial_year_id", id)
-    .order("date");
+    .order("date", { ascending: false });
   if (issueError) throwDb(issueError);
   const issues = (issueData ?? []) as IssueRow[];
 

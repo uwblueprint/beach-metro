@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { DatePicker } from "@/components/ui/date-picker";
 import { PageBreadcrumb } from "@/components/ui/page-breadcrumb";
+import { useOriginalLook, useTweak } from "@/components/dev-look-toggle";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
@@ -75,8 +76,6 @@ import {
 /** Fixed column widths — table-layout:fixed; checking cells must not resize columns */
 const ISSUE_COLUMN_WIDTH = 232;
 const CAPTAIN_COLUMN_WIDTH = 133;
-
-const FINANCES_TABLE_CELL = "border-[0.5px] border-border";
 
 function OpenLockIcon() {
   return (
@@ -169,6 +168,63 @@ function IssueDeleteButton({ onClick }: { onClick: () => void }) {
   );
 }
 
+function IssueRowMenu({
+  locked,
+  canFreeze,
+  canDelete,
+  deleteDisabledReason,
+  onToggleLock,
+  onDelete,
+}: {
+  locked: boolean;
+  canFreeze: boolean;
+  canDelete: boolean;
+  deleteDisabledReason?: string;
+  onToggleLock: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            aria-label="Issue actions"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            className="flex size-7 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground transition-[background-color,color] duration-100 hover:bg-bg-secondary hover:text-primary data-popup-open:bg-bg-secondary [&_svg]:pointer-events-none"
+          />
+        }
+      >
+        <MoreHorizontal className="size-4" strokeWidth={1.75} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        side="bottom"
+        sideOffset={4}
+        collisionPadding={8}
+        collisionAvoidance={{ side: "flip", align: "shift", fallbackAxisSide: "end" }}
+      >
+        {canFreeze ? (
+          <DropdownMenuItem onClick={onToggleLock}>
+            {locked ? "Unfreeze" : "Freeze"}
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuItem
+          variant="destructive"
+          disabled={!canDelete}
+          title={canDelete ? undefined : deleteDisabledReason}
+          onClick={onDelete}
+        >
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 type FilterSegmentOption<T extends string> = {
   value: T;
   label: string;
@@ -252,6 +308,18 @@ function FilterSegmentGroup<T extends string>({
 }
 
 export default function FinancesPage() {
+  const original = useOriginalLook();
+  const tableCell = useTweak(
+    "border-[0.5px] border-hairline",
+    "border-[0.5px] border-border",
+  );
+  const tableHead = useTweak(
+    "sticky top-0 z-10 border-x-[0.5px] border-b-[0.5px] border-hairline bg-bg",
+    "border-[0.5px] border-border",
+  );
+  const rowHeight = useTweak("h-10", "h-12");
+  const headerType = useTweak("text-md", "text-sm");
+  const issuePad = useTweak("pl-6 pr-4", "px-4");
   const [selectedYearId, setSelectedYearId] = React.useState<string | null>(null);
   const [draftIssue, setDraftIssue] = React.useState<{ label: string } | null>(null);
   const [editingCell, setEditingCell] = React.useState<CellKey | null>(null);
@@ -643,11 +711,21 @@ export default function FinancesPage() {
     <div className="page-container">
       <div className="page">
         <div className="flex h-full min-h-0 flex-col">
-          <PageBreadcrumb
-            className="pr-[18px]"
-            root="Finances"
-            current={
-              <div className="inline-flex min-w-0 items-center gap-1">
+          {original ? (
+            <PageBreadcrumb
+              className="pr-[18px]"
+              root="Finances"
+              current={
+              <div
+                className={cn(
+                  "inline-flex min-w-0 items-center",
+                  original
+                    ? "gap-1"
+                    : isEditingTableTitle
+                      ? "gap-1"
+                      : "-ml-1.5",
+                )}
+              >
                 {isEditingTableTitle ? (
                   <span className="inline-grid items-center [&>*]:col-start-1 [&>*]:row-start-1">
                     <span aria-hidden className="invisible whitespace-pre px-0 text-md font-medium">
@@ -673,7 +751,11 @@ export default function FinancesPage() {
                         variant="text"
                         size="sm"
                         aria-label="Switch table"
-                        className="-ml-1 gap-1 px-1.5 font-medium"
+                        className={
+                          original
+                            ? "-ml-1 gap-1 px-1.5 font-medium"
+                            : "h-auto gap-1 px-1.5 font-medium text-md text-secondary"
+                        }
                         onDoubleClick={!isEditingTableTitle ? startTableTitleEdit : undefined}
                       />
                     }
@@ -713,9 +795,9 @@ export default function FinancesPage() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-            }
-            actions={
-              <>
+              }
+              actions={
+                <>
                 <Button variant="default" size="sm" onClick={handleExportCsv}>
                   Export as CSV
                 </Button>
@@ -744,46 +826,117 @@ export default function FinancesPage() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </>
-            }
-          />
+                </>
+              }
+            />
+          ) : (
+            <div className="page-header-container">
+              <div className="flex min-w-0 items-center gap-2">
+                <h1 className="shrink-0 text-md text-primary">Finances</h1>
+              <div
+                className={cn(
+                  "inline-flex min-w-0 items-center",
+                  original
+                    ? "gap-1"
+                    : isEditingTableTitle
+                      ? "gap-1"
+                      : "-ml-1.5",
+                )}
+              >
+                {isEditingTableTitle ? (
+                  <span className="inline-grid items-center [&>*]:col-start-1 [&>*]:row-start-1">
+                    <span aria-hidden className="invisible whitespace-pre px-0 text-md font-medium">
+                      {tableTitleEditValue || tableDisplayLabel}
+                    </span>
+                    <input
+                      autoFocus
+                      value={tableTitleEditValue}
+                      onChange={(event) => setTableTitleEditValue(event.target.value)}
+                      onKeyDown={handleTableTitleKeyDown}
+                      onBlur={cancelTableTitleEdit}
+                      onFocus={(event) => event.target.select()}
+                      aria-label="Table name"
+                      className="w-full min-w-0 border-0 bg-transparent p-0 text-md font-medium text-primary outline outline-2 outline-active -outline-offset-2"
+                    />
+                  </span>
+                ) : null}
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="text"
+                        size="sm"
+                        aria-label="Switch table"
+                        className={
+                          original
+                            ? "-ml-1 gap-1 px-1.5 font-medium"
+                            : "h-auto gap-1 px-1.5 font-medium text-md text-secondary"
+                        }
+                        onDoubleClick={!isEditingTableTitle ? startTableTitleEdit : undefined}
+                      />
+                    }
+                  >
+                    {!isEditingTableTitle && (
+                      <span className={cn("text-md", !original && "text-secondary")}>
+                        {tableDisplayLabel}
+                      </span>
+                    )}
+                    <ChevronDown
+                      className={cn(
+                        "size-3.5",
+                        original ? "text-muted-foreground" : "text-secondary",
+                      )}
+                      strokeWidth={2}
+                    />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="start"
+                    side="bottom"
+                    sideOffset={4}
+                    className="min-w-56"
+                  >
+                    <DropdownMenuRadioGroup
+                      value={activeYearId ?? ""}
+                      onValueChange={handleSelectTable}
+                    >
+                      {tableOptions.map((option) => {
+                        const isSelected = option.id === activeYearId;
 
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6">
-            {showArchiveBanner && archivedYearDateRange && (
-              <ArchiveBanner
-                dateRange={archivedYearDateRange}
-                onDismiss={() => setShowArchiveBanner(false)}
-                onUnarchive={
-                  activeYearId
-                    ? () =>
-                        unarchiveYear.mutate(activeYearId, {
-                          onSuccess: () => setShowArchiveBanner(false),
-                        })
-                    : undefined
-                }
-              />
-            )}
-
-            {/* Filter + table */}
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-end">
+                        return (
+                          <DropdownMenuRadioItem
+                            key={option.id}
+                            value={option.id}
+                            className={cn(
+                              "data-checked:font-medium",
+                              option.archived && !isSelected && "text-muted-foreground",
+                            )}
+                          >
+                            {option.label}
+                          </DropdownMenuRadioItem>
+                        );
+                      })}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
                 <Popover open={filtersOpen} onOpenChange={handleFiltersOpenChange}>
                   <PopoverTrigger
                     render={
-                      <button
+                      <Button
                         type="button"
+                        variant="text"
+                        size="icon"
                         aria-label="Filter"
-                        className={cn(
-                          "flex size-7 shrink-0 items-center justify-center rounded-[8px] border-[0.5px] border-border bg-bg text-muted-foreground transition-[background-color,color,border-color] duration-300 ease-out",
-                          "hover:border-transparent hover:bg-bg-secondary hover:text-primary",
-                          "data-popup-open:border-transparent data-popup-open:bg-bg-tertiary data-popup-open:text-primary data-popup-open:hover:bg-bg-tertiary",
-                        )}
+                        className="text-secondary data-popup-open:bg-bg-tertiary"
                       >
                         <Filter className="size-4" strokeWidth={1.5} />
-                      </button>
+                      </Button>
                     }
                   />
-                  <PopoverContent
+<PopoverContent
                     align="end"
                     side="bottom"
                     sideOffset={4}
@@ -823,6 +976,7 @@ export default function FinancesPage() {
                               label="Start Date"
                               value={draftFilters.startDate}
                               onChange={(startDate) => updateDraftFilters({ startDate })}
+                              max={draftFilters.endDate}
                             />
                           </div>
                           <span aria-hidden className="shrink-0 text-sm text-muted-foreground">
@@ -833,6 +987,7 @@ export default function FinancesPage() {
                               label="End Date"
                               value={draftFilters.endDate}
                               onChange={(endDate) => updateDraftFilters({ endDate })}
+                              min={draftFilters.startDate}
                             />
                           </div>
                         </div>
@@ -860,7 +1015,195 @@ export default function FinancesPage() {
                                   onCheckedChange={(nextChecked) =>
                                     toggleDraftCaptainFilter(captain.id, nextChecked)
                                   }
-                                  className="border-border bg-bg data-checked:border-primary data-checked:bg-primary data-checked:text-bg"
+                                  className={
+                                    original
+                                      ? "border-border bg-bg data-checked:border-primary data-checked:bg-primary data-checked:text-bg"
+                                      : undefined
+                                  }
+                                />
+                                {captain.name}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </FilterSection>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 border-t border-hairline pt-2.5">
+                      <Button type="button" variant="text" size="sm" onClick={clearDraftFilters}>
+                        Clear all
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        disabled={dateRangeInvalid}
+                        onClick={applyFilters}
+                      >
+                        Apply
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                <Button variant="default" size="sm" onClick={handleExportCsv}>
+                  Export as CSV
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="text"
+                        size="icon"
+                        aria-label="More actions"
+                        className="text-secondary data-popup-open:bg-bg-tertiary"
+                      />
+                    }
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {!isArchivedYear && (
+                      <DropdownMenuItem onClick={handleArchiveTable}>
+                        Archive table
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onClick={openCreateTableDialog}>
+                      Create new table
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          )}
+
+          <div
+            className={
+              original
+                ? "flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6"
+                : "flex min-h-0 flex-1 flex-col overflow-hidden"
+            }
+          >
+            {showArchiveBanner && archivedYearDateRange && (
+              <div className={cn(!original && "shrink-0 px-4 pt-4")}>
+                <ArchiveBanner
+                  dateRange={archivedYearDateRange}
+                  onDismiss={() => setShowArchiveBanner(false)}
+                  onUnarchive={
+                    activeYearId
+                      ? () =>
+                          unarchiveYear.mutate(activeYearId, {
+                            onSuccess: () => setShowArchiveBanner(false),
+                          })
+                      : undefined
+                  }
+                />
+              </div>
+            )}
+
+            {original ? (
+              <div className="flex justify-end">
+                <Popover open={filtersOpen} onOpenChange={handleFiltersOpenChange}>
+                  <PopoverTrigger
+                    render={
+                      <button
+                        type="button"
+                        aria-label="Filter"
+                        className={cn(
+                          "flex size-7 shrink-0 items-center justify-center rounded-[8px] border-[0.5px] border-border bg-bg text-muted-foreground transition-[background-color,color,border-color] duration-300 ease-out",
+                          "hover:border-transparent hover:bg-bg-secondary hover:text-primary",
+                          "data-popup-open:border-transparent data-popup-open:bg-bg-tertiary data-popup-open:text-primary data-popup-open:hover:bg-bg-tertiary",
+                        )}
+                      >
+                        <Filter className="size-4" strokeWidth={1.5} />
+                      </button>
+                    }
+                  />
+<PopoverContent
+                    align="end"
+                    side="bottom"
+                    sideOffset={4}
+                    className="w-[280px] gap-2.5 rounded-lg bg-bg p-3 text-md text-primary"
+                  >
+                    <div className="flex flex-col gap-2">
+                      <p className="text-sm font-medium text-primary">Filters</p>
+
+                      <FilterSection label="Issue">
+                        <FilterSegmentGroup<IssueFilterValue>
+                          value={draftFilters.issue}
+                          onChange={(issue) => updateDraftFilters({ issue })}
+                          options={[
+                            { value: "all", label: "All" },
+                            { value: "open", label: "Open" },
+                            { value: "closed", label: "Closed" },
+                          ]}
+                        />
+                      </FilterSection>
+
+                      <FilterSection label="Payment">
+                        <FilterSegmentGroup<PaymentFilterValue>
+                          value={draftFilters.payment}
+                          onChange={(payment) => updateDraftFilters({ payment })}
+                          options={[
+                            { value: "all", label: "All" },
+                            { value: "paid", label: "Paid" },
+                            { value: "unpaid", label: "Unpaid" },
+                          ]}
+                        />
+                      </FilterSection>
+
+                      <FilterSection label="Date">
+                        <div className="flex items-center gap-2">
+                          <div className="min-w-0 flex-1">
+                            <DatePicker
+                              label="Start Date"
+                              value={draftFilters.startDate}
+                              onChange={(startDate) => updateDraftFilters({ startDate })}
+                              max={draftFilters.endDate}
+                            />
+                          </div>
+                          <span aria-hidden className="shrink-0 text-sm text-muted-foreground">
+                            →
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <DatePicker
+                              label="End Date"
+                              value={draftFilters.endDate}
+                              onChange={(endDate) => updateDraftFilters({ endDate })}
+                              min={draftFilters.startDate}
+                            />
+                          </div>
+                        </div>
+                        {dateRangeInvalid ? (
+                          <p className="text-sm text-destructive">
+                            Start date must be on or before the end date.
+                          </p>
+                        ) : null}
+                      </FilterSection>
+
+                      <div className="border-t border-hairline" />
+
+                      <FilterSection label="Captain">
+                        <div className="flex flex-col gap-2">
+                          {allCaptains.map((captain) => {
+                            const checked = draftFilters.captains.includes(captain.id);
+
+                            return (
+                              <label
+                                key={captain.id}
+                                className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground"
+                              >
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(nextChecked) =>
+                                    toggleDraftCaptainFilter(captain.id, nextChecked)
+                                  }
+                                  className={
+                                    original
+                                      ? "border-border bg-bg data-checked:border-primary data-checked:bg-primary data-checked:text-bg"
+                                      : undefined
+                                  }
                                 />
                                 {captain.name}
                               </label>
@@ -887,9 +1230,17 @@ export default function FinancesPage() {
                   </PopoverContent>
                 </Popover>
               </div>
+            ) : null}
 
-              <div className="overflow-hidden bg-bg">
-                <Table className="w-full table-fixed border-collapse">
+            <div
+              className={
+                original ? "overflow-hidden bg-bg" : "min-h-0 flex-1 overflow-hidden"
+              }
+            >
+                <Table
+                  containerClassName={original ? undefined : "h-full overflow-auto"}
+                  className="w-full table-fixed border-collapse"
+                >
                   <colgroup>
                     <col style={{ width: ISSUE_COLUMN_WIDTH }} />
                     {visibleCaptains.map((captain) => (
@@ -900,8 +1251,10 @@ export default function FinancesPage() {
                     <TableRow className="border-0 hover:bg-transparent">
                       <TableHead
                         className={cn(
-                          "h-10 px-4 text-sm font-medium text-muted-foreground",
-                          FINANCES_TABLE_CELL,
+                          "h-10 font-medium text-muted-foreground",
+                          headerType,
+                          issuePad,
+                          tableHead,
                         )}
                         style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
                       >
@@ -926,8 +1279,8 @@ export default function FinancesPage() {
                         <TableHead
                           key={captain.id}
                           className={cn(
-                            "h-10 px-4 text-sm font-medium text-muted-foreground",
-                            FINANCES_TABLE_CELL,
+                            cn("h-10 px-4 font-medium text-muted-foreground", headerType),
+                            tableHead,
                           )}
                           style={{ width: CAPTAIN_COLUMN_WIDTH, minWidth: CAPTAIN_COLUMN_WIDTH }}
                         >
@@ -940,7 +1293,7 @@ export default function FinancesPage() {
                     {isEmptyTable && !isArchivedYear && (
                       <TableRow className="border-0 hover:bg-transparent">
                         <TableCell
-                          className={cn("px-4 py-3", FINANCES_TABLE_CELL)}
+                          className={cn(rowHeight, issuePad, tableCell)}
                           style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
                         >
                           <Button
@@ -955,7 +1308,7 @@ export default function FinancesPage() {
                         {visibleCaptains.map((captain) => (
                           <TableCell
                             key={`empty-${captain.id}`}
-                            className={cn("h-12", FINANCES_TABLE_CELL)}
+                            className={cn(rowHeight, tableCell)}
                             style={{ width: CAPTAIN_COLUMN_WIDTH, minWidth: CAPTAIN_COLUMN_WIDTH }}
                           />
                         ))}
@@ -965,8 +1318,12 @@ export default function FinancesPage() {
                       <TableRow className="border-0 hover:bg-transparent">
                         <TableCell
                           className={cn(
-                            "relative z-10 px-4 py-3 outline outline-2 outline-active -outline-offset-2",
-                            FINANCES_TABLE_CELL,
+                            cn(
+                              "relative z-10 outline outline-2 outline-active -outline-offset-2",
+                              rowHeight,
+                              issuePad,
+                            ),
+                            tableCell,
                           )}
                           style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
                         >
@@ -984,7 +1341,7 @@ export default function FinancesPage() {
                         {visibleCaptains.map((captain) => (
                           <TableCell
                             key={`draft-${captain.id}`}
-                            className={cn("h-12", FINANCES_TABLE_CELL)}
+                            className={cn(rowHeight, tableCell)}
                             style={{ width: CAPTAIN_COLUMN_WIDTH, minWidth: CAPTAIN_COLUMN_WIDTH }}
                           />
                         ))}
@@ -992,16 +1349,22 @@ export default function FinancesPage() {
                     )}
                     {visibleIssues.map((issue) => {
                       const isIssueLocked = issue.locked;
+                      const isFrozen = issue.cells.some(
+                        (cell) => cell.calculationStatus === "frozen",
+                      );
                       const isIssueClosed = issue.status === "closed";
                       const hasPaidCell = issue.cells.some((cell) => cell.paid);
                       const canDeleteIssue = !isArchivedYear && !isIssueClosed && !hasPaidCell;
 
                       return (
-                        <TableRow key={issue.id} className="group border-0 hover:bg-transparent">
+                        <TableRow
+                          key={issue.id}
+                          className="group border-0 hover:bg-transparent has-aria-expanded:bg-transparent"
+                        >
                           <TableCell
                             className={cn(
-                              "h-12 px-4 py-2 text-md text-primary",
-                              FINANCES_TABLE_CELL,
+                              cn(rowHeight, "py-2 text-md text-primary", issuePad),
+                              tableCell,
                             )}
                             style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
                           >
@@ -1029,21 +1392,60 @@ export default function FinancesPage() {
                                   {issue.name}
                                 </span>
                               )}
-                              {!isArchivedYear && !isIssueClosed && (
-                                <div className="flex shrink-0 items-center">
-                                  {canDeleteIssue && (
-                                    <IssueDeleteButton
-                                      onClick={() =>
-                                        setDeleteIssueTarget({ id: issue.id, name: issue.name })
+                              <div className="ml-auto flex shrink-0 items-center">
+                                {!original && isFrozen && (
+                                  <span
+                                    className="flex size-7 items-center justify-center text-secondary"
+                                    title="Frozen"
+                                    aria-label="Frozen"
+                                  >
+                                    <ClosedLockIcon />
+                                  </span>
+                                )}
+                                {!isArchivedYear &&
+                                  (original ? (
+                                    !isIssueClosed ? (
+                                      <div className="flex shrink-0 items-center">
+                                        {canDeleteIssue && (
+                                          <IssueDeleteButton
+                                            onClick={() =>
+                                              setDeleteIssueTarget({
+                                                id: issue.id,
+                                                name: issue.name,
+                                              })
+                                            }
+                                          />
+                                        )}
+                                        <IssueLockButton
+                                          locked={isIssueLocked}
+                                          onToggle={() =>
+                                            toggleIssueLock(issue.id, isIssueLocked)
+                                          }
+                                        />
+                                      </div>
+                                    ) : null
+                                  ) : (
+                                    <IssueRowMenu
+                                      locked={isFrozen}
+                                      canFreeze={!isIssueClosed}
+                                      canDelete={canDeleteIssue}
+                                      deleteDisabledReason={
+                                        isIssueClosed
+                                          ? "Closed issues cannot be deleted."
+                                          : "Issues with a paid cell cannot be deleted."
+                                      }
+                                      onToggleLock={() =>
+                                        toggleIssueLock(issue.id, isFrozen)
+                                      }
+                                      onDelete={() =>
+                                        setDeleteIssueTarget({
+                                          id: issue.id,
+                                          name: issue.name,
+                                        })
                                       }
                                     />
-                                  )}
-                                  <IssueLockButton
-                                    locked={isIssueLocked}
-                                    onToggle={() => toggleIssueLock(issue.id, isIssueLocked)}
-                                  />
-                                </div>
-                              )}
+                                  ))}
+                              </div>
                             </div>
                           </TableCell>
                           {visibleCaptains.map((captain) => {
@@ -1053,7 +1455,7 @@ export default function FinancesPage() {
                               return (
                                 <TableCell
                                   key={cellKey}
-                                  className={cn("h-12 px-4", FINANCES_TABLE_CELL)}
+                                  className={cn(rowHeight, "px-4", tableCell)}
                                   style={{
                                     width: CAPTAIN_COLUMN_WIDTH,
                                     minWidth: CAPTAIN_COLUMN_WIDTH,
@@ -1084,7 +1486,7 @@ export default function FinancesPage() {
                             return (
                               <TableCell
                                 key={cellKey}
-                                className={cn("p-0", FINANCES_TABLE_CELL)}
+                                className={cn("p-0", tableCell)}
                                 style={{
                                   width: CAPTAIN_COLUMN_WIDTH,
                                   minWidth: CAPTAIN_COLUMN_WIDTH,
@@ -1125,6 +1527,7 @@ export default function FinancesPage() {
                                   onEditCancel={() => setEditingCell(null)}
                                   onDoubleClick={() => handleDoubleClick(key)}
                                   readOnly={isArchivedYear}
+                                  issueClosed={isIssueClosed}
                                   isLocked={isIssueLocked}
                                 />
                               </TableCell>
@@ -1135,7 +1538,6 @@ export default function FinancesPage() {
                     })}
                   </TableBody>
                 </Table>
-              </div>
             </div>
 
             <Dialog
