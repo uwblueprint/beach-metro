@@ -32,7 +32,7 @@ const SIDEBAR_WIDTH_COLLAPSED = SIDEBAR_GUTTER + SIDEBAR_ICON_RAIL;
 
 const NAV_ITEMS: { label: string; href: string; icon: LucideIcon }[] = [
   { label: "Overview", href: "/overview", icon: LayoutGrid },
-  { label: "All Deliveries", href: "/routes", icon: MapPin },
+  { label: "Deliveries", href: "/routes", icon: MapPin },
   { label: "Members", href: "/members", icon: Users },
   { label: "Finances", href: "/finances", icon: Briefcase },
   { label: "Labels", href: "/labels", icon: Clipboard },

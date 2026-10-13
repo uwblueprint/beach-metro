@@ -477,7 +477,7 @@ export default function OverviewPage() {
                           render={
                             <button
                               type="button"
-                              className="inline-flex items-center gap-1 rounded-[4px] px-2 py-1 text-sm font-medium text-primary transition-[background-color,scale] duration-150 ease-out hover:scale-[0.98] hover:bg-bg-tertiary active:scale-[0.97] data-popup-open:bg-bg-quaternary data-popup-open:hover:scale-100 data-popup-open:active:scale-[0.97] motion-reduce:transition-none motion-reduce:hover:scale-100 motion-reduce:active:scale-100"
+                              className="inline-flex items-center gap-1 rounded-[4px] px-2 py-1 text-sm font-medium text-secondary transition-[background-color,color,scale] duration-150 ease-out hover:scale-[0.98] hover:bg-bg-tertiary hover:text-primary active:scale-[0.97] data-popup-open:bg-bg-quaternary data-popup-open:text-primary data-popup-open:hover:scale-100 data-popup-open:active:scale-[0.97] motion-reduce:transition-none motion-reduce:hover:scale-100 motion-reduce:active:scale-100"
                             >
                               {periodLabel}
                               <ChevronDown className="size-3" strokeWidth={2} />
@@ -608,7 +608,7 @@ export default function OverviewPage() {
                       <button
                         type="button"
                         onClick={() => setPapersDialogOpen(true)}
-                        className="inline-flex items-center gap-1 px-4 py-3 text-md font-medium text-primary"
+                        className="inline-flex cursor-pointer items-center gap-1 px-4 py-3 text-md font-medium text-secondary transition-colors hover:text-primary"
                       >
                         View all {papersPerIssue.length} issues
                         <ArrowRight className="size-3" strokeWidth={2} />
