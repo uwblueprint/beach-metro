@@ -820,6 +820,7 @@ export default function FinancesPage() {
                         <div className="flex items-center gap-2">
                           <div className="min-w-0 flex-1">
                             <DatePicker
+                              size="sm"
                               label="Start Date"
                               value={draftFilters.startDate}
                               onChange={(startDate) => updateDraftFilters({ startDate })}
@@ -830,6 +831,7 @@ export default function FinancesPage() {
                           </span>
                           <div className="min-w-0 flex-1">
                             <DatePicker
+                              size="sm"
                               label="End Date"
                               value={draftFilters.endDate}
                               onChange={(endDate) => updateDraftFilters({ endDate })}

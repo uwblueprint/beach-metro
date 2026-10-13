@@ -293,6 +293,14 @@
     @apply text-quaternary;
   }
 
+  /* Resize grip drawn inset from the corner so it doesn't sit on the rounded
+     border. Chromium/Safari only; Firefox keeps its native grip. Stroke is
+     --quaternary, hardcoded because a data URL can't read custom properties. */
+  textarea::-webkit-resizer {
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23a9a49e' stroke-width='1.25' stroke-linecap='round'%3E%3Cpath d='M11 5 5 11M11 8.5 8.5 11'/%3E%3C/svg%3E")
+      no-repeat center / 16px 16px;
+  }
+
   /* Clickable affordances always show a pointer (unless explicitly overridden, e.g. cursor-text). */
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),

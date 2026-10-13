@@ -3,6 +3,7 @@
 import * as React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
+import { inputFieldClassName } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
@@ -165,14 +166,30 @@ function DatePickerCalendar({
   );
 }
 
+/**
+ * The app's one date control; use it instead of `<input type="date">`.
+ * Value is an ISO `YYYY-MM-DD` string, or "" when empty.
+ * `size="sm"` is the compact trigger for filter popovers; the default matches `Input`.
+ */
 function DatePicker({
+  id,
   label,
+  placeholder,
   value,
   onChange,
+  size = "default",
+  disabled = false,
+  className,
 }: {
+  id?: string;
+  /** Accessible name; also the placeholder unless `placeholder` is given. */
   label: string;
+  placeholder?: string;
   value: string;
   onChange: (value: string) => void;
+  size?: "default" | "sm";
+  disabled?: boolean;
+  className?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [viewMonth, setViewMonth] = React.useState(() => parseISODate(value) ?? new Date());
@@ -196,15 +213,19 @@ function DatePicker({
       <PopoverTrigger
         render={
           <button
+            id={id}
             type="button"
             aria-label={label}
+            disabled={disabled}
             className={cn(
-              "flex h-8 w-full min-w-0 items-center rounded-md border border-border bg-bg px-2.5 text-left text-sm transition-colors",
-              value ? "text-primary" : "text-muted-foreground",
-              "data-popup-open:border-ring",
+              inputFieldClassName,
+              "flex cursor-pointer items-center text-left data-popup-open:border-active",
+              size === "sm" && "h-8 px-2.5 py-0 text-sm",
+              !value && "text-quaternary",
+              className,
             )}
           >
-            {value ? formatDisplayDate(value) : label}
+            {value ? formatDisplayDate(value) : (placeholder ?? label)}
           </button>
         }
       />

@@ -126,7 +126,7 @@ function PopoverComment({
           {!readOnly && isEmpty ? (
             <button
               type="button"
-              className="flex h-6 min-w-0 flex-1 cursor-text items-center text-left text-md leading-[1.3] break-words text-muted-foreground outline-none focus:outline-none focus-visible:outline-none"
+              className="flex h-6 min-w-0 flex-1 cursor-text items-center text-left text-md leading-[1.3] break-words text-muted-foreground outline-none transition-colors hover:text-primary focus:outline-none focus-visible:outline-none"
               onClick={startEditing}
             >
               Add a note…
@@ -141,7 +141,7 @@ function PopoverComment({
               <button
                 type="button"
                 aria-label={isEmpty ? "Add comment" : "Edit comment"}
-                className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[4px] border-0 bg-transparent text-muted-foreground outline-none transition-colors hover:bg-bg-secondary focus:outline-none focus-visible:outline-none [&_svg]:block [&_svg]:fill-none [&_svg]:stroke-current"
+                className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[4px] border-0 bg-transparent text-muted-foreground outline-none transition-colors hover:bg-bg-secondary hover:text-primary focus:outline-none focus-visible:outline-none [&_svg]:block [&_svg]:fill-none [&_svg]:stroke-current"
                 onClick={(event) => {
                   event.stopPropagation();
                   startEditing();
