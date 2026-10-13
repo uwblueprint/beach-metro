@@ -18,6 +18,7 @@ import {
 } from "react";
 import { AddressField } from "@/components/address-field";
 import { BundlePapersTable, papersRowsDiffer } from "@/components/bundle-papers-table";
+import { ResizablePanel } from "@/components/resizable-panel";
 import { SidePanelField } from "@/components/side-panel-field";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -428,6 +430,8 @@ const TYPE_OPTIONS: { value: DeliveryTypeFilter; label: string }[] = [
   { value: "drops", label: "Drops" },
 ];
 
+const NO_CAPTAIN_IDS: string[] = [];
+
 const ASSIGNED_OPTIONS: { value: VacancyFilter; label: string }[] = [
   { value: "assigned", label: "Assigned" },
   { value: "vacant", label: "Vacant" },
@@ -463,6 +467,18 @@ const FilterPillTrigger = forwardRef<
     </button>
   );
 });
+
+/** Trailing "Clear" row for filter dropdowns; the rule matches the menu's ring colour. */
+function FilterClearItem({ disabled, onClear }: { disabled: boolean; onClear: () => void }) {
+  return (
+    <>
+      <DropdownMenuSeparator className="bg-black/5" />
+      <DropdownMenuItem disabled={disabled} onClick={onClear} className="text-secondary">
+        Clear
+      </DropdownMenuItem>
+    </>
+  );
+}
 
 /** Two-option exclusive filter — checkmark on the selected row; click again to clear to All. */
 function SingleSelectFilterPill({
@@ -500,6 +516,7 @@ function SingleSelectFilterPill({
             </DropdownMenuItem>
           );
         })}
+        <FilterClearItem disabled={!hasSelection} onClear={() => onChange(null)} />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -553,7 +570,7 @@ function MultiSelectFilterPill({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={searchPlaceholder}
-              className="min-w-0 flex-1 bg-transparent text-md text-primary outline-none placeholder:text-secondary"
+              className="min-w-0 flex-1 bg-transparent text-md text-primary outline-none placeholder:text-quaternary"
             />
           </div>
         </div>
@@ -576,6 +593,7 @@ function MultiSelectFilterPill({
             </DropdownMenuCheckboxItem>
           ))
         )}
+        <FilterClearItem disabled={!hasSelection} onClear={() => onChange([])} />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -741,11 +759,11 @@ function RoutesFilterSection(props: {
   );
 }
 
-export function RoutesClient() {
+export function RoutesClient({ initialRouteId = null }: { initialRouteId?: string | null }) {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [showHomes] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialRouteId);
   const [detailMemberHome, setDetailMemberHome] = useState<SelectedMemberHome | null>(null);
   const [creating, setCreating] = useState(false);
   const [creatingDrop, setCreatingDrop] = useState(false);
@@ -779,17 +797,22 @@ export function RoutesClient() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  // Selections survive closing the filter panel, but only narrow results while it's open.
+  const activeDeliveryType = filterOpen ? deliveryType : null;
+  const activeVacancy = filterOpen ? vacancy : null;
+  const activeCaptainIds = filterOpen ? captainIds : NO_CAPTAIN_IDS;
+
   const listUrl = useMemo(() => {
     const params = new URLSearchParams();
-    if (vacancy) params.set("vacancy", vacancy);
-    if (captainIds.length === 1) params.set("captainId", captainIds[0]);
+    if (activeVacancy) params.set("vacancy", activeVacancy);
+    if (activeCaptainIds.length === 1) params.set("captainId", activeCaptainIds[0]);
     if (q.trim()) params.set("q", q.trim());
     const qs = params.toString();
     return `/api/routes${qs ? `?${qs}` : ""}`;
-  }, [vacancy, captainIds, q]);
+  }, [activeVacancy, activeCaptainIds, q]);
 
   const routes = useQuery({
-    queryKey: ["routes", vacancy, captainIds, q],
+    queryKey: ["routes", activeVacancy, activeCaptainIds, q],
     queryFn: () => getJson<RouteSummary[]>(listUrl),
   });
   const volunteers = useQuery({
@@ -849,22 +872,22 @@ export function RoutesClient() {
     let list = routes.data ?? [];
 
     // null = All; otherwise split point deliveries from street routes.
-    if (deliveryType) {
-      list = list.filter((r) => matchesDeliveryType(r, deliveryType));
+    if (activeDeliveryType) {
+      list = list.filter((r) => matchesDeliveryType(r, activeDeliveryType));
     }
 
-    if (vacancy) {
-      list = list.filter((r) => r.lifecycle === vacancy);
+    if (activeVacancy) {
+      list = list.filter((r) => r.lifecycle === activeVacancy);
     }
 
     // A single captain is pushed to the server as a query param; only a
     // multi-select needs narrowing here.
-    if (captainIds.length > 1) {
-      list = list.filter((r) => r.captain != null && captainIds.includes(r.captain.id));
+    if (activeCaptainIds.length > 1) {
+      list = list.filter((r) => r.captain != null && activeCaptainIds.includes(r.captain.id));
     }
 
     return list;
-  }, [routes.data, deliveryType, vacancy, captainIds]);
+  }, [routes.data, activeDeliveryType, activeVacancy, activeCaptainIds]);
 
   const mapRoutes: MapRoute[] = filteredRoutes.map((r) => {
     const drop = isDropSummary(r);
@@ -899,7 +922,7 @@ export function RoutesClient() {
         <div className="page-header-container">
           <div className="flex items-center gap-2">
             <h1 className="text-md text-primary">Routes</h1>
-            <p className="text-md text-secondary">
+            <p className="text-md text-tertiary">
               {routes.data ? `Showing ${listRoutes.length}` : "Loading…"}
             </p>
           </div>
@@ -941,7 +964,7 @@ export function RoutesClient() {
                 setCreatingDrop(false);
                 selectRoute(id);
               }}
-              boundsFitKey={`${vacancy ?? "all"}|${q.trim()}|${deliveryType ?? "all"}|${captainIds.join(",")}|${showHomes ? "homes" : "no-homes"}`}
+              boundsFitKey={`${activeVacancy ?? "all"}|${q.trim()}|${activeDeliveryType ?? "all"}|${activeCaptainIds.join(",")}|${showHomes ? "homes" : "no-homes"}`}
               boundsFitReady={!routes.isFetching && (!showHomes || !volunteers.isFetching)}
               filterPlacement={filterPlacement}
               search={q}
@@ -958,7 +981,14 @@ export function RoutesClient() {
             />
           </div>
 
-          <div className="flex h-full w-[400px] shrink-0 flex-col border-l border-border bg-bg">
+          <ResizablePanel
+            defaultWidth={400}
+            minWidth={320}
+            maxWidth={640}
+            handleSide="left"
+            handleLabel="Resize routes panel"
+            className="flex flex-col border-l border-border bg-bg"
+          >
             {creatingDrop ? (
               <CreateDropPanel
                 onClose={() => setCreatingDrop(false)}
@@ -1044,7 +1074,7 @@ export function RoutesClient() {
                 </div>
               </>
             )}
-          </div>
+          </ResizablePanel>
         </div>
       </div>
     </div>
@@ -1133,7 +1163,9 @@ function DropdownField(props: {
           disabled={isDisabled}
           render={<button type="button" className={inputTriggerClassName} />}
         >
-          <span className={cn("min-w-0 truncate", isDisabled && "text-secondary")}>
+          <span
+            className={cn("min-w-0 truncate", (isDisabled || !props.value) && "text-secondary")}
+          >
             {props.display}
           </span>
           <ChevronDown className={cn("size-3 shrink-0", !isDisabled && "text-primary")} />
@@ -1158,14 +1190,14 @@ function RouteVolunteerCaptainHint(props: {
   volunteers: VolunteerSummary[] | undefined;
 }) {
   if (!props.volunteerId) {
-    return <p className="text-md text-secondary">Select a volunteer for this route</p>;
+    return <p className="text-md text-tertiary">Select a volunteer for this route</p>;
   }
 
   const captainName =
     props.volunteers?.find((v) => v.id === props.volunteerId)?.territory?.captainName ?? null;
 
   return (
-    <p className="text-md text-secondary">
+    <p className="text-md text-tertiary">
       The captain responsible for this volunteer, thus this route is{" "}
       <span className="font-semibold text-primary">{captainName ?? "no captain"}</span>
     </p>

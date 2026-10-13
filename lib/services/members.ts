@@ -29,6 +29,8 @@ export interface MemberRow {
    * Captains: their territory as "N volunteers, M drops".
    */
   routeInfo: string;
+  /** Set only when a volunteer carries exactly one route, so the UI can link to it. */
+  routeId: string | null;
   /** Volunteers: the captain above them. Captains: themselves. */
   captainName: string;
   /** ISO. The UI decides how to display it. */
@@ -63,6 +65,7 @@ export async function listMembers(filters: z.infer<typeof membersQuery>): Promis
         : v.routesCarried.length === 1
           ? v.routesCarried[0].label
           : plural(v.routesCarried.length, "route"),
+    routeId: v.routesCarried.length === 1 ? v.routesCarried[0].id : null,
     captainName: v.territory?.captainName ?? "No captain",
     startDate: v.startDate,
     status: v.status,
@@ -83,6 +86,7 @@ export async function listMembers(filters: z.infer<typeof membersQuery>): Promis
       routeInfo: territory
         ? `${plural(territory.volunteerCount, "volunteer")}, ${plural(territory.commercialDropCount, "drop")}`
         : "No territory",
+      routeId: null,
       captainName: c.displayName,
       startDate: c.startDate,
       status: c.status,

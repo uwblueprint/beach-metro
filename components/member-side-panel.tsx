@@ -679,7 +679,7 @@ function CaptainContent({ id }: { id: string }) {
                   meta="Volunteer"
                   onEdit={() => openEditVolunteer(item.volunteer)}
                 >
-                  <span className="text-secondary">{item.volunteer.displayName}</span>
+                  {item.volunteer.displayName}
                 </SidePanelRow>
               ) : (
                 <SidePanelRow
@@ -691,9 +691,7 @@ function CaptainContent({ id }: { id: string }) {
                   }
                   onEdit={() => openEditCommercial(item.drop)}
                 >
-                  <span className="text-secondary">
-                    {item.drop.formattedAddress ?? "Address not geocoded yet"}
-                  </span>
+                  {item.drop.formattedAddress ?? "Address not geocoded yet"}
                 </SidePanelRow>
               )
             }

@@ -678,7 +678,9 @@ export default function FinancesPage() {
                       />
                     }
                   >
-                    {!isEditingTableTitle && <span className="text-md">{tableDisplayLabel}</span>}
+                    {!isEditingTableTitle && (
+                      <span className="text-md text-tertiary">{tableDisplayLabel}</span>
+                    )}
                     <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
@@ -976,7 +978,7 @@ export default function FinancesPage() {
                             onKeyDown={handleDraftKeyDown}
                             onBlur={handleDraftBlur}
                             aria-label="Issue name"
-                            className="w-full border-0 bg-transparent p-0 text-md text-primary outline-none placeholder:text-muted-foreground"
+                            className="w-full border-0 bg-transparent p-0 text-md text-primary outline-none placeholder:text-quaternary"
                           />
                         </TableCell>
                         {visibleCaptains.map((captain) => (

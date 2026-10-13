@@ -118,7 +118,7 @@ function PopoverComment({
             onFocus={(event) => event.target.select()}
             aria-label={isEmpty ? "Add comment" : "Edit comment"}
             placeholder="Add a note…"
-            className="h-6 min-h-6 w-full min-w-0 appearance-none border-0 bg-transparent p-0 text-md leading-[1.3] text-primary outline-none placeholder:text-muted-foreground"
+            className="h-6 min-h-6 w-full min-w-0 appearance-none border-0 bg-transparent p-0 text-md leading-[1.3] text-primary outline-none placeholder:text-quaternary"
           />
         </div>
       ) : (

@@ -82,7 +82,7 @@ export default function MembersPage() {
           <div className="page-header-container">
             <div className="flex items-center gap-2">
               <h1 className="text-md text-primary">Members</h1>
-              <p className="text-md text-secondary">
+              <p className="text-md text-tertiary">
                 Showing {rows.length} of {allMembers?.length ?? rows.length}
               </p>
             </div>

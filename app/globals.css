@@ -284,6 +284,9 @@
   html {
     @apply font-sans;
   }
+  ::placeholder {
+    @apply text-quaternary;
+  }
 
   /* Clickable affordances always show a pointer (unless explicitly overridden, e.g. cursor-text). */
   button:not(:disabled),
@@ -559,13 +562,16 @@
   will-change: opacity, filter, transform;
 }
 .t-icon-swap[data-state="a"] .t-icon[data-icon="a"],
-.t-icon-swap[data-state="b"] .t-icon[data-icon="b"] {
+.t-icon-swap[data-state="b"] .t-icon[data-icon="b"],
+.t-icon-swap[data-state="c"] .t-icon[data-icon="c"] {
   opacity: 1;
   filter: blur(0);
   transform: scale(1);
 }
-.t-icon-swap[data-state="a"] .t-icon[data-icon="b"],
-.t-icon-swap[data-state="b"] .t-icon[data-icon="a"] {
+.t-icon-swap[data-state="a"] .t-icon:not([data-icon="a"]),
+.t-icon-swap[data-state="b"] .t-icon:not([data-icon="b"]),
+.t-icon-swap[data-state="c"] .t-icon:not([data-icon="c"]),
+.t-icon-swap[data-state="none"] .t-icon {
   opacity: 0;
   filter: blur(var(--icon-swap-blur));
   transform: scale(var(--icon-swap-start-scale));
