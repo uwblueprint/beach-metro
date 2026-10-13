@@ -172,12 +172,14 @@ function IssueRowMenu({
   locked,
   canFreeze,
   canDelete,
+  deleteDisabledReason,
   onToggleLock,
   onDelete,
 }: {
   locked: boolean;
   canFreeze: boolean;
   canDelete: boolean;
+  deleteDisabledReason?: string;
   onToggleLock: () => void;
   onDelete: () => void;
 }) {
@@ -210,14 +212,14 @@ function IssueRowMenu({
             {locked ? "Unfreeze" : "Freeze"}
           </DropdownMenuItem>
         ) : null}
-        {canDelete ? (
-          <DropdownMenuItem variant="destructive" onClick={onDelete}>
-            Delete
-          </DropdownMenuItem>
-        ) : null}
-        {!canFreeze && !canDelete ? (
-          <DropdownMenuItem disabled>Issue closed</DropdownMenuItem>
-        ) : null}
+        <DropdownMenuItem
+          variant="destructive"
+          disabled={!canDelete}
+          title={canDelete ? undefined : deleteDisabledReason}
+          onClick={onDelete}
+        >
+          Delete
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -1355,7 +1357,10 @@ export default function FinancesPage() {
                       const canDeleteIssue = !isArchivedYear && !isIssueClosed && !hasPaidCell;
 
                       return (
-                        <TableRow key={issue.id} className="group border-0 hover:bg-transparent">
+                        <TableRow
+                          key={issue.id}
+                          className="group border-0 hover:bg-transparent has-aria-expanded:bg-transparent"
+                        >
                           <TableCell
                             className={cn(
                               cn(rowHeight, "py-2 text-md text-primary", issuePad),
@@ -1424,6 +1429,11 @@ export default function FinancesPage() {
                                       locked={isFrozen}
                                       canFreeze={!isIssueClosed}
                                       canDelete={canDeleteIssue}
+                                      deleteDisabledReason={
+                                        isIssueClosed
+                                          ? "Closed issues cannot be deleted."
+                                          : "Issues with a paid cell cannot be deleted."
+                                      }
                                       onToggleLock={() =>
                                         toggleIssueLock(issue.id, isFrozen)
                                       }
@@ -1517,6 +1527,7 @@ export default function FinancesPage() {
                                   onEditCancel={() => setEditingCell(null)}
                                   onDoubleClick={() => handleDoubleClick(key)}
                                   readOnly={isArchivedYear}
+                                  issueClosed={isIssueClosed}
                                   isLocked={isIssueLocked}
                                 />
                               </TableCell>

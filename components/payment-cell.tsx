@@ -83,7 +83,7 @@ function PopoverComment({
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-1 whitespace-normal">
-      <p className="text-md text-secondary">Note</p>
+      <p className="text-md text-tertiary">Note</p>
       <Textarea
         ref={textareaRef}
         rows={2}
@@ -91,10 +91,14 @@ function PopoverComment({
         readOnly={readOnly}
         placeholder="Add a note"
         aria-label={displayComment.trim() ? "Edit comment" : "Add comment"}
-        className="min-h-16 resize-none"
+        className={cn("min-h-16 resize-none", readOnly && "cursor-not-allowed")}
         onChange={(event) => setDraft(event.target.value)}
-        onFocus={() => {
-          setFocused(true);
+        onFocus={() => setFocused(true)}
+        onPointerDown={(event) => {
+          if (readOnly) {
+            event.preventDefault();
+            return;
+          }
           onEditingChange(true);
         }}
         onKeyDown={(event) => {
@@ -146,6 +150,7 @@ type PaymentCellProps = {
   comment?: string;
   onCommentChange?: (comment: string | null) => void;
   readOnly?: boolean;
+  issueClosed?: boolean;
   isLocked?: boolean;
   className?: string;
 };
@@ -160,6 +165,7 @@ function PaymentAmountPopover({
   comment,
   onCommentChange,
   readOnly,
+  issueClosed = false,
   commentEditRequest = 0,
   dismissRef,
 }: {
@@ -172,6 +178,8 @@ function PaymentAmountPopover({
   comment?: string;
   onCommentChange?: (comment: string | null) => void;
   readOnly?: boolean;
+  /** Closed issues reject note edits, same as the other payment changes. */
+  issueClosed?: boolean;
   commentEditRequest?: number;
   /** Parent calls this when the pointer moves onto the check or ⋯. */
   dismissRef?: React.RefObject<() => void>;
@@ -182,6 +190,11 @@ function PaymentAmountPopover({
   const openTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const isEditingCommentRef = React.useRef(false);
+  const openRef = React.useRef(false);
+  const triggerRef = React.useRef<HTMLSpanElement>(null);
+  const popupInnerRef = React.useRef<HTMLDivElement>(null);
+  const pointerRef = React.useRef({ x: 0, y: 0, seen: false });
+  openRef.current = open;
 
   const clearOpenTimeout = React.useCallback(() => {
     if (openTimeoutRef.current) {
@@ -195,6 +208,15 @@ function PaymentAmountPopover({
       clearTimeout(closeTimeoutRef.current);
       closeTimeoutRef.current = null;
     }
+  }, []);
+
+  const pointerInside = React.useCallback(() => {
+    if (!pointerRef.current.seen) return false;
+    const el = document.elementFromPoint(pointerRef.current.x, pointerRef.current.y);
+    if (!el) return false;
+    if (triggerRef.current?.contains(el)) return true;
+    const shell = popupInnerRef.current?.parentElement;
+    return Boolean(shell?.contains(el));
   }, []);
 
   const dismissDetail = React.useCallback(() => {
@@ -211,24 +233,84 @@ function PaymentAmountPopover({
     };
   }, [dismissRef, dismissDetail]);
 
-  const handleHoverEnter = React.useCallback(() => {
-    clearCloseTimeout();
-    if (openTimeoutRef.current) return;
-    openTimeoutRef.current = setTimeout(() => {
-      openTimeoutRef.current = null;
-      setOpen(true);
-    }, HOVER_OPEN_DELAY_MS);
-  }, [clearCloseTimeout]);
+  const rememberPointer = React.useCallback((event: { clientX: number; clientY: number }) => {
+    pointerRef.current = { x: event.clientX, y: event.clientY, seen: true };
+  }, []);
 
-  const handleHoverLeave = React.useCallback(() => {
+  const pointerInsideRef = React.useRef(pointerInside);
+  const clearCloseTimeoutRef = React.useRef(clearCloseTimeout);
+  pointerInsideRef.current = pointerInside;
+  clearCloseTimeoutRef.current = clearCloseTimeout;
+
+  const stopTrackingRef = React.useRef<(() => void) | null>(null);
+  const scheduleCloseRef = React.useRef<() => void>(() => {});
+
+  const ensureTracking = React.useCallback(() => {
+    if (stopTrackingRef.current) return;
+    function onPointerMove(event: PointerEvent) {
+      pointerRef.current = { x: event.clientX, y: event.clientY, seen: true };
+      if (pointerInsideRef.current()) {
+        clearCloseTimeoutRef.current();
+        return;
+      }
+      clearOpenTimeout();
+      if (openRef.current) scheduleCloseRef.current();
+      else stopTrackingRef.current?.();
+    }
+    function onScroll() {
+      if (pointerInsideRef.current()) return;
+      clearOpenTimeout();
+      if (openRef.current) scheduleCloseRef.current();
+    }
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("scroll", onScroll, true);
+    stopTrackingRef.current = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("scroll", onScroll, true);
+      stopTrackingRef.current = null;
+    };
+  }, [clearOpenTimeout]);
+
+  const scheduleClose = React.useCallback(() => {
     if (isEditingCommentRef.current) return;
     clearOpenTimeout();
-    clearCloseTimeout();
+    if (closeTimeoutRef.current) return;
     closeTimeoutRef.current = setTimeout(() => {
       closeTimeoutRef.current = null;
+      if (isEditingCommentRef.current || pointerInside()) return;
       setOpen(false);
+      stopTrackingRef.current?.();
     }, HOVER_CLOSE_DELAY_MS);
-  }, [clearOpenTimeout, clearCloseTimeout]);
+  }, [clearOpenTimeout, pointerInside]);
+  scheduleCloseRef.current = scheduleClose;
+
+  const handleHoverEnter = React.useCallback(
+    (event: React.MouseEvent) => {
+      rememberPointer(event);
+      ensureTracking();
+      clearCloseTimeout();
+      if (openTimeoutRef.current || openRef.current) return;
+      openTimeoutRef.current = setTimeout(() => {
+        openTimeoutRef.current = null;
+        if (pointerInside()) setOpen(true);
+        else stopTrackingRef.current?.();
+      }, HOVER_OPEN_DELAY_MS);
+    },
+    [clearCloseTimeout, ensureTracking, pointerInside, rememberPointer],
+  );
+
+  const handleHoverLeave = React.useCallback(
+    (event: React.MouseEvent) => {
+      const next = event.relatedTarget;
+      if (next instanceof Node) {
+        if (triggerRef.current?.contains(next)) return;
+        const shell = popupInnerRef.current?.parentElement;
+        if (shell?.contains(next)) return;
+      }
+      scheduleClose();
+    },
+    [scheduleClose],
+  );
 
   const handleCommentEditingChange = React.useCallback(
     (editing: boolean) => {
@@ -237,9 +319,11 @@ function PaymentAmountPopover({
       if (editing) {
         clearCloseTimeout();
         setOpen(true);
+        return;
       }
+      if (!pointerInside()) scheduleClose();
     },
-    [clearCloseTimeout],
+    [clearCloseTimeout, pointerInside, scheduleClose],
   );
 
   React.useEffect(() => {
@@ -250,9 +334,26 @@ function PaymentAmountPopover({
   }, [commentEditRequest, handleCommentEditingChange]);
 
   React.useEffect(() => {
+    if (!open) return;
+    // The popup can flip after it opens (rows like issue 04). That move does
+    // not fire mouseleave, so re-check once layout settles.
+    let frame2 = 0;
+    const frame1 = requestAnimationFrame(() => {
+      frame2 = requestAnimationFrame(() => {
+        if (!pointerInside()) scheduleClose();
+      });
+    });
+    return () => {
+      cancelAnimationFrame(frame1);
+      cancelAnimationFrame(frame2);
+    };
+  }, [open, pointerInside, scheduleClose]);
+
+  React.useEffect(() => {
     return () => {
       clearOpenTimeout();
       clearCloseTimeout();
+      stopTrackingRef.current?.();
     };
   }, [clearOpenTimeout, clearCloseTimeout]);
 
@@ -273,11 +374,15 @@ function PaymentAmountPopover({
         nativeButton={false}
         render={
           <span
+            ref={triggerRef}
             className={cn(
               "inline-flex w-full min-w-0 cursor-default flex-col items-start justify-center text-md tabular-nums outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0",
               paid ? "text-muted-foreground opacity-40" : "text-primary",
             )}
-            onMouseEnter={handleHoverEnter}
+            onMouseEnter={(event) => {
+              triggerRef.current = event.currentTarget;
+              handleHoverEnter(event);
+            }}
             onMouseLeave={handleHoverLeave}
             onClick={(event) => event.preventDefault()}
           >
@@ -309,7 +414,7 @@ function PaymentAmountPopover({
         onMouseEnter={handleHoverEnter}
         onMouseLeave={handleHoverLeave}
       >
-        <div className="flex w-full min-w-0 flex-col gap-3 whitespace-nowrap">
+        <div ref={popupInnerRef} className="flex w-full min-w-0 flex-col gap-3 whitespace-nowrap">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-1">
               <p className="shrink-0 text-md text-primary">
@@ -317,7 +422,7 @@ function PaymentAmountPopover({
               </p>
               {hasSubstitute && <ArrowLeftRight className="size-3 shrink-0 text-secondary" />}
             </div>
-            <p className="shrink-0 text-md text-secondary">
+            <p className="shrink-0 text-md text-tertiary">
               {paymentDetail.issueLabel} • Last Modified {paymentDetail.lastModified}
             </p>
           </div>
@@ -325,17 +430,14 @@ function PaymentAmountPopover({
           <div className="border-t border-border" />
 
           <div className="flex flex-col gap-1">
-            <p className="shrink-0 text-md text-secondary">Routes</p>
-            <div className="flex items-center justify-between gap-3">
-              <span className="shrink-0 text-md text-primary">{paymentDetail.territory}</span>
-              <span className="shrink-0 text-md text-secondary">{bundleLabel}</span>
-            </div>
+            <p className="shrink-0 text-md text-tertiary">Routes</p>
+            <p className="shrink-0 text-md text-primary">{paymentDetail.territory}</p>
           </div>
 
           <div className="border-t border-border" />
 
           <div className="flex items-center justify-between gap-3">
-            <span className="shrink-0 text-md text-secondary">
+            <span className="shrink-0 text-md text-tertiary">
               {bundleLabel} × {formatCurrency(paymentDetail.ratePerBundle)}
             </span>
             <span className="shrink-0 text-md tabular-nums text-primary">
@@ -344,10 +446,10 @@ function PaymentAmountPopover({
             </span>
           </div>
 
-          {(hasComment || (onCommentChange && !readOnly && !paid)) && (
+          {(hasComment || (onCommentChange && !readOnly && !issueClosed && !paid)) && (
             <PopoverComment
               comment={comment ?? ""}
-              readOnly={readOnly || paid || !onCommentChange}
+              readOnly={readOnly || issueClosed || paid || !onCommentChange}
               editing={editingComment}
               onSave={onCommentChange}
               onEditingChange={handleCommentEditingChange}
@@ -355,19 +457,16 @@ function PaymentAmountPopover({
           )}
 
           {override && (
-            <div className="flex w-full min-w-0 flex-col gap-1 whitespace-normal">
-              <p className="text-md text-secondary">Manually overridden</p>
-              <p className="text-md text-primary">
-                {formatCurrency(override.originalValue)} → {formatCurrency(value)}
-              </p>
-              <Textarea
-                readOnly
-                rows={2}
-                value={override.note}
-                aria-label="Override note"
-                className="min-h-16 resize-none"
-              />
-            </div>
+            <>
+              <div className="border-t border-border" />
+              <div className="flex w-full min-w-0 flex-col gap-1 whitespace-normal">
+                <p className="text-md text-tertiary">Manually overridden</p>
+                <p className="text-md tabular-nums text-primary">
+                  {formatCurrency(override.originalValue)} → {formatCurrency(value)}
+                </p>
+                {override.note ? <p className="text-md text-secondary">{override.note}</p> : null}
+              </div>
+            </>
           )}
         </div>
       </PopoverContent>
@@ -523,6 +622,7 @@ export function PaymentCell({
   comment,
   onCommentChange,
   readOnly = false,
+  issueClosed = false,
   isLocked = false,
   className,
 }: PaymentCellProps) {
@@ -605,6 +705,7 @@ export function PaymentCell({
             comment={comment}
             onCommentChange={onCommentChange}
             readOnly={readOnly}
+            issueClosed={issueClosed}
             commentEditRequest={commentEditRequest}
             dismissRef={dismissDetailRef}
           />
