@@ -513,6 +513,7 @@ export default function OverviewPage() {
                             <div className="flex items-center gap-2">
                               <div className="min-w-0 flex-1">
                                 <DatePicker
+                                  size="sm"
                                   label="Start Date"
                                   value={draftStart}
                                   onChange={setDraftStart}
@@ -523,6 +524,7 @@ export default function OverviewPage() {
                               </span>
                               <div className="min-w-0 flex-1">
                                 <DatePicker
+                                  size="sm"
                                   label="End Date"
                                   value={draftEnd}
                                   onChange={setDraftEnd}
