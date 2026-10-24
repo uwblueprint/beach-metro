@@ -19,22 +19,14 @@
   --font-mono: var(--font-mono);
   --font-heading: var(--font-sans);
 
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-hover: var(--sidebar-hover);
-  --color-sidebar-active: var(--sidebar-active);
-
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-chart-bar: var(--chart-bar);
+  --color-chart-bar-hover: var(--chart-bar-hover);
+  --color-chart-bar-empty: var(--chart-bar-empty);
 
   --color-ring: var(--ring);
   --color-input: var(--input);
@@ -56,6 +48,7 @@
   --color-secondary-fill-hover: var(--secondary-fill-hover);
   --color-active: var(--active);
   --color-active-hover: var(--active-hover);
+  --color-active-selected: var(--active-selected);
   --color-active-grey: var(--active-grey);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
@@ -63,6 +56,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-hover: var(--destructive-hover);
+  --color-destructive-selected: var(--destructive-selected);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-disabled: var(--disabled);
@@ -111,26 +105,29 @@
 
 :root {
   --sidebar-width: 200px;
-  /* bg scale: --bg is primary (not renamed). ΔL = 0.01; non-primary ever-so-slightly warm.
-     Interactive steps: hover = +1, active = +2 from the resting surface.
+  /* bg scale: --bg is primary (not renamed). Values match Figma swatches; keep chroma at 3 decimals —
+     rounding to 0.01 doubles the warmth.
+     Interaction rule (everywhere, incl. sidebar): hover = +1, active/selected/open = +2 from the
+     surface the control rests on. Hovering an active/open control keeps the active fill.
+     Coloured fills step darker instead: hover = −0.02 L, selected = −0.04 L.
      Quinary/senary exist so tertiary (and deeper) surfaces can still +2. */
   --bg: oklch(1 0 0);
-  --bg-secondary: oklch(0.99 0.004 80);
-  --bg-tertiary: oklch(0.98 0.004 80); /* former --bg-secondary */
-  --bg-quaternary: oklch(0.97 0.004 80);
-  --bg-quinary: oklch(0.96 0.004 80);
-  --bg-senary: oklch(0.95 0.004 80);
-  --foreground: oklch(0.216 0.009 255.6);
+  --bg-secondary: oklch(0.98 0.006 84.6);
+  --bg-tertiary: oklch(0.965 0.007 80.7);
+  --bg-quaternary: oklch(0.948 0.007 67.7);
+  --bg-quinary: oklch(0.933 0.007 67.7);
+  --bg-senary: oklch(0.917 0.005 67.8);
+  --foreground: #23201a;
   --card: var(--bg);
   --card-foreground: var(--foreground);
   --popover: var(--bg);
   --popover-foreground: var(--foreground);
 
-  /* text colors — primary/secondary unchanged; tertiary/quaternary continue ΔL ≈ 0.312 */
+  /* text colors — values match Figma text-* swatches */
   --primary: var(--foreground);
-  --secondary: oklch(0.528 0 0); /* Figma text/secondary ≈ #6B6B6B */
-  --tertiary: oklch(0.84 0 0);
-  --quaternary: oklch(1 0 0);
+  --secondary: #433e37;
+  --tertiary: #777169;
+  --quaternary: #a9a49e;
 
   /* Neutral fills — hover +1 / active +2 from resting surface.
      On primary: hover secondary, active tertiary. On tertiary: hover quaternary, active quinary. */
@@ -139,6 +136,7 @@
 
   --active: oklch(0.717 0.149 234.3);
   --active-hover: oklch(0.697 0.149 234.3);
+  --active-selected: oklch(0.677 0.149 234.3);
   --active-grey: var(--bg-tertiary);
   --muted: var(--bg-tertiary);
   --muted-foreground: var(--secondary);
@@ -146,27 +144,30 @@
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.664 0.224 32.3);
   --destructive-hover: oklch(0.644 0.224 32.3);
+  --destructive-selected: oklch(0.624 0.224 32.3);
   --success: oklch(0.68 0.215 144.9);
-  --warning: oklch(0.818 0.169 77.5);
+  /* Text on bg-tag-warning: 4.88:1 */
+  --warning: oklch(0.53 0.125 58);
   --disabled: oklch(0.845 0 0);
 
   /* border styles */
   --border: oklch(0.925 0 0);
   --hairline: oklch(0.961 0 0);
   --active-border: oklch(0.946 0.045 212.1);
-  --success-border: oklch(0.957 0.08 140.1);
-  --warning-border: oklch(0.964 0.052 92.9);
+  --success-border: oklch(0.946 0.045 140.1);
+  --warning-border: oklch(0.9 0.07 75);
   --destructive-border: oklch(0.923 0.044 50.4);
   --input: var(--border);
   --ring: oklch(0.605 0.186 257.6);
 
-  /* Pills at tertiary → hover +1 = quaternary */
-  --tag: var(--bg-tertiary);
-  --tag-hover: var(--bg-quaternary);
-  --tag-success: oklch(0.985 0.027 140.2);
+  /* Pills at secondary → hover +1 = tertiary */
+  --tag: var(--bg-secondary);
+  --tag-hover: var(--bg-tertiary);
+  --tag-success: oklch(0.98 0.04 140.2);
   --tag-active: oklch(0.98 0.04 220.6);
   --tag-active-hover: oklch(0.964 0.06 220.6);
-  --tag-warning: oklch(0.988 0.018 92.7);
+  /* Near sRGB max chroma for this lightness — raising C clips the red channel */
+  --tag-warning: oklch(0.96 0.032 75);
   --tag-destructive: oklch(0.974 0.014 50.8);
 
   /* Inner highlight stroke — buttons, pills */
@@ -178,19 +179,22 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
+  --chart-bar: oklch(0.895 0.061 224.2);
+  --chart-bar-hover: oklch(0.875 0.061 224.2);
+  --chart-bar-empty: var(--bg-quinary);
+
+  /* Basemap — aliases of design tokens so the map tracks palette retunes.
+     route-map resolves these to hex at runtime (Maps JS can't read CSS vars). */
+  --map-land: var(--bg);
+  --map-road: var(--border);
+  --map-park: var(--tag-success);
+  --map-water: var(--active-border);
+  --map-water-label: var(--tertiary);
+  --map-label: var(--tertiary);
+  --map-label-stroke: var(--bg);
 
   /* misc styles */
   --radius: 0.625rem;
-  --sidebar: var(--bg-tertiary); /* warm shell — same L as cool predecessor, on the bg scale */
-  --sidebar-hover: var(--bg-quinary); /* +2 from sidebar */
-  --sidebar-active: var(--bg-senary); /* +3 from sidebar */
-  --sidebar-foreground: var(--foreground);
-  --sidebar-primary: var(--active);
-  --sidebar-primary-foreground: var(--bg);
-  --sidebar-accent: var(--sidebar-hover);
-  --sidebar-accent-foreground: var(--foreground);
-  --sidebar-border: var(--border);
-  --sidebar-ring: var(--ring);
 
   /* transitions-dev — install once; snippets read these semantic names */
   --resize-dur: 300ms;
@@ -285,6 +289,9 @@
   html {
     @apply font-sans;
   }
+  ::placeholder {
+    @apply text-quaternary;
+  }
 
   /* Clickable affordances always show a pointer (unless explicitly overridden, e.g. cursor-text). */
   button:not(:disabled),
@@ -320,7 +327,7 @@
   /* Outer shell beside the sidebar — Figma: pt 12 / pr 12 / pb 16.
      pl-4 matches the sidebar’s left gutter so screen↔sidebar ≡ sidebar↔page. */
   .page-container {
-    @apply bg-bg-tertiary flex h-full w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-3 pr-3 pb-4 pl-4;
+    @apply bg-bg-secondary flex h-full w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-3 pr-3 pb-4 pl-4;
   }
 
   /* White content panel that fills the container */
@@ -560,13 +567,16 @@
   will-change: opacity, filter, transform;
 }
 .t-icon-swap[data-state="a"] .t-icon[data-icon="a"],
-.t-icon-swap[data-state="b"] .t-icon[data-icon="b"] {
+.t-icon-swap[data-state="b"] .t-icon[data-icon="b"],
+.t-icon-swap[data-state="c"] .t-icon[data-icon="c"] {
   opacity: 1;
   filter: blur(0);
   transform: scale(1);
 }
-.t-icon-swap[data-state="a"] .t-icon[data-icon="b"],
-.t-icon-swap[data-state="b"] .t-icon[data-icon="a"] {
+.t-icon-swap[data-state="a"] .t-icon:not([data-icon="a"]),
+.t-icon-swap[data-state="b"] .t-icon:not([data-icon="b"]),
+.t-icon-swap[data-state="c"] .t-icon:not([data-icon="c"]),
+.t-icon-swap[data-state="none"] .t-icon {
   opacity: 0;
   filter: blur(var(--icon-swap-blur));
   transform: scale(var(--icon-swap-start-scale));

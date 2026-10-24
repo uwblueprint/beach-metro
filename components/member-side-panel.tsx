@@ -295,7 +295,6 @@ function VolunteerContent({ id }: { id: string }) {
                   variant="primary"
                   onClick={() => void saveInfo()}
                   disabled={updateVolunteer.isPending}
-                  className="active:scale-[0.96]"
                 >
                   {updateVolunteer.isPending ? "Saving…" : "Save"}
                 </Button>
@@ -616,7 +615,6 @@ function CaptainContent({ id }: { id: string }) {
                   variant="primary"
                   onClick={() => void saveInfo()}
                   disabled={updateCaptain.isPending}
-                  className="active:scale-[0.96]"
                 >
                   {updateCaptain.isPending ? "Saving…" : "Save"}
                 </Button>
@@ -681,7 +679,7 @@ function CaptainContent({ id }: { id: string }) {
                   meta="Volunteer"
                   onEdit={() => openEditVolunteer(item.volunteer)}
                 >
-                  <span className="text-secondary">{item.volunteer.displayName}</span>
+                  {item.volunteer.displayName}
                 </SidePanelRow>
               ) : (
                 <SidePanelRow
@@ -693,9 +691,7 @@ function CaptainContent({ id }: { id: string }) {
                   }
                   onEdit={() => openEditCommercial(item.drop)}
                 >
-                  <span className="text-secondary">
-                    {item.drop.formattedAddress ?? "Address not geocoded yet"}
-                  </span>
+                  {item.drop.formattedAddress ?? "Address not geocoded yet"}
                 </SidePanelRow>
               )
             }
@@ -1129,13 +1125,7 @@ function MemberSidePanel({ member, creating, onClose, onCreated }: MemberSidePan
             <Button variant="default" onClick={onClose} disabled={createBusy}>
               Cancel
             </Button>
-            <Button
-              variant="primary"
-              form="cm-form"
-              type="submit"
-              disabled={createBusy}
-              className="active:scale-[0.96]"
-            >
+            <Button variant="primary" form="cm-form" type="submit" disabled={createBusy}>
               {createBusy ? "Creating…" : "Create Member"}
             </Button>
           </div>

@@ -13,14 +13,14 @@ const STATUS_LABEL: Record<MemberStatus, string> = {
 };
 
 /**
- * Status tint. Active and on-vacation keep `text-primary` on their backgrounds;
- * retired uses `text-destructive` on `bg-tag-destructive` (same pairing as vacant
- * RouteTag chips).
+ * Status tint. Active uses `text-secondary`; on-vacation uses `text-warning` on
+ * `bg-tag-warning`; retired uses `text-destructive` on `bg-tag-destructive` (same
+ * pairing as the Vacant RouteStateTag).
  */
 const STATUS_CLASSES: Record<MemberStatus, string> = {
-  active: "bg-tag text-primary",
-  "on-vacation": "bg-tag-warning text-primary",
-  retired: "bg-tag-destructive text-destructive",
+  active: "border-hairline bg-tag text-secondary",
+  "on-vacation": "border-warning-border bg-tag-warning text-warning",
+  retired: "border-destructive-border bg-tag-destructive text-destructive",
 };
 
 /**
@@ -34,18 +34,21 @@ const STATUS_CLASSES: Record<MemberStatus, string> = {
 export function RoleTag({
   role,
   status,
+  neutral = false,
   className,
 }: {
   role: MemberRole;
   status: MemberStatus;
+  /** Skip the status tint, for places that already show status as text. */
+  neutral?: boolean;
   className?: string;
 }) {
   return (
     <span
-      aria-label={`${ROLE_LABEL[role]}, ${STATUS_LABEL[status]}`}
+      aria-label={neutral ? undefined : `${ROLE_LABEL[role]}, ${STATUS_LABEL[status]}`}
       className={cn(
-        "inline-flex max-w-full min-w-0 items-center justify-center overflow-hidden px-2 py-1",
-        STATUS_CLASSES[status],
+        "inline-flex max-w-full min-w-0 items-center justify-center overflow-hidden border px-[7px] py-[3px] shadow-[var(--stroke-inner)]",
+        STATUS_CLASSES[neutral ? "active" : status],
         className,
       )}
     >

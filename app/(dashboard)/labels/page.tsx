@@ -318,7 +318,7 @@ export default function LabelsPage() {
           <div className="page-header-container">
             <div className="flex items-center gap-2">
               <h1 className="text-md text-primary">Labels</h1>
-              <p className="text-md text-secondary">
+              <p className="text-md text-tertiary">
                 {totalBundles} {totalBundles === 1 ? "bundle" : "bundles"}
               </p>
             </div>

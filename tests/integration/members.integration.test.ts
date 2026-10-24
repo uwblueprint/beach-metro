@@ -163,6 +163,7 @@ describe.skipIf(!RUN)("members list", () => {
       (m) => m.id === withRoute.id,
     )!;
     expect(row.routeInfo).toBe(route.label);
+    expect(row.routeId).toBe(route.id);
   });
 });
 

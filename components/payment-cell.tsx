@@ -118,7 +118,7 @@ function PopoverComment({
             onFocus={(event) => event.target.select()}
             aria-label={isEmpty ? "Add comment" : "Edit comment"}
             placeholder="Add a note…"
-            className="h-6 min-h-6 w-full min-w-0 appearance-none border-0 bg-transparent p-0 text-md leading-[1.3] text-primary outline-none placeholder:text-muted-foreground"
+            className="h-6 min-h-6 w-full min-w-0 appearance-none border-0 bg-transparent p-0 text-md leading-[1.3] text-primary outline-none placeholder:text-quaternary"
           />
         </div>
       ) : (
@@ -485,8 +485,8 @@ function CellActionsMenu({
             aria-label="Cell actions"
             className={cn(
               "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[opacity,background-color,color] duration-150 ease-out",
-              "pointer-events-none group-hover/cell:pointer-events-auto group-hover/cell:bg-muted group-hover/cell:text-primary group-hover/cell:opacity-100",
-              "data-popup-open:pointer-events-auto data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:opacity-100 data-popup-open:hover:bg-bg-secondary data-popup-open:hover:text-primary",
+              "pointer-events-none group-hover/cell:pointer-events-auto group-hover/cell:opacity-100 hover:bg-bg-tertiary hover:text-primary",
+              "data-popup-open:pointer-events-auto data-popup-open:bg-bg-quaternary data-popup-open:text-primary data-popup-open:opacity-100",
             )}
             onClick={(event) => event.stopPropagation()}
           >

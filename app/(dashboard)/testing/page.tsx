@@ -1293,7 +1293,7 @@ export default function TestingPage() {
           <div className="page-header-container">
             <div className="flex items-center gap-2">
               <h1 className="text-md text-primary">Component playground</h1>
-              <p className="text-secondary text-md">Press ? from anywhere to open</p>
+              <p className="text-tertiary text-md">Press ? from anywhere to open</p>
             </div>
           </div>
 

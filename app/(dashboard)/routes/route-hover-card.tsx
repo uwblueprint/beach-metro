@@ -11,6 +11,11 @@ import { RouteTag } from "./route-tag";
 
 type LatLng = { lat: number; lng: number };
 
+/** Min px between the card and the map edge. */
+const HOVER_CARD_EDGE_GAP = 8;
+/** Keep the caret at least this far from the card's side so it never hangs off a rounded corner. */
+const HOVER_CARD_CARET_INSET = 16;
+
 type HoverRoute = {
   id: string;
   label: string;
@@ -77,14 +82,21 @@ function readCssDurationMs(variable: string, fallback: number): number {
 }
 
 /** Positions React content on the map via OverlayView (legacy 2D maps). */
-function MapHtmlOverlay(props: { position: LatLng; children: React.ReactNode }) {
+function MapHtmlOverlay(props: {
+  position: LatLng;
+  /** Runs after each placement, once the overlay sits at its new pixel position. */
+  onDraw?: (container: HTMLDivElement) => void;
+  children: React.ReactNode;
+}) {
   const map = useMap();
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const overlayRef = useRef<google.maps.OverlayView | null>(null);
   const positionRef = useRef(props.position);
+  const onDrawRef = useRef(props.onDraw);
 
   useLayoutEffect(() => {
     positionRef.current = props.position;
+    onDrawRef.current = props.onDraw;
   });
 
   useEffect(() => {
@@ -108,6 +120,7 @@ function MapHtmlOverlay(props: { position: LatLng; children: React.ReactNode }) 
         if (point) {
           div.style.left = `${point.x}px`;
           div.style.top = `${point.y}px`;
+          onDrawRef.current?.(div);
         }
       }
       onRemove() {
@@ -125,9 +138,10 @@ function MapHtmlOverlay(props: { position: LatLng; children: React.ReactNode }) 
     };
   }, [map]);
 
-  useEffect(() => {
-    overlayRef.current?.draw();
-  }, [props.position.lat, props.position.lng]);
+  // Every render, after portaled children mount: content width can change with the position.
+  useLayoutEffect(() => {
+    if (container) overlayRef.current?.draw();
+  });
 
   if (!container) return null;
   return createPortal(props.children, container);
@@ -151,7 +165,22 @@ export function RouteHoverCard(props: {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
+  /** Slide the card body (not the caret) so it stays inside the map's visible bounds. */
+  function keepCardInsideMap(anchorEl: HTMLDivElement) {
+    const body = bodyRef.current;
+    const mapEl = anchorEl.closest("[data-map-container]");
+    if (!body || !mapEl) return;
+    const anchorX = anchorEl.getBoundingClientRect().left;
+    const bounds = mapEl.getBoundingClientRect();
+    const half = body.offsetWidth / 2;
+    const minShift = bounds.left + HOVER_CARD_EDGE_GAP - (anchorX - half);
+    const maxShift = bounds.right - HOVER_CARD_EDGE_GAP - (anchorX + half);
+    const limit = Math.max(0, half - HOVER_CARD_CARET_INSET);
+    const shift = Math.max(-limit, Math.min(limit, Math.max(minShift, Math.min(maxShift, 0))));
+    body.style.translate = shift ? `${shift}px 0` : "";
+  }
   const openRouteId = open && route ? route.id : null;
   const [trackedOpenId, setTrackedOpenId] = useState<string | null>(openRouteId);
 
@@ -223,10 +252,8 @@ export function RouteHoverCard(props: {
 
   const volunteer = snapshot.route.volunteerName ?? "vacant";
   const counts = `${snapshot.route.bundleCount}B, ${snapshot.route.papers}P`;
-  const isVacant = snapshot.route.lifecycle === "vacant";
-
   return (
-    <MapHtmlOverlay position={snapshot.position}>
+    <MapHtmlOverlay position={snapshot.position} onDraw={keepCardInsideMap}>
       {/* ~25% tighter than prior h-8 bridge: h-6 gap under the pointer tip. */}
       <div className="flex -translate-x-1/2 -translate-y-full flex-col items-center">
         <div
@@ -234,12 +261,13 @@ export function RouteHoverCard(props: {
           data-origin="bottom-center"
         >
           <div
+            ref={bodyRef}
             className={cn(
-              "flex w-max max-w-[14rem] flex-col gap-1 rounded-xl bg-bg p-1 pb-2 text-left smooth-shadow-ring-md select-none",
+              "flex w-max max-w-[14rem] flex-col gap-1 rounded-[10px] bg-bg p-1 pb-2 text-left smooth-shadow-ring-md select-none",
               "text-md",
             )}
           >
-            <RouteTag label={snapshot.route.label} vacant={isVacant} />
+            <RouteTag label={snapshot.route.label} />
             <span className="flex w-full items-center justify-between gap-3 px-2 text-md text-secondary">
               <span className="min-w-0 truncate">{volunteer}</span>
               <span className="shrink-0 tabular-nums">{counts}</span>

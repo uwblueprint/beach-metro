@@ -3,7 +3,6 @@
 import { Pencil } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface SidePanelRowProps {
@@ -41,13 +40,18 @@ function SidePanelRow({
   trailing,
   className,
 }: SidePanelRowProps) {
-  const interactive = !isStatic && Boolean(onClick || onEdit || trailing);
+  // An editable row behaves like a copyable Attribute: the whole row is the target.
+  const handleClick = onClick ?? onEdit;
+  const interactive = !isStatic && Boolean(handleClick || trailing);
   const showTrailing = Boolean(trailing || onEdit) && !isStatic;
   const classes = cn(
     interactive
       ? // pr-3 (12px): room for trailing icons; right edge aligns with panel close (content pr-6).
         "table-row group/row relative gap-2 overflow-hidden pr-3"
       : "relative flex h-10 w-full cursor-default items-center gap-2 overflow-hidden rounded-md p-2 text-md",
+    onEdit &&
+      !isStatic &&
+      "text-secondary transition-colors duration-150 ease-out hover:text-primary",
     className,
   );
 
@@ -71,19 +75,10 @@ function SidePanelRow({
           <div className="absolute right-0 top-0 flex h-full items-center justify-end opacity-0 transition-opacity group-hover/row:opacity-100">
             {trailing}
             {onEdit ? (
-              <Button
-                type="button"
-                variant="text"
-                size="icon-sm"
-                aria-label="Edit"
-                className="text-secondary"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit();
-                }}
-              >
-                <Pencil className="size-3" />
-              </Button>
+              <span className="flex size-6 items-center justify-center text-current">
+                <Pencil aria-hidden className="size-3" strokeWidth={1.75} />
+                <span className="sr-only">Edit</span>
+              </span>
             ) : null}
           </div>
         </>
@@ -97,16 +92,16 @@ function SidePanelRow({
   // and Enter/Space on the inner trigger stops being reliable.
   return (
     <div
-      role={onClick && !isStatic ? "button" : undefined}
-      tabIndex={onClick && !isStatic ? 0 : undefined}
+      role={handleClick && !isStatic ? "button" : undefined}
+      tabIndex={handleClick && !isStatic ? 0 : undefined}
       aria-label={ariaLabel}
-      onClick={isStatic ? undefined : onClick}
+      onClick={isStatic ? undefined : handleClick}
       onKeyDown={
-        onClick && !isStatic
+        handleClick && !isStatic
           ? (e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                onClick();
+                handleClick();
               }
             }
           : undefined

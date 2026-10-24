@@ -15,9 +15,11 @@ import {
   useState,
   type ComponentProps,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 import { AddressField } from "@/components/address-field";
 import { BundlePapersTable, papersRowsDiffer } from "@/components/bundle-papers-table";
+import { ResizablePanel } from "@/components/resizable-panel";
 import { SidePanelField } from "@/components/side-panel-field";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -52,7 +55,7 @@ import {
   type SelectedMemberHome,
   type VacancyFilter,
 } from "./route-map";
-import { RouteStateTag, RouteTag } from "./route-tag";
+import { RouteStateTag, RouteTag, type RouteState } from "./route-tag";
 
 /** What kind of building a drop serves; see docs/design_decisions.md. */
 const DROP_KIND_OPTIONS = [
@@ -81,12 +84,14 @@ const inputTriggerClassName =
   "flex h-auto w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-hairline bg-bg px-3 py-2 text-left text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-bg-tertiary disabled:text-disabled disabled:opacity-50";
 
 /**
- * Attention flag for a row, or null when the route is healthy (route flow
- * §4f/§4g). The two are not exclusive — a carrier on vacation can also be past
- * their end date — so needs-attention wins: suspension clears itself when the
+ * State tag for a row, or null when the route is healthy (route flow §3a,
+ * §4f/§4g). Vacant routes have no volunteer, so they can't carry either flag.
+ * The flags are not exclusive — a carrier on vacation can also be past their
+ * end date — so needs-attention wins: suspension clears itself when the
  * vacation window ends, a passed end date needs the manager to act.
  */
-function routeState(r: RouteSummary): "attention" | "suspended" | null {
+function routeState(r: RouteSummary): RouteState | null {
+  if (r.lifecycle === "vacant") return "vacant";
   if (r.needsAttention) return "attention";
   if (r.suspended) return "suspended";
   return null;
@@ -381,14 +386,23 @@ function LegacyRoutesFilterSection(props: {
             shape="rounded"
             aria-label="Toggle filters"
             aria-expanded={props.filterOpen}
-            selected={props.filterOpen || filterClosing}
+            selected={
+              props.filterOpen ||
+              filterClosing ||
+              props.deliveryType !== "all" ||
+              props.vacancy !== "all" ||
+              props.captainId !== "all"
+            }
             onClick={props.onFilterToggle}
           >
             <Filter />
           </Button>
         </div>
 
-        <div className="t-resize overflow-hidden" style={{ height: filterHeight }}>
+        <div
+          className="t-resize overflow-hidden"
+          style={{ height: filterVisible ? filterHeight : 0 }}
+        >
           {filterVisible && (
             <div
               ref={filterInnerRef}
@@ -478,6 +492,18 @@ const FilterPillTrigger = forwardRef<
   );
 });
 
+/** Trailing "Clear" row for filter dropdowns; the rule matches the menu's ring colour. */
+function FilterClearItem({ disabled, onClear }: { disabled: boolean; onClear: () => void }) {
+  return (
+    <>
+      <DropdownMenuSeparator className="bg-black/5" />
+      <DropdownMenuItem disabled={disabled} onClick={onClear} className="text-secondary">
+        Clear
+      </DropdownMenuItem>
+    </>
+  );
+}
+
 /** Two-option exclusive filter — checkmark on the selected row; click again to clear to All. */
 function SingleSelectFilterPill({
   label,
@@ -514,6 +540,7 @@ function SingleSelectFilterPill({
             </DropdownMenuItem>
           );
         })}
+        <FilterClearItem disabled={!hasSelection} onClear={() => onChange(null)} />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -555,9 +582,12 @@ function MultiSelectFilterPill({
       <DropdownMenuTrigger
         render={<FilterPillTrigger label={label} summary={summary} hasSelection={hasSelection} />}
       />
-      <DropdownMenuContent align="start" className="min-w-[14rem] p-1">
+      <DropdownMenuContent
+        align="start"
+        className="flex min-w-[14rem] flex-col overflow-x-hidden overflow-y-hidden p-1"
+      >
         <div
-          className="sticky top-0 z-10 mb-1 bg-bg pb-1"
+          className="shrink-0 bg-bg pb-1"
           onKeyDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
@@ -567,29 +597,32 @@ function MultiSelectFilterPill({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={searchPlaceholder}
-              className="min-w-0 flex-1 bg-transparent text-md text-primary outline-none placeholder:text-secondary"
+              className="min-w-0 flex-1 bg-transparent text-md text-primary outline-none placeholder:text-quaternary"
             />
           </div>
         </div>
-        {filtered.length === 0 ? (
-          <p className="px-2 py-1.5 text-md text-secondary">No matches</p>
-        ) : (
-          filtered.map((opt) => (
-            <DropdownMenuCheckboxItem
-              key={opt.value}
-              checked={selected.includes(opt.value)}
-              onCheckedChange={(checked) => {
-                if (checked === true) {
-                  onChange([...selected, opt.value]);
-                } else {
-                  onChange(selected.filter((v) => v !== opt.value));
-                }
-              }}
-            >
-              {opt.label}
-            </DropdownMenuCheckboxItem>
-          ))
-        )}
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+          {filtered.length === 0 ? (
+            <p className="px-2 py-1.5 text-md text-secondary">No matches</p>
+          ) : (
+            filtered.map((opt) => (
+              <DropdownMenuCheckboxItem
+                key={opt.value}
+                checked={selected.includes(opt.value)}
+                onCheckedChange={(checked) => {
+                  if (checked === true) {
+                    onChange([...selected, opt.value]);
+                  } else {
+                    onChange(selected.filter((v) => v !== opt.value));
+                  }
+                }}
+              >
+                {opt.label}
+              </DropdownMenuCheckboxItem>
+            ))
+          )}
+          <FilterClearItem disabled={!hasSelection} onClear={() => onChange([])} />
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -714,14 +747,23 @@ function RoutesFilterSection(props: {
             shape="rounded"
             aria-label="Toggle filters"
             aria-expanded={props.filterOpen}
-            selected={props.filterOpen || filterClosing}
+            selected={
+              props.filterOpen ||
+              filterClosing ||
+              props.deliveryType != null ||
+              props.vacancy != null ||
+              props.captainIds.length > 0
+            }
             onClick={props.onFilterToggle}
           >
             <Filter />
           </Button>
         </div>
 
-        <div className="t-resize overflow-hidden" style={{ height: filterHeight }}>
+        <div
+          className="t-resize overflow-hidden"
+          style={{ height: filterVisible ? filterHeight : 0 }}
+        >
           {filterVisible && (
             <div
               ref={filterInnerRef}
@@ -755,14 +797,13 @@ function RoutesFilterSection(props: {
   );
 }
 
-export function RoutesClient() {
+export function RoutesClient({ initialRouteId = null }: { initialRouteId?: string | null }) {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [showHomes] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialRouteId);
   const [detailMemberHome, setDetailMemberHome] = useState<SelectedMemberHome | null>(null);
   const [creating, setCreating] = useState(false);
-  const [creatingDrop, setCreatingDrop] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [deliveryType, setDeliveryType] = useState<DeliveryTypeFilter | null>(null);
   const [vacancy, setVacancy] = useState<VacancyFilter | null>(null);
@@ -793,17 +834,21 @@ export function RoutesClient() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  // Selections keep narrowing results after the filter row is closed.
+  const activeDeliveryType = deliveryType;
+  const activeVacancy = vacancy;
+  const activeCaptainIds = captainIds;
+
   const listUrl = useMemo(() => {
     const params = new URLSearchParams();
-    if (vacancy) params.set("vacancy", vacancy);
-    if (captainIds.length === 1) params.set("captainId", captainIds[0]);
-    if (q.trim()) params.set("q", q.trim());
+    if (activeVacancy) params.set("vacancy", activeVacancy);
+    if (activeCaptainIds.length === 1) params.set("captainId", activeCaptainIds[0]);
     const qs = params.toString();
     return `/api/routes${qs ? `?${qs}` : ""}`;
-  }, [vacancy, captainIds, q]);
+  }, [activeVacancy, activeCaptainIds]);
 
   const routes = useQuery({
-    queryKey: ["routes", vacancy, captainIds, q],
+    queryKey: ["routes", activeVacancy, activeCaptainIds],
     queryFn: () => getJson<RouteSummary[]>(listUrl),
   });
   const volunteers = useQuery({
@@ -863,22 +908,31 @@ export function RoutesClient() {
     let list = routes.data ?? [];
 
     // null = All; otherwise split point deliveries from street routes.
-    if (deliveryType) {
-      list = list.filter((r) => matchesDeliveryType(r, deliveryType));
+    if (activeDeliveryType) {
+      list = list.filter((r) => matchesDeliveryType(r, activeDeliveryType));
     }
 
-    if (vacancy) {
-      list = list.filter((r) => r.lifecycle === vacancy);
+    if (activeVacancy) {
+      list = list.filter((r) => r.lifecycle === activeVacancy);
     }
 
     // A single captain is pushed to the server as a query param; only a
     // multi-select needs narrowing here.
-    if (captainIds.length > 1) {
-      list = list.filter((r) => r.captain != null && captainIds.includes(r.captain.id));
+    if (activeCaptainIds.length > 1) {
+      list = list.filter((r) => r.captain != null && activeCaptainIds.includes(r.captain.id));
+    }
+
+    const term = q.trim().toLowerCase();
+    if (term) {
+      list = list.filter((r) =>
+        [deliveryListLabel(r), r.assignedVolunteer?.displayName, r.captain?.name].some((field) =>
+          field?.toLowerCase().includes(term),
+        ),
+      );
     }
 
     return list;
-  }, [routes.data, deliveryType, vacancy, captainIds]);
+  }, [routes.data, activeDeliveryType, activeVacancy, activeCaptainIds, q]);
 
   const mapRoutes: MapRoute[] = filteredRoutes.map((r) => {
     const drop = isDropSummary(r);
@@ -912,35 +966,21 @@ export function RoutesClient() {
       <div className="page flex flex-col overflow-hidden">
         <div className="page-header-container">
           <div className="flex items-center gap-2">
-            <h1 className="text-md text-primary">Routes</h1>
-            <p className="text-md text-secondary">
+            <h1 className="text-md text-primary">Deliveries</h1>
+            <p className="text-md text-tertiary">
               {routes.data ? `Showing ${listRoutes.length}` : "Loading…"}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="default"
-              onClick={() => {
-                selectRoute(null);
-                setCreating(false);
-                setCreatingDrop(true);
-              }}
-            >
-              <Plus data-icon="inline-start" />
-              Add Drop
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                selectRoute(null);
-                setCreatingDrop(false);
-                setCreating(true);
-              }}
-            >
-              <Plus data-icon="inline-start" />
-              Add Route
-            </Button>
-          </div>
+          <Button
+            variant="primary"
+            onClick={() => {
+              selectRoute(null);
+              setCreating(true);
+            }}
+          >
+            <Plus data-icon="inline-start" />
+            Add Delivery
+          </Button>
         </div>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -952,10 +992,9 @@ export function RoutesClient() {
               selectedMemberHome={selectedId ? detailMemberHome : null}
               onSelect={(id) => {
                 setCreating(false);
-                setCreatingDrop(false);
                 selectRoute(id);
               }}
-              boundsFitKey={`${vacancy ?? "all"}|${q.trim()}|${deliveryType ?? "all"}|${captainIds.join(",")}|${showHomes ? "homes" : "no-homes"}`}
+              boundsFitKey={`${activeVacancy ?? "all"}|${q.trim()}|${activeDeliveryType ?? "all"}|${activeCaptainIds.join(",")}|${showHomes ? "homes" : "no-homes"}`}
               boundsFitReady={!routes.isFetching && (!showHomes || !volunteers.isFetching)}
               filterPlacement={filterPlacement}
               search={q}
@@ -972,19 +1011,16 @@ export function RoutesClient() {
             />
           </div>
 
-          <div className="flex h-full w-[400px] shrink-0 flex-col border-l border-border bg-bg">
-            {creatingDrop ? (
-              <CreateDropPanel
-                onClose={() => setCreatingDrop(false)}
-                onCreated={(id) => {
-                  setCreatingDrop(false);
-                  selectRoute(id);
-                  qc.invalidateQueries({ queryKey: ["routes"] });
-                  qc.invalidateQueries({ queryKey: ["route-paths"] });
-                }}
-              />
-            ) : creating ? (
-              <CreateRoutePanel
+          <ResizablePanel
+            defaultWidth={400}
+            minWidth={320}
+            maxWidth={640}
+            handleSide="left"
+            handleLabel="Resize deliveries panel"
+            className="flex flex-col border-l border-border bg-bg"
+          >
+            {creating ? (
+              <CreateDeliveryPanel
                 onClose={() => setCreating(false)}
                 onCreated={(id) => {
                   setCreating(false);
@@ -1007,7 +1043,7 @@ export function RoutesClient() {
             ) : (
               <>
                 <div className="page-header-container">
-                  <span className="text-md font-normal text-primary">Routes</span>
+                  <span className="text-md font-normal text-primary">Deliveries</span>
                 </div>
                 {filterPlacement === "pills" ? (
                   <RoutesFilterSection
@@ -1046,7 +1082,6 @@ export function RoutesClient() {
                     selectedId={selectedId}
                     onSelect={(id) => {
                       setCreating(false);
-                      setCreatingDrop(false);
                       selectRoute(id);
                     }}
                     onClearSelection={() => selectRoute(null)}
@@ -1058,7 +1093,7 @@ export function RoutesClient() {
                 </div>
               </>
             )}
-          </div>
+          </ResizablePanel>
         </div>
       </div>
     </div>
@@ -1081,8 +1116,8 @@ function RouteList(props: {
   return (
     <div className="flex flex-col gap-3">
       {props.routes.map((r) => {
-        const isVacant = r.lifecycle === "vacant";
         const captainName = r.captain?.name ?? "No captain";
+        const volunteerName = isDropSummary(r) ? null : r.assignedVolunteer?.displayName;
         const state = routeState(r);
 
         return (
@@ -1104,11 +1139,11 @@ function RouteList(props: {
           >
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <div className="flex min-w-0 items-center gap-2">
-                <RouteTag label={deliveryListLabel(r)} vacant={isVacant} />
+                <RouteTag label={deliveryListLabel(r)} />
                 {state && <RouteStateTag state={state} />}
               </div>
               <span className="truncate pl-2 text-md font-normal text-secondary">
-                {captainName}
+                {volunteerName ? `${captainName}; ${volunteerName} (V)` : captainName}
               </span>
             </div>
             <div className="flex shrink-0 items-center self-start">
@@ -1148,7 +1183,9 @@ function DropdownField(props: {
           disabled={isDisabled}
           render={<button type="button" className={inputTriggerClassName} />}
         >
-          <span className={cn("min-w-0 truncate", isDisabled && "text-secondary")}>
+          <span
+            className={cn("min-w-0 truncate", (isDisabled || !props.value) && "text-secondary")}
+          >
             {props.display}
           </span>
           <ChevronDown className={cn("size-3 shrink-0", !isDisabled && "text-primary")} />
@@ -1173,16 +1210,24 @@ function RouteVolunteerCaptainHint(props: {
   volunteers: VolunteerSummary[] | undefined;
 }) {
   if (!props.volunteerId) {
-    return <p className="text-md text-secondary">Select a volunteer for this route</p>;
+    return <p className="text-md text-tertiary">Select a volunteer for this route</p>;
   }
 
   const captainName =
     props.volunteers?.find((v) => v.id === props.volunteerId)?.territory?.captainName ?? null;
 
+  if (!captainName) {
+    return (
+      <p className="text-md text-tertiary">
+        This volunteer has no captain, so neither does this route
+      </p>
+    );
+  }
+
   return (
-    <p className="text-md text-secondary">
-      The captain responsible for this volunteer, thus this route is{" "}
-      <span className="font-semibold text-primary">{captainName ?? "no captain"}</span>
+    <p className="text-md text-tertiary">
+      This volunteer and route are under{" "}
+      <span className="font-semibold text-primary">{captainName}</span>
     </p>
   );
 }
@@ -1228,18 +1273,19 @@ function RouteActionsMenu(props: {
         aria-label="Route actions"
         render={
           <Button
-            variant="default"
-            size="icon"
+            variant="text"
+            size={props.revealOnRowHover ? "icon-sm" : "icon"}
             className={cn(
-              "shrink-0 bg-transparent text-secondary hover:bg-bg-quaternary data-popup-open:bg-bg-quaternary",
-              props.revealOnRowHover &&
-                "opacity-0 transition-[opacity,background-color,transform,color] group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100",
+              "shrink-0 text-secondary",
+              props.revealOnRowHover
+                ? "opacity-0 transition-[opacity,background-color,transform,scale,color] group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100 hover:bg-bg-tertiary data-popup-open:bg-bg-quaternary"
+                : "hover:bg-bg-secondary data-popup-open:bg-bg-tertiary",
             )}
             onClick={stopRowClick}
           />
         }
       >
-        <MoreHorizontal />
+        <MoreHorizontal className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {showRouteDetails ? (
@@ -1340,7 +1386,7 @@ function DetailBreadcrumb(props: { title: string; onBack: () => void; actions?: 
           className="shrink-0 cursor-pointer text-secondary hover:text-primary"
           onClick={props.onBack}
         >
-          Routes
+          Deliveries
         </button>
         <span className="text-secondary">&gt;</span>
         <span className="truncate text-primary">{props.title}</span>
@@ -1701,13 +1747,54 @@ function RouteDetailPanel({
   );
 }
 
+type CreatePanelProps = {
+  onClose: () => void;
+  onCreated: (id: string) => void;
+  typeField: ReactNode;
+  editPapersOnMount: boolean;
+};
+
+const DELIVERY_TYPE_OPTIONS = [
+  { value: "drop", label: "Drop" },
+  { value: "route", label: "Route" },
+];
+
+/**
+ * One create form for both delivery types. The type picker sits at the top;
+ * switching it remounts the form below, since the fields differ per type.
+ */
+function CreateDeliveryPanel(props: { onClose: () => void; onCreated: (id: string) => void }) {
+  const [type, setType] = useState<"drop" | "route">("drop");
+  const [switched, setSwitched] = useState(false);
+  const typeField = (
+    <DropdownField
+      label="Type"
+      value={type}
+      display={type === "drop" ? "Drop" : "Route"}
+      options={DELIVERY_TYPE_OPTIONS}
+      onChange={(v) => {
+        setType(v === "route" ? "route" : "drop");
+        setSwitched(true);
+      }}
+    />
+  );
+  // After a switch, skip the papers autofocus: it would scroll the panel away
+  // from the type picker.
+  const shared = { ...props, typeField, editPapersOnMount: !switched };
+  return type === "drop" ? (
+    <CreateDropPanel key="drop" {...shared} />
+  ) : (
+    <CreateRoutePanel key="route" {...shared} />
+  );
+}
+
 /**
  * Create a route. Endpoint addresses resolve server-side — by placeId when a
  * suggestion was picked (exact), otherwise by Address Validation on the typed
  * text. Either way the route gets the coordinates the map needs, so it appears
  * on the map as soon as it's saved.
  */
-function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) => void }) {
+function CreateRoutePanel(props: CreatePanelProps) {
   const volunteers = useQuery({
     queryKey: ["volunteers", "assignable"],
     queryFn: () => getJson<VolunteerSummary[]>("/api/volunteers?status=active"),
@@ -1777,9 +1864,11 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
 
   return (
     <div className="flex h-full flex-col">
-      <DetailBreadcrumb title="New route" onBack={props.onClose} />
+      <DetailBreadcrumb title="New delivery" onBack={props.onClose} />
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-4">
+        {props.typeField}
+
         <div className="flex flex-col gap-2">
           <DropdownField
             label="Volunteer"
@@ -1848,7 +1937,7 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
         <BundlePapersTable
           value={papersRows}
           onChange={setPapersRows}
-          startEditingLast
+          startEditingLast={props.editPapersOnMount}
           onValidityChange={setPapersValid}
         />
 
@@ -1891,7 +1980,7 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
  * people flow does not model, and Places autocomplete for editing a drop's
  * address from the detail panel.
  */
-function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) => void }) {
+function CreateDropPanel(props: CreatePanelProps) {
   const captains = useQuery({
     queryKey: ["captains", "assignable"],
     queryFn: () =>
@@ -1967,9 +2056,11 @@ function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) =
 
   return (
     <div className="flex h-full flex-col">
-      <DetailBreadcrumb title="New drop" onBack={props.onClose} />
+      <DetailBreadcrumb title="New delivery" onBack={props.onClose} />
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-4">
+        {props.typeField}
+
         <DropdownField
           label="Captain"
           value={captainId}
@@ -2026,7 +2117,7 @@ function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) =
         <BundlePapersTable
           value={papersRows}
           onChange={setPapersRows}
-          startEditingLast
+          startEditingLast={props.editPapersOnMount}
           onValidityChange={setPapersValid}
         />
 

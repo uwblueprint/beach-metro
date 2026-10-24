@@ -220,7 +220,7 @@ function FilterSegmentGroup<T extends string>({
   }, [updateIndicator]);
 
   return (
-    <div ref={containerRef} className="relative flex rounded-full bg-[#F3F4F6] p-1">
+    <div ref={containerRef} className="relative flex rounded-full bg-bg-tertiary p-1">
       <div
         aria-hidden
         className="absolute top-1 bottom-1 rounded-full bg-bg transition-[left,width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
@@ -240,7 +240,7 @@ function FilterSegmentGroup<T extends string>({
             onClick={() => onChange(option.value)}
             className={cn(
               "relative z-10 flex-1 rounded-full px-2 py-1 text-sm transition-colors",
-              isSelected ? "font-medium text-primary" : "text-muted-foreground",
+              isSelected ? "font-medium text-primary" : "text-muted-foreground hover:text-primary",
             )}
           >
             {option.label}
@@ -678,7 +678,9 @@ export default function FinancesPage() {
                       />
                     }
                   >
-                    {!isEditingTableTitle && <span className="text-md">{tableDisplayLabel}</span>}
+                    {!isEditingTableTitle && (
+                      <span className="text-md text-tertiary">{tableDisplayLabel}</span>
+                    )}
                     <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
@@ -725,7 +727,7 @@ export default function FinancesPage() {
                         variant="text"
                         size="icon"
                         aria-label="More actions"
-                        className="text-secondary"
+                        className="text-secondary data-popup-open:bg-bg-tertiary"
                       />
                     }
                   >
@@ -774,7 +776,7 @@ export default function FinancesPage() {
                         className={cn(
                           "flex size-7 shrink-0 items-center justify-center rounded-[8px] border-[0.5px] border-border bg-bg text-muted-foreground transition-[background-color,color,border-color] duration-300 ease-out",
                           "hover:border-transparent hover:bg-bg-secondary hover:text-primary",
-                          "data-popup-open:border-transparent data-popup-open:bg-muted data-popup-open:text-primary data-popup-open:hover:bg-bg-secondary data-popup-open:hover:text-primary",
+                          "data-popup-open:border-transparent data-popup-open:bg-bg-tertiary data-popup-open:text-primary data-popup-open:hover:bg-bg-tertiary",
                         )}
                       >
                         <Filter className="size-4" strokeWidth={1.5} />
@@ -976,7 +978,7 @@ export default function FinancesPage() {
                             onKeyDown={handleDraftKeyDown}
                             onBlur={handleDraftBlur}
                             aria-label="Issue name"
-                            className="w-full border-0 bg-transparent p-0 text-md text-primary outline-none placeholder:text-muted-foreground"
+                            className="w-full border-0 bg-transparent p-0 text-md text-primary outline-none placeholder:text-quaternary"
                           />
                         </TableCell>
                         {visibleCaptains.map((captain) => (
