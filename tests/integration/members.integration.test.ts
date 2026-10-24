@@ -37,6 +37,7 @@ const services = RUN
       captains: await import("@/lib/services/captains"),
       payouts: await import("@/lib/services/payouts"),
       territories: await import("@/lib/services/territories"),
+      routes: await import("@/lib/services/routes"),
     }
   : null;
 
@@ -48,6 +49,7 @@ const created = {
   captainIds: [] as string[],
   territoryIds: [] as string[],
   addressIds: [] as string[],
+  routeIds: [] as string[],
 };
 
 async function expectServiceError(promise: Promise<unknown>, status: number): Promise<void> {
@@ -164,6 +166,55 @@ describe.skipIf(!RUN)("members list", () => {
     )!;
     expect(row.routeInfo).toBe(route.label);
     expect(row.routeId).toBe(route.id);
+  });
+
+  it("reports the bundles a route stores, not a split rebuilt from its papers", async () => {
+    const last = unique("Bundles");
+    const volunteer = await S().volunteers.createVolunteerRecord({
+      displayName: `${TEST_FIRST_NAME} ${last}`,
+      firstName: TEST_FIRST_NAME,
+      lastName: last,
+      email: null,
+      phone: null,
+      address: {
+        addressLines: [`${unique("Addr")} 1900 Queen St E`],
+        locality: "Toronto",
+        administrativeArea: "ON",
+        regionCode: "CA",
+      },
+      startDate: null,
+      endDate: null,
+      note: null,
+    });
+    created.volunteerIds.push(volunteer.id);
+
+    // 110 papers tied as two 55s. The greedy rule would make 50, 50 and 10, so a
+    // count rebuilt from the paper total reports three where the office ties two.
+    const route = await S().routes.createRouteRecord({
+      streetName: "Queen St E",
+      startAddress: {
+        addressLines: [`${unique("Start")} 1900 Queen St E`],
+        locality: "Toronto",
+        administrativeArea: "ON",
+        regionCode: "CA",
+      },
+      endAddress: {
+        addressLines: [`${unique("End")} 2100 Queen St E`],
+        locality: "Toronto",
+        administrativeArea: "ON",
+        regionCode: "CA",
+      },
+      houseCount: 20,
+      bundles: [{ papers: 55 }, { papers: 55 }],
+      assignedVolunteerId: volunteer.id,
+    });
+    created.routeIds.push(route.id);
+
+    const carried = (await S().volunteers.getVolunteer(volunteer.id)).routesCarried.find(
+      (r) => r.id === route.id,
+    )!;
+    expect(carried.papers).toBe(110);
+    expect(carried.bundleCount).toBe(2);
   });
 });
 
@@ -645,6 +696,8 @@ afterAll(async () => {
   const client = createAdminClient();
   // Years cascade to issues -> payouts + deliveries, so they go first.
   for (const id of createdYearIds) await client.from("financial_years").delete().eq("id", id);
+  // Routes reference volunteers, so they clear before the people do.
+  for (const id of created.routeIds) await client.from("volunteer_routes").delete().eq("id", id);
   // Notes cascade with their parent, so they need no explicit cleanup.
   for (const id of created.volunteerIds) await client.from("volunteers").delete().eq("id", id);
   for (const id of created.addressIds) await client.from("addresses").delete().eq("id", id);

@@ -18,7 +18,7 @@ import {
   type AddressDetail,
 } from "./addresses";
 import {
-  greedySplit,
+  bundleCount,
   recomposedDisplayName,
   routeLabel,
   volunteerNeedsAttention,
@@ -30,7 +30,13 @@ import { db, throwDb, today } from "./shared";
 
 type RouteLite = Pick<
   VolunteerRouteRow,
-  "id" | "street_name" | "assigned_volunteer_id" | "papers" | "start_address_id" | "end_address_id"
+  | "id"
+  | "street_name"
+  | "assigned_volunteer_id"
+  | "papers"
+  | "bundles"
+  | "start_address_id"
+  | "end_address_id"
 >;
 
 /** What the members table and the side panel both render for one carried route. */
@@ -83,7 +89,9 @@ async function fetchContext(): Promise<Context> {
   const [routesRes, territoriesRes, captainsRes] = await Promise.all([
     client
       .from("volunteer_routes")
-      .select("id, street_name, assigned_volunteer_id, papers, start_address_id, end_address_id")
+      .select(
+        "id, street_name, assigned_volunteer_id, papers, bundles, start_address_id, end_address_id",
+      )
       .is("deleted_at", null),
     client.from("captain_territories").select("*"),
     client.from("captains").select("id, display_name"),
@@ -115,7 +123,10 @@ function toCarriedRoute(r: RouteLite, addresses: Map<string, AddressDetail>): Ca
       addresses.get(r.end_address_id)?.formattedAddress ?? null,
     ),
     papers: r.papers,
-    bundleCount: greedySplit(r.papers).length,
+    // The stored split is the truth. The office can tie a route into sizes the
+    // greedy rule would never produce, such as two bundles of 55, so rebuilding
+    // the split from the paper count reports a different number than they tie.
+    bundleCount: bundleCount(Array.isArray(r.bundles) ? r.bundles : []),
   };
 }
 
