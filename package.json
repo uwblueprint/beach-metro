@@ -23,7 +23,9 @@
     "db:seed": "bash scripts/db.sh seed",
     "db:types": "bash scripts/db.sh types",
     "create-admin": "node --env-file=.env.local scripts/create-admin.ts",
-    "refresh-coords": "node --env-file=.env.local scripts/refresh-coords.ts"
+    "refresh-coords": "node --env-file=.env.local scripts/refresh-coords.ts",
+    "import:convert": "python3 scripts/decrypt-workbook.py",
+    "import:legacy": "tsx --tsconfig tsconfig.scripts.json scripts/import-legacy.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -63,6 +65,7 @@
     "postgres": "^3.4.9",
     "prettier": "^3.8.4",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vite": "^8.1.4",
     "vitest": "^4.1.9"
