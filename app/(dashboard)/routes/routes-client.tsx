@@ -151,6 +151,8 @@ interface RouteSummary {
   needsAttention: boolean;
   effectiveHouseCount: number;
   papers: number;
+  /** The split the route actually stores, which need not be 50s and 25s. */
+  bundles: Array<{ papers: number }>;
   assignedVolunteer: { id: string; displayName: string; status: string } | null;
   captain: { id: string; name: string } | null;
   start: { latitude: number; longitude: number } | null;
@@ -947,7 +949,10 @@ export function RoutesClient({ initialRouteId = null }: { initialRouteId?: strin
       path: drop ? null : (pathById.get(r.id) ?? null),
       label: deliveryListLabel(r),
       volunteerName: r.assignedVolunteer ? r.assignedVolunteer.displayName : null,
-      bundleCount: greedySplit(Math.max(0, Math.floor(r.papers))).length,
+      // Count the split the route stores rather than rebuilding one from the
+      // paper total, which reports a different number for any route the office
+      // tied by hand.
+      bundleCount: r.bundles.length,
       papers: r.papers,
       isDrop: drop,
     };
