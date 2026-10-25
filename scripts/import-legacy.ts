@@ -142,6 +142,12 @@ async function importCaptains(
     const verdict = ledger?.decide(captain.sourceKey, rowHash, null) ?? { kind: "create" as const };
 
     if (verdict.kind === "unchanged") {
+      // The territory is still needed even though nothing about the captain
+      // changed, because the people phase reads this map to place a volunteer.
+      // Skipping it would send a later run's volunteer patch through with no
+      // captain and clear the link an earlier run made.
+      const existing = await services!.getCaptain(verdict.entityId);
+      if (existing.territory) territories.set(captain.sourceKey, existing.territory.id);
       out.unchanged += 1;
       await ledger!.touch(captain.sourceKey);
       continue;
@@ -182,7 +188,10 @@ async function importCaptains(
     }
   }
 
-  out.disappeared = (ledger?.disappeared() ?? []).map((r) => r.sourceKey);
+  // Only a run that read every row can tell a row that is gone from one this
+  // run never looked at.
+  if (options.limit === null)
+    out.disappeared = (ledger?.disappeared() ?? []).map((r) => r.sourceKey);
   return out;
 }
 
@@ -258,6 +267,10 @@ async function importPeople(
       out.created += 1;
       continue;
     }
+    // A record needs the place id the lookup returned, which is why --apply
+    // turns address checking on. Stated here so a future change to that cannot
+    // quietly write volunteers with no address.
+    if (!resolved) throw new Error("a run that writes needs resolved addresses");
 
     const territoryId = person.rt
       ? (territories.get(byRt.get(normalise(person.rt)) ?? "") ?? null)
@@ -267,7 +280,7 @@ async function importPeople(
       const created = await volunteers!.createVolunteerRecord({
         displayName: person.displayName,
         // The place id is reused so the lookup above is not paid for twice.
-        address: { placeId: resolved!.placeId },
+        address: { placeId: resolved.placeId },
         email: person.email,
         phone: person.phone,
         startDate: person.startDate,
@@ -277,7 +290,16 @@ async function importPeople(
         // duplicate them. A changed note is reported instead.
         note: person.notes.length > 0 ? person.notes.join(" ") : null,
       });
-      await ledger!.record(person.sourceKey, "volunteer", created.id, rowHash, addressHash);
+      // The record exists before the ledger knows about it, and only for these
+      // few lines. If the ledger write fails the run stops, so say which record
+      // it was, since a re-run would otherwise create a second copy of them.
+      try {
+        await ledger!.record(person.sourceKey, "volunteer", created.id, rowHash, addressHash);
+      } catch (err) {
+        console.error(`${person.displayName} was created as ${created.id} but not recorded.`);
+        console.error("Delete that volunteer before re-running, or they will come in twice.");
+        throw err;
+      }
       out.created += 1;
     } else {
       await volunteers!.updateVolunteerRecord(verdict.entityId, {
@@ -285,15 +307,20 @@ async function importPeople(
         email: person.email,
         phone: person.phone,
         startDate: person.startDate,
-        captainTerritoryId: territoryId,
-        ...(verdict.addressChanged ? { address: { placeId: resolved!.placeId } } : {}),
+        // Sent only when a territory was worked out. Sending null instead would
+        // clear a placement somebody made in the app by hand.
+        ...(territoryId ? { captainTerritoryId: territoryId } : {}),
+        ...(verdict.addressChanged ? { address: { placeId: resolved.placeId } } : {}),
       });
       await ledger!.record(person.sourceKey, "volunteer", verdict.entityId, rowHash, addressHash);
       out.updated += 1;
     }
   }
 
-  out.disappeared = (ledger?.disappeared() ?? []).map((r) => r.sourceKey);
+  // Only a run that read every row can tell a row that is gone from one this
+  // run never looked at.
+  if (options.limit === null)
+    out.disappeared = (ledger?.disappeared() ?? []).map((r) => r.sourceKey);
   return out;
 }
 
@@ -352,6 +379,14 @@ async function main(): Promise<number> {
   }
   if (options.apply && !process.env.SUPABASE_SECRET_KEY) {
     console.error("SUPABASE_SECRET_KEY is not set, so there is nothing to write to.");
+    return 1;
+  }
+  // A person is placed in their captain's territory, and the captains phase is
+  // what works out which territory that is. Writing people without it would
+  // create every volunteer with no captain, which is a day of work to redo.
+  if (options.apply && options.only.includes("people") && !options.only.includes("captains")) {
+    console.error("Writing people needs the captains phase, which finds their territories.");
+    console.error("Drop --only, or name both phases.");
     return 1;
   }
 
