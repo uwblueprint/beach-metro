@@ -194,7 +194,14 @@ function PaymentAmountPopover({
   const triggerRef = React.useRef<HTMLSpanElement>(null);
   const popupInnerRef = React.useRef<HTMLDivElement>(null);
   const pointerRef = React.useRef({ x: 0, y: 0, seen: false });
-  openRef.current = open;
+
+  // These refs exist so the hover callbacks, which are created once, can read
+  // the current value without being rebuilt on every render. They are written
+  // after the render commits, since a render React discards must not leave a
+  // value behind. Every read of them happens inside a later callback.
+  React.useEffect(() => {
+    openRef.current = open;
+  });
 
   const clearOpenTimeout = React.useCallback(() => {
     if (openTimeoutRef.current) {
@@ -239,8 +246,10 @@ function PaymentAmountPopover({
 
   const pointerInsideRef = React.useRef(pointerInside);
   const clearCloseTimeoutRef = React.useRef(clearCloseTimeout);
-  pointerInsideRef.current = pointerInside;
-  clearCloseTimeoutRef.current = clearCloseTimeout;
+  React.useEffect(() => {
+    pointerInsideRef.current = pointerInside;
+    clearCloseTimeoutRef.current = clearCloseTimeout;
+  });
 
   const stopTrackingRef = React.useRef<(() => void) | null>(null);
   const scheduleCloseRef = React.useRef<() => void>(() => {});
@@ -282,7 +291,9 @@ function PaymentAmountPopover({
       stopTrackingRef.current?.();
     }, HOVER_CLOSE_DELAY_MS);
   }, [clearOpenTimeout, pointerInside]);
-  scheduleCloseRef.current = scheduleClose;
+  React.useEffect(() => {
+    scheduleCloseRef.current = scheduleClose;
+  });
 
   const handleHoverEnter = React.useCallback(
     (event: React.MouseEvent) => {

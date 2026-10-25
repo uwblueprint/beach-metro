@@ -153,9 +153,11 @@ function TextSwap({ text, className }: { text: string; className?: string }) {
   const latest = React.useRef(text);
   const timer = React.useRef<number | null>(null);
   const ready = React.useRef(false);
-  latest.current = text;
 
   React.useLayoutEffect(() => {
+    // Set before the early returns below, so a swap already running still lands
+    // on the newest text rather than the one it started with.
+    latest.current = text;
     const el = ref.current;
     if (!el) return;
     if (!ready.current) {
@@ -325,61 +327,61 @@ function PapersPanel({
   return (
     <OverviewPanel className={panelClassName}>
       <div ref={bodyRef}>
-      {issues.length === 0 ? (
-        <p className={cn(rowPad, "text-md font-medium text-secondary")}>
-          No issues in this period yet.
-        </p>
-      ) : (
-        <>
-          {visible.map((issue) => (
-            <div
-              key={issue.issueId}
-              className={cn("flex items-center justify-between gap-4", rowPad)}
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <span
-                  className={
-                    plainRows
-                      ? "text-md font-medium text-primary"
-                      : "min-w-0 truncate text-md font-medium text-primary"
-                  }
-                >
-                  {issue.name.split(",")[0]}
-                </span>
-                <span
-                  className={
-                    plainRows
-                      ? "text-sm font-medium text-secondary"
-                      : "shrink-0 text-sm font-medium text-secondary"
-                  }
-                >
-                  {formatIssueDate(issue.date)}
+        {issues.length === 0 ? (
+          <p className={cn(rowPad, "text-md font-medium text-secondary")}>
+            No issues in this period yet.
+          </p>
+        ) : (
+          <>
+            {visible.map((issue) => (
+              <div
+                key={issue.issueId}
+                className={cn("flex items-center justify-between gap-4", rowPad)}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span
+                    className={
+                      plainRows
+                        ? "text-md font-medium text-primary"
+                        : "min-w-0 truncate text-md font-medium text-primary"
+                    }
+                  >
+                    {issue.name.split(",")[0]}
+                  </span>
+                  <span
+                    className={
+                      plainRows
+                        ? "text-sm font-medium text-secondary"
+                        : "shrink-0 text-sm font-medium text-secondary"
+                    }
+                  >
+                    {formatIssueDate(issue.date)}
+                  </span>
+                </div>
+                <span className="shrink-0 text-md font-medium text-primary tabular-nums">
+                  {formatCount(issue.papers)}
                 </span>
               </div>
-              <span className="shrink-0 text-md font-medium text-primary tabular-nums">
-                {formatCount(issue.papers)}
-              </span>
-            </div>
-          ))}
-          {!showAll && issues.length > PAPERS_PREVIEW_COUNT && (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onViewAll();
-              }}
-              className={cn(
-                "inline-flex items-center gap-1 text-md font-medium text-primary",
-                rowPad,
-              )}
-            >
-              View all {issues.length} issues
-              <ArrowRight className="size-3" strokeWidth={2} />
-            </button>
-          )}
-        </>
-      )}
+            ))}
+            {!showAll && issues.length > PAPERS_PREVIEW_COUNT && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onViewAll();
+                }}
+                className={cn(
+                  "inline-flex items-center gap-1 text-md font-medium text-primary",
+                  rowPad,
+                )}
+              >
+                View all {issues.length} issues
+                <ArrowRight className="size-3" strokeWidth={2} />
+              </button>
+            )}
+          </>
+        )}
       </div>
     </OverviewPanel>
   );
@@ -434,10 +436,7 @@ function YtdRunningCostChart({
   return (
     <div className="flex w-full items-start gap-2">
       <div
-        className={cn(
-          "relative text-sm font-medium text-secondary tabular-nums",
-          axisBox,
-        )}
+        className={cn("relative text-sm font-medium text-secondary tabular-nums", axisBox)}
         style={{ height: CHART_BAR_MAX_HEIGHT }}
       >
         {axisAnchor === "left-0" && (
@@ -508,9 +507,7 @@ function YtdRunningCostChart({
                 >
                   <div
                     className={
-                      original
-                        ? "relative w-full"
-                        : "t-resize pointer-events-none relative w-full"
+                      original ? "relative w-full" : "t-resize pointer-events-none relative w-full"
                     }
                     style={{ height: barHeight }}
                   >
@@ -688,9 +685,7 @@ export default function OverviewPage() {
     ? overview.monthlyCosts.reduce((sum, month) => sum + month.amount, 0)
     : 0;
   const hoveredMonth =
-    overview && hoveredChartIndex !== null
-      ? overview.monthlyCosts[hoveredChartIndex]
-      : undefined;
+    overview && hoveredChartIndex !== null ? overview.monthlyCosts[hoveredChartIndex] : undefined;
 
   function handleSelectYear(yearId: string) {
     const next = yearOptions.find((o) => o.id === yearId);
@@ -985,303 +980,318 @@ export default function OverviewPage() {
                 </OverviewSection>
 
                 <div className={lowerLayout}>
-                <div ref={captainFrameRef}>
-                <OverviewSection className={paired ? "h-full min-h-0 overflow-hidden" : undefined}>
-                  <div
-                    ref={captainHeaderRef}
-                    className={cn(
-                      paired && "shrink-0",
-                      original
-                        ? "flex flex-col gap-2 px-2"
-                        : cn(
-                            titlePad,
-                            sideBySide
-                              ? "flex items-center justify-between gap-3"
-                              : "flex flex-col gap-2",
-                          ),
-                    )}
-                  >
-                    {original ? (
-                      <h2 className="text-md font-medium text-primary">Captain Payments</h2>
-                    ) : (
-                      <Link
-                        href="/finances"
-                        className="group shrink-0 rounded-[4px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                      >
-                        <h2
-                          className={cn(
-                            sectionTitle,
-                            sideBySide && "shrink-0",
-                            "transition-colors duration-150 group-hover:text-primary",
-                          )}
-                        >
-                          Captain Payments
-                        </h2>
-                      </Link>
-                    )}
-                    <div
-                      className={cn(
-                        "flex items-center",
-                        original
-                          ? "justify-between gap-4"
-                          : sideBySide
-                            ? "min-w-0 flex-1 justify-end"
-                            : "justify-end",
-                      )}
+                  <div ref={captainFrameRef}>
+                    <OverviewSection
+                      className={paired ? "h-full min-h-0 overflow-hidden" : undefined}
                     >
-                      {original && captainMode === "ytd" && (
-                        <p className="min-w-0 flex-1 text-sm font-medium text-secondary">
-                          {ytdRangeLabel ? `${ytdRangeLabel} (full year)` : null}
-                        </p>
-                      )}
-
-                      <Popover open={periodOpen} onOpenChange={handlePeriodOpenChange}>
-                        <PopoverTrigger
-                          render={
-                            <button
-                              type="button"
-                              className={cn(
-                                "inline-flex shrink-0 items-center gap-1 rounded-[4px] px-2 text-sm font-medium text-primary transition-[background-color,scale] duration-150 ease-out hover:scale-[0.98] hover:bg-bg-tertiary active:scale-[0.97] data-popup-open:bg-bg-quaternary data-popup-open:hover:scale-100 data-popup-open:active:scale-[0.97] motion-reduce:transition-none motion-reduce:hover:scale-100 motion-reduce:active:scale-100",
-                                original ? "py-1" : "-mr-2 py-0",
-                              )}
-                            >
-                              {original ? periodLabel : <TextSwap text={periodLabel} />}
-                              <ChevronDown className="size-3" strokeWidth={2} />
-                            </button>
-                          }
-                        />
-                        <PopoverContent
-                          align="end"
-                          side="bottom"
-                          sideOffset={4}
-                          className="w-[280px] gap-0 p-1"
-                        >
-                          {original ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setCaptainMode("ytd");
-                                  setPeriodOpen(false);
-                                }}
-                                className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-bg-secondary"
-                              >
-                                <span className={cn(captainMode === "ytd" && "font-medium")}>YTD</span>
-                                {captainMode === "ytd" && (
-                                  <Check className="size-3.5 text-active" strokeWidth={2.5} />
-                                )}
-                              </button>
-
-                              <div className="my-1 h-px bg-hairline" />
-
-                              <div className="flex flex-col gap-2 px-1.5 pt-1 pb-1.5">
-                                <p className="text-xs font-medium text-muted-foreground">
-                                  Custom range
-                                </p>
-                                <div className="flex items-center gap-2">
-                                  <div className="min-w-0 flex-1">
-                                    <DatePicker
-                                      label="Start Date"
-                                      value={draftStart}
-                                      onChange={setDraftStart}
-                                      max={draftEnd}
-                                    />
-                                  </div>
-                                  <span aria-hidden className="shrink-0 text-sm text-muted-foreground">
-                                    →
-                                  </span>
-                                  <div className="min-w-0 flex-1">
-                                    <DatePicker
-                                      label="End Date"
-                                      value={draftEnd}
-                                      onChange={setDraftEnd}
-                                      min={draftStart}
-                                    />
-                                  </div>
-                                </div>
-                                <Button
-                                  type="button"
-                                  variant="primary"
-                                  size="sm"
-                                  disabled={!canApplyCustomRange}
-                                  onClick={applyCustomRange}
-                                >
-                                  Apply
-                                </Button>
-                              </div>
-                            </>
-                          ) : (
-                            <div className="flex flex-col gap-2 px-1.5 pt-1 pb-1.5">
-                              <div className="flex items-end gap-2">
-                                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                                  <p className="px-1 text-sm font-medium text-secondary">Start</p>
-                                  <DatePicker
-                                    label="Start"
-                                    value={draftStart}
-                                    onChange={setDraftStart}
-                                    max={draftEnd}
-                                  />
-                                </div>
-                                <span
-                                  aria-hidden
-                                  className="flex h-8 shrink-0 items-center text-sm text-muted-foreground"
-                                >
-                                  →
-                                </span>
-                                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                                  <p className="px-1 text-sm font-medium text-secondary">End</p>
-                                  <DatePicker
-                                    label="End"
-                                    value={draftEnd}
-                                    onChange={setDraftEnd}
-                                    min={draftStart}
-                                  />
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-end gap-2">
-                                <Button
-                                  type="button"
-                                  variant="text"
-                                  size="sm"
-                                  disabled={!draftStart && !draftEnd && captainMode !== "custom"}
-                                  onClick={clearPeriodFilter}
-                                >
-                                  Clear
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="primary"
-                                  size="sm"
-                                  disabled={!canApplyCustomRange}
-                                  onClick={applyCustomRange}
-                                >
-                                  Apply
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </div>
-
-                  {original ? (
-                  <OverviewPanel>
-                    <div>
-                      {(captainOverview?.captainPayments.length ?? 0) === 0 &&
-                      (captainOverview?.substitutePayments.length ?? 0) === 0 ? (
-                        <p className={cn(rowPad, "text-md font-medium text-secondary")}>
-                          No captain payments in this period.
-                        </p>
-                      ) : (
-                        <>
-                          {captainOverview!.captainPayments.map((captain) => (
-                            <PaymentRow
-                              key={`captain-${captain.captainId}`}
-                              name={captain.captainName}
-                              meta={`${labelCase(captain.payType)} • ${labelCase(captain.payCadence)}`}
-                              amount={formatCurrency(captain.amount)}
-                            />
-                          ))}
-                          {captainOverview!.substitutePayments.map((sub) => (
-                            <PaymentRow
-                              key={`substitute-${sub.captainId}`}
-                              name={sub.captainName}
-                              meta={`Covered ${sub.coveredFor.map((c) => c.captainName).join(", ")} • ${sub.issueCount} ${sub.issueCount === 1 ? "issue" : "issues"}`}
-                              amount={formatCurrency(sub.amount)}
-                            />
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  </OverviewPanel>
-                  ) : (
-                  <Link
-                    href="/finances"
-                    className={cn(
-                      "rounded-[16px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                      paired && "flex min-h-0 flex-1 flex-col",
-                    )}
-                  >
-                  <OverviewPanel className={paired ? pairedScroll : undefined}>
-                    <div ref={captainBodyRef}>
-                      {(captainOverview?.captainPayments.length ?? 0) === 0 &&
-                      (captainOverview?.substitutePayments.length ?? 0) === 0 ? (
-                        <p className={cn(rowPad, "text-md font-medium text-secondary")}>
-                          No captain payments in this period.
-                        </p>
-                      ) : (
-                        <>
-                          {captainOverview!.captainPayments.map((captain) => (
-                            <PaymentRow
-                              key={`captain-${captain.captainId}`}
-                              name={captain.captainName}
-                              meta={`${labelCase(captain.payType)} • ${labelCase(captain.payCadence)}`}
-                              amount={formatCurrency(captain.amount)}
-                            />
-                          ))}
-                          {captainOverview!.substitutePayments.map((sub) => (
-                            <PaymentRow
-                              key={`substitute-${sub.captainId}`}
-                              name={sub.captainName}
-                              meta={`Covered ${sub.coveredFor.map((c) => c.captainName).join(", ")} • ${sub.issueCount} ${sub.issueCount === 1 ? "issue" : "issues"}`}
-                              amount={formatCurrency(sub.amount)}
-                            />
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  </OverviewPanel>
-                  </Link>
-                  )}
-                </OverviewSection>
-                </div>
-
-                <div ref={papersFrameRef}>
-                <OverviewSection className={paired ? "h-full min-h-0 overflow-hidden" : undefined}>
-                  {original ? (
-                    <>
-                      <h2 className="px-2 text-md font-medium text-primary">Papers Per Issue</h2>
-                      <PapersPanel
-                        issues={papersPerIssue}
-                        rowPad={rowPad}
-                        showAll={false}
-                        plainRows
-                        onViewAll={() => setPapersDialogOpen(true)}
-                      />
-                    </>
-                  ) : (
-                    <Link
-                      href="/labels"
-                      className={cn(
-                        "group flex flex-col gap-2 rounded-[12px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                        paired && "h-full min-h-0",
-                      )}
-                    >
-                      <h2
-                        ref={papersHeaderRef}
+                      <div
+                        ref={captainHeaderRef}
                         className={cn(
-                          sectionTitle,
-                          titlePad,
-                          sideBySide && "shrink-0",
-                          "transition-colors duration-150 group-hover:text-primary",
+                          paired && "shrink-0",
+                          original
+                            ? "flex flex-col gap-2 px-2"
+                            : cn(
+                                titlePad,
+                                sideBySide
+                                  ? "flex items-center justify-between gap-3"
+                                  : "flex flex-col gap-2",
+                              ),
                         )}
                       >
-                        Papers Per Issue
-                      </h2>
-                      <PapersPanel
-                        issues={papersPerIssue}
-                        rowPad={rowPad}
-                        showAll={sideBySide}
-                        plainRows={false}
-                        onViewAll={() => setPapersDialogOpen(true)}
-                        panelClassName={paired ? pairedScroll : undefined}
-                        bodyRef={papersBodyRef}
-                      />
-                    </Link>
-                  )}
-                </OverviewSection>
-                </div>
+                        {original ? (
+                          <h2 className="text-md font-medium text-primary">Captain Payments</h2>
+                        ) : (
+                          <Link
+                            href="/finances"
+                            className="group shrink-0 rounded-[4px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                          >
+                            <h2
+                              className={cn(
+                                sectionTitle,
+                                sideBySide && "shrink-0",
+                                "transition-colors duration-150 group-hover:text-primary",
+                              )}
+                            >
+                              Captain Payments
+                            </h2>
+                          </Link>
+                        )}
+                        <div
+                          className={cn(
+                            "flex items-center",
+                            original
+                              ? "justify-between gap-4"
+                              : sideBySide
+                                ? "min-w-0 flex-1 justify-end"
+                                : "justify-end",
+                          )}
+                        >
+                          {original && captainMode === "ytd" && (
+                            <p className="min-w-0 flex-1 text-sm font-medium text-secondary">
+                              {ytdRangeLabel ? `${ytdRangeLabel} (full year)` : null}
+                            </p>
+                          )}
+
+                          <Popover open={periodOpen} onOpenChange={handlePeriodOpenChange}>
+                            <PopoverTrigger
+                              render={
+                                <button
+                                  type="button"
+                                  className={cn(
+                                    "inline-flex shrink-0 items-center gap-1 rounded-[4px] px-2 text-sm font-medium text-primary transition-[background-color,scale] duration-150 ease-out hover:scale-[0.98] hover:bg-bg-tertiary active:scale-[0.97] data-popup-open:bg-bg-quaternary data-popup-open:hover:scale-100 data-popup-open:active:scale-[0.97] motion-reduce:transition-none motion-reduce:hover:scale-100 motion-reduce:active:scale-100",
+                                    original ? "py-1" : "-mr-2 py-0",
+                                  )}
+                                >
+                                  {original ? periodLabel : <TextSwap text={periodLabel} />}
+                                  <ChevronDown className="size-3" strokeWidth={2} />
+                                </button>
+                              }
+                            />
+                            <PopoverContent
+                              align="end"
+                              side="bottom"
+                              sideOffset={4}
+                              className="w-[280px] gap-0 p-1"
+                            >
+                              {original ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCaptainMode("ytd");
+                                      setPeriodOpen(false);
+                                    }}
+                                    className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-bg-secondary"
+                                  >
+                                    <span className={cn(captainMode === "ytd" && "font-medium")}>
+                                      YTD
+                                    </span>
+                                    {captainMode === "ytd" && (
+                                      <Check className="size-3.5 text-active" strokeWidth={2.5} />
+                                    )}
+                                  </button>
+
+                                  <div className="my-1 h-px bg-hairline" />
+
+                                  <div className="flex flex-col gap-2 px-1.5 pt-1 pb-1.5">
+                                    <p className="text-xs font-medium text-muted-foreground">
+                                      Custom range
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                      <div className="min-w-0 flex-1">
+                                        <DatePicker
+                                          label="Start Date"
+                                          value={draftStart}
+                                          onChange={setDraftStart}
+                                          max={draftEnd}
+                                        />
+                                      </div>
+                                      <span
+                                        aria-hidden
+                                        className="shrink-0 text-sm text-muted-foreground"
+                                      >
+                                        →
+                                      </span>
+                                      <div className="min-w-0 flex-1">
+                                        <DatePicker
+                                          label="End Date"
+                                          value={draftEnd}
+                                          onChange={setDraftEnd}
+                                          min={draftStart}
+                                        />
+                                      </div>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="primary"
+                                      size="sm"
+                                      disabled={!canApplyCustomRange}
+                                      onClick={applyCustomRange}
+                                    >
+                                      Apply
+                                    </Button>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="flex flex-col gap-2 px-1.5 pt-1 pb-1.5">
+                                  <div className="flex items-end gap-2">
+                                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                                      <p className="px-1 text-sm font-medium text-secondary">
+                                        Start
+                                      </p>
+                                      <DatePicker
+                                        label="Start"
+                                        value={draftStart}
+                                        onChange={setDraftStart}
+                                        max={draftEnd}
+                                      />
+                                    </div>
+                                    <span
+                                      aria-hidden
+                                      className="flex h-8 shrink-0 items-center text-sm text-muted-foreground"
+                                    >
+                                      →
+                                    </span>
+                                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                                      <p className="px-1 text-sm font-medium text-secondary">End</p>
+                                      <DatePicker
+                                        label="End"
+                                        value={draftEnd}
+                                        onChange={setDraftEnd}
+                                        min={draftStart}
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center justify-end gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="text"
+                                      size="sm"
+                                      disabled={
+                                        !draftStart && !draftEnd && captainMode !== "custom"
+                                      }
+                                      onClick={clearPeriodFilter}
+                                    >
+                                      Clear
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="primary"
+                                      size="sm"
+                                      disabled={!canApplyCustomRange}
+                                      onClick={applyCustomRange}
+                                    >
+                                      Apply
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </div>
+
+                      {original ? (
+                        <OverviewPanel>
+                          <div>
+                            {(captainOverview?.captainPayments.length ?? 0) === 0 &&
+                            (captainOverview?.substitutePayments.length ?? 0) === 0 ? (
+                              <p className={cn(rowPad, "text-md font-medium text-secondary")}>
+                                No captain payments in this period.
+                              </p>
+                            ) : (
+                              <>
+                                {captainOverview!.captainPayments.map((captain) => (
+                                  <PaymentRow
+                                    key={`captain-${captain.captainId}`}
+                                    name={captain.captainName}
+                                    meta={`${labelCase(captain.payType)} • ${labelCase(captain.payCadence)}`}
+                                    amount={formatCurrency(captain.amount)}
+                                  />
+                                ))}
+                                {captainOverview!.substitutePayments.map((sub) => (
+                                  <PaymentRow
+                                    key={`substitute-${sub.captainId}`}
+                                    name={sub.captainName}
+                                    meta={`Covered ${sub.coveredFor.map((c) => c.captainName).join(", ")} • ${sub.issueCount} ${sub.issueCount === 1 ? "issue" : "issues"}`}
+                                    amount={formatCurrency(sub.amount)}
+                                  />
+                                ))}
+                              </>
+                            )}
+                          </div>
+                        </OverviewPanel>
+                      ) : (
+                        <Link
+                          href="/finances"
+                          className={cn(
+                            "rounded-[16px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                            paired && "flex min-h-0 flex-1 flex-col",
+                          )}
+                        >
+                          <OverviewPanel className={paired ? pairedScroll : undefined}>
+                            <div ref={captainBodyRef}>
+                              {(captainOverview?.captainPayments.length ?? 0) === 0 &&
+                              (captainOverview?.substitutePayments.length ?? 0) === 0 ? (
+                                <p className={cn(rowPad, "text-md font-medium text-secondary")}>
+                                  No captain payments in this period.
+                                </p>
+                              ) : (
+                                <>
+                                  {captainOverview!.captainPayments.map((captain) => (
+                                    <PaymentRow
+                                      key={`captain-${captain.captainId}`}
+                                      name={captain.captainName}
+                                      meta={`${labelCase(captain.payType)} • ${labelCase(captain.payCadence)}`}
+                                      amount={formatCurrency(captain.amount)}
+                                    />
+                                  ))}
+                                  {captainOverview!.substitutePayments.map((sub) => (
+                                    <PaymentRow
+                                      key={`substitute-${sub.captainId}`}
+                                      name={sub.captainName}
+                                      meta={`Covered ${sub.coveredFor.map((c) => c.captainName).join(", ")} • ${sub.issueCount} ${sub.issueCount === 1 ? "issue" : "issues"}`}
+                                      amount={formatCurrency(sub.amount)}
+                                    />
+                                  ))}
+                                </>
+                              )}
+                            </div>
+                          </OverviewPanel>
+                        </Link>
+                      )}
+                    </OverviewSection>
+                  </div>
+
+                  <div ref={papersFrameRef}>
+                    <OverviewSection
+                      className={paired ? "h-full min-h-0 overflow-hidden" : undefined}
+                    >
+                      {original ? (
+                        <>
+                          <h2 className="px-2 text-md font-medium text-primary">
+                            Papers Per Issue
+                          </h2>
+                          <PapersPanel
+                            issues={papersPerIssue}
+                            rowPad={rowPad}
+                            showAll={false}
+                            plainRows
+                            onViewAll={() => setPapersDialogOpen(true)}
+                          />
+                        </>
+                      ) : (
+                        <Link
+                          href="/labels"
+                          className={cn(
+                            "group flex flex-col gap-2 rounded-[12px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                            paired && "h-full min-h-0",
+                          )}
+                        >
+                          <h2
+                            ref={papersHeaderRef}
+                            className={cn(
+                              sectionTitle,
+                              titlePad,
+                              sideBySide && "shrink-0",
+                              "transition-colors duration-150 group-hover:text-primary",
+                            )}
+                          >
+                            Papers Per Issue
+                          </h2>
+                          <PapersPanel
+                            issues={papersPerIssue}
+                            rowPad={rowPad}
+                            showAll={sideBySide}
+                            plainRows={false}
+                            onViewAll={() => setPapersDialogOpen(true)}
+                            panelClassName={paired ? pairedScroll : undefined}
+                            bodyRef={papersBodyRef}
+                          />
+                        </Link>
+                      )}
+                    </OverviewSection>
+                  </div>
                 </div>
               </>
             )}
