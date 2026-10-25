@@ -1,7 +1,7 @@
 // Pure derivations from the flow docs — no I/O, unit-tested directly.
 // Derived values are computed, never stored (data model convention).
 import type { AddressInput } from "@/lib/validation/common";
-import type { CaptainPayoutRow, PayType, RouteBundle, VolunteerRow } from "@/types/db";
+import type { CaptainPayoutRow, DropKind, PayType, RouteBundle, VolunteerRow } from "@/types/db";
 
 export type VolunteerStatus = "active" | "on-vacation" | "retired";
 
@@ -51,6 +51,22 @@ export function routeLifecycle(r: {
 }): "assigned" | "vacant" {
   const carrier = r.isDrop ? r.assignedCaptainId : r.assignedVolunteerId;
   return carrier ? "assigned" : "vacant";
+}
+
+/**
+ * The Type a delivery prints under on the labels screen, derived from the route
+ * rather than stored a second time.
+ *
+ * A street route is walked by a volunteer and is always Carrier. A drop is a
+ * bulk hand-off at one address, so it takes the kind of building that receives
+ * it (docs/design_decisions.md).
+ */
+export function labelType(r: { isDrop: boolean; dropKind: DropKind | null }): "carrier" | DropKind {
+  if (!r.isDrop) return "carrier";
+  // The column permits a null kind on a drop, so a row written outside the
+  // service can arrive without one. Commercial is where the office's records
+  // start, and the apartment and condo ones get told apart by hand from there.
+  return r.dropKind ?? "commercial";
 }
 
 /** Needs attention: end date passed but not retired (a planning flag, never an auto-retire). */

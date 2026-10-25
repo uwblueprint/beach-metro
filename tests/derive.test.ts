@@ -9,6 +9,7 @@ import {
   recomposedDisplayName,
   effectiveAmount,
   greedySplit,
+  labelType,
   routeLifecycle,
   sameAddressInput,
   volunteerNeedsAttention,
@@ -255,6 +256,24 @@ describe("sameAddressInput", () => {
         lines(["1900 Queen St E"], { postalCode: "M4L" }),
       ),
     ).toBe(false);
+  });
+});
+
+describe("labelType", () => {
+  it("calls a street route Carrier whatever kind is stored against it", () => {
+    expect(labelType({ isDrop: false, dropKind: null })).toBe("carrier");
+    // A street route should never hold a kind; if one leaks in it stays Carrier
+    // rather than reclassifying the route behind the office's back.
+    expect(labelType({ isDrop: false, dropKind: "commercial" })).toBe("carrier");
+  });
+
+  it("takes a drop's type from the kind of building that receives it", () => {
+    expect(labelType({ isDrop: true, dropKind: "commercial" })).toBe("commercial");
+    expect(labelType({ isDrop: true, dropKind: "residential" })).toBe("residential");
+  });
+
+  it("reads a drop with no kind as commercial, where the office's records start", () => {
+    expect(labelType({ isDrop: true, dropKind: null })).toBe("commercial");
   });
 });
 
