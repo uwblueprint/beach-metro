@@ -158,6 +158,16 @@ interface RouteSummary {
   startLabel: string | null;
   endLabel: string | null;
 }
+/** What the suggested-house-count endpoint answers with. */
+interface HouseCountSuggestion {
+  /** Null when no count could be produced. Never falls back to zero. */
+  count: number | null;
+  reason: string;
+  addresses: string[];
+  /** Required wherever the count is shown, by the data's licence. */
+  attribution: string;
+}
+
 interface RouteDetail extends RouteSummary {
   /** Drops only: what kind of building receives it, and what it is called. */
   dropKind: "commercial" | "residential" | null;
@@ -1416,6 +1426,14 @@ function RouteDetailPanel({
     queryFn: () => getJson<LabelSheet>("/api/labels"),
     retry: false,
   });
+  // Counted from Toronto's address data. Advisory, so a failure shows nothing
+  // and leaves the manual count alone.
+  const suggestion = useQuery({
+    queryKey: ["route-house-count", routeId],
+    queryFn: () => getJson<HouseCountSuggestion>(`/api/routes/${routeId}/suggested-house-count`),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
   const volunteers = useQuery({
     queryKey: ["volunteers", "assignable"],
     queryFn: () => getJson<VolunteerSummary[]>("/api/volunteers?status=active"),
@@ -1503,6 +1521,15 @@ function RouteDetailPanel({
     dirtyDropName ||
     dirtyBundles ||
     dirtyLabels;
+
+  const acceptSuggestion = useMutation({
+    mutationFn: (count: number) =>
+      sendJson(`/api/routes/${routeId}`, "PATCH", { houseCount: count, houseCountOverride: null }),
+    onSuccess: () => {
+      detail.refetch();
+      onChanged();
+    },
+  });
 
   const save = useMutation({
     mutationFn: async () => {
@@ -1704,9 +1731,28 @@ function RouteDetailPanel({
               options={[...SIDE_OPTIONS]}
               onChange={setSide}
             />
-            {/* Read-only: house count is manual for MVP and has no edit path in
-                this panel yet. A drop is one address, so it has no house count. */}
+            {/* Read-only here. The count is set by accepting the suggestion
+                below, or edited where the route is created. A drop is one
+                address, so it has no house count. */}
             <InputField label="House Count" value={String(r.effectiveHouseCount)} />
+            {suggestion.data?.count != null && suggestion.data.count !== r.effectiveHouseCount ? (
+              <div className="flex flex-col gap-1 px-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-md text-secondary">
+                    The Toronto address data counts {suggestion.data.count}
+                  </span>
+                  <button
+                    type="button"
+                    className="text-md text-active underline disabled:opacity-50"
+                    disabled={acceptSuggestion.isPending}
+                    onClick={() => acceptSuggestion.mutate(suggestion.data!.count!)}
+                  >
+                    Use this
+                  </button>
+                </div>
+                <span className="text-sm text-tertiary">{suggestion.data.attribution}</span>
+              </div>
+            ) : null}
           </>
         )}
 
@@ -1924,7 +1970,7 @@ function CreateRoutePanel(props: CreatePanelProps) {
         />
 
         {/* Manual entry for MVP (docs/design_decisions.md); auto-calc from
-            Toronto Open Data is post-MVP. */}
+            the suggestion is offered in the detail panel once it exists. */}
         <InputField
           label="House Count"
           type="number"

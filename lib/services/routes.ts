@@ -17,6 +17,7 @@ import type {
   DropKind,
   RouteBundle,
   RouteSide,
+  TorontoAddressPointRow,
   VolunteerRouteRow,
   VolunteerRow,
 } from "@/types/db";
@@ -34,6 +35,13 @@ import {
   sameAddressInput,
   volunteerStatus,
 } from "./derive";
+import {
+  boundingBox,
+  computeHouseCountSuggestion,
+  normalizeStreetName,
+  type AddressPoint,
+  type HouseCountSuggestion,
+} from "./house-count";
 import { db, throwDb, today } from "./shared";
 
 export interface RouteSummary {
@@ -544,4 +552,89 @@ export async function nearestVacantRoutes(
     }))
     .sort((a, b) => a.durationSeconds - b.durationSeconds)
     .slice(0, query.limit);
+}
+
+/** Required wherever a suggested count is shown (Open Government Licence – Toronto). */
+export const TORONTO_ATTRIBUTION =
+  "Contains information licensed under the Open Government Licence – Toronto.";
+
+/** PostgREST caps rows (supabase/config.toml `max_rows`); hitting it means the
+ * address set is incomplete, so we decline to answer rather than under-count. */
+const ADDRESS_POINT_LIMIT = 1000;
+
+export interface RouteHouseCountSuggestion extends HouseCountSuggestion {
+  routeId: string;
+  attribution: string;
+}
+
+export async function suggestRouteHouseCount(id: string): Promise<RouteHouseCountSuggestion> {
+  const r = await fetchRoute(id);
+  const addresses = await getAddressDetails([r.start_address_id, r.end_address_id]);
+  const start = coord(addresses.get(r.start_address_id));
+  const end = coord(addresses.get(r.end_address_id));
+
+  const streetName = normalizeStreetName(r.street_name);
+  const meta = { routeId: id, attribution: TORONTO_ATTRIBUTION };
+
+  // The 30-day Google coordinate cache can be evicted, so this is a real state.
+  if (!start || !end) {
+    return {
+      ...meta,
+      count: null,
+      reason: "no-coordinates",
+      streetName,
+      side: r.side,
+      numberRange: null,
+      addresses: [],
+      parityConsistent: true,
+    };
+  }
+
+  const box = boundingBox(start, end);
+  const inBox = (name: string, exact: boolean) => {
+    const q = db()
+      .from("toronto_address_points")
+      .select("address_number, street_number, centreline_side, latitude, longitude, address_full");
+    return (exact ? q.eq("linear_name_norm", name) : q.like("linear_name_norm", `${name}%`))
+      .gte("latitude", box.minLat)
+      .lte("latitude", box.maxLat)
+      .gte("longitude", box.minLng)
+      .lte("longitude", box.maxLng)
+      .limit(ADDRESS_POINT_LIMIT);
+  };
+
+  // Exact first. A prefix would also pull in Toronto's direction-suffixed
+  // siblings, and those are genuinely different streets with their own
+  // numbering — "Glen Manor Dr" is a loop with separate Dr E and Dr W branches,
+  // and merging them interleaves two number sequences on one side of the road.
+  let { data, error } = await inBox(streetName, true);
+  if (error) throwDb(error);
+  // Only when the exact name is unknown do we widen, which covers a route named
+  // for the base street when the addresses all carry a suffix.
+  if ((data ?? []).length === 0) {
+    ({ data, error } = await inBox(streetName, false));
+    if (error) throwDb(error);
+  }
+
+  const rows = (data ?? []) as unknown as TorontoAddressPointRow[];
+  const points: AddressPoint[] = rows.map((row) => ({
+    addressNumber: row.address_number,
+    streetNumber: row.street_number,
+    centrelineSide: row.centreline_side,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    addressFull: row.address_full,
+  }));
+
+  return {
+    ...meta,
+    ...computeHouseCountSuggestion({
+      streetName,
+      side: r.side,
+      start,
+      end,
+      points,
+      truncated: rows.length >= ADDRESS_POINT_LIMIT,
+    }),
+  };
 }
