@@ -18,9 +18,11 @@ import {
 import { SidePanelField } from "@/components/side-panel-field";
 import { SidePanelRow } from "@/components/side-panel-row";
 import { SidePanelSection } from "@/components/side-panel-section";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { ApiError } from "@/lib/api/client";
+import { RetireMemberDialog } from "@/components/retire-member-dialog";
 import { RoleTag } from "@/components/role-tag";
 import {
   memberKeys,
@@ -28,6 +30,8 @@ import {
   useCaptainPayouts,
   useCreateCaptain,
   useCreateVolunteer,
+  useReactivateMember,
+  useSetVacation,
   useTerritory,
   useUpdateCaptain,
   useUpdateVolunteer,
@@ -101,6 +105,22 @@ function formatDate(iso: string | null): string {
   return `${MONTHS[month - 1]} ${day}, ${year}`;
 }
 
+/** A vacation window that is in effect or still ahead; a past one no longer means anything. */
+function hasOpenVacation(v: { vacationStart: string | null; vacationEnd: string | null }) {
+  return Boolean(v.vacationStart && v.vacationEnd && v.vacationEnd >= todayIso());
+}
+
+const VOLUNTEER_STATUS_OPTIONS = [
+  { value: "active", label: "Active" },
+  { value: "on-vacation", label: "On vacation" },
+  { value: "retired", label: "Retired" },
+];
+
+const CAPTAIN_STATUS_OPTIONS = [
+  { value: "active", label: "Active" },
+  { value: "retired", label: "Retired" },
+];
+
 const CADENCE_LABEL: Record<string, string> = {
   biweekly: "Bi-Weekly",
   monthly: "Monthly",
@@ -110,6 +130,8 @@ function VolunteerContent({ id }: { id: string }) {
   const queryClient = useQueryClient();
   const { data: volunteer, isPending, isError, error } = useVolunteer(id);
   const updateVolunteer = useUpdateVolunteer(id);
+  const setVacation = useSetVacation(id);
+  const reactivate = useReactivateMember();
   const { data: territories } = useTerritorySummaries();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
@@ -121,6 +143,10 @@ function VolunteerContent({ id }: { id: string }) {
   const [addressPlaceId, setAddressPlaceId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState("");
   const [captainTerritoryId, setCaptainTerritoryId] = useState("");
+  const [status, setStatus] = useState<MemberStatus>("active");
+  const [vacationStart, setVacationStart] = useState("");
+  const [vacationEnd, setVacationEnd] = useState("");
+  const [retireOpen, setRetireOpen] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   if (isError) {
@@ -155,6 +181,12 @@ function VolunteerContent({ id }: { id: string }) {
     setAddressPlaceId(volunteer!.address.placeId);
     setStartDate(volunteer!.startDate ?? "");
     setCaptainTerritoryId(volunteer!.territory?.id ?? "");
+    const openVacation = hasOpenVacation(volunteer!);
+    setStatus(
+      volunteer!.status === "retired" ? "retired" : openVacation ? "on-vacation" : "active",
+    );
+    setVacationStart(openVacation ? (volunteer!.vacationStart ?? "") : "");
+    setVacationEnd(openVacation ? (volunteer!.vacationEnd ?? "") : "");
     setSaveError(null);
     setEditing(true);
   }
@@ -164,18 +196,40 @@ function VolunteerContent({ id }: { id: string }) {
     setSaveError(null);
   }
 
-  async function saveInfo() {
-    const trimmedEmail = email.trim();
-    const trimmedPhone = phone.trim();
-    const trimmedAddress = address.trim();
-    if (!trimmedEmail || !trimmedPhone) {
+  function saveInfo() {
+    if (!email.trim() || !phone.trim()) {
       setSaveError("Email and phone are required.");
       return;
     }
-    if (!trimmedAddress) {
+    if (!address.trim()) {
       setSaveError("Address is required.");
       return;
     }
+    if (status === "on-vacation") {
+      if (!vacationStart || !vacationEnd) {
+        setSaveError("Set a vacation start and end date.");
+        return;
+      }
+      if (vacationStart > vacationEnd) {
+        setSaveError("Vacation start must be on or before the end date.");
+        return;
+      }
+    }
+
+    setSaveError(null);
+    // Retiring vacates their routes, so it goes through the confirmation dialog,
+    // which calls applyChanges once the retirement has gone through.
+    if (status === "retired" && volunteer!.status !== "retired") {
+      setRetireOpen(true);
+      return;
+    }
+    void applyChanges();
+  }
+
+  async function applyChanges() {
+    const trimmedEmail = email.trim();
+    const trimmedPhone = phone.trim();
+    const trimmedAddress = address.trim();
 
     const body: {
       email?: string | null;
@@ -200,20 +254,27 @@ function VolunteerContent({ id }: { id: string }) {
       body.captainTerritoryId = nextTerritoryId;
     }
 
-    if (Object.keys(body).length === 0) {
-      setEditing(false);
-      setSaveError(null);
-      return;
-    }
+    const vacationChanged =
+      status === "on-vacation" &&
+      (vacationStart !== (volunteer!.vacationStart ?? "") ||
+        vacationEnd !== (volunteer!.vacationEnd ?? ""));
+    const clearVacation = status === "active" && hasOpenVacation(volunteer!);
 
     setSaveError(null);
     try {
-      await updateVolunteer.mutateAsync(body);
+      if (Object.keys(body).length > 0) await updateVolunteer.mutateAsync(body);
+      if (volunteer!.status === "retired" && status !== "retired") {
+        await reactivate.mutateAsync({ id, role: "volunteer" });
+      }
+      if (vacationChanged) await setVacation.mutateAsync({ vacationStart, vacationEnd });
+      if (clearVacation) await setVacation.mutateAsync({ clear: true });
       setEditing(false);
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : "Could not save changes.");
     }
   }
+
+  const saving = updateVolunteer.isPending || setVacation.isPending || reactivate.isPending;
 
   return (
     <>
@@ -259,12 +320,11 @@ function VolunteerContent({ id }: { id: string }) {
                 />
               </SidePanelField>
               <SidePanelField label="Start Date" htmlFor={`volunteer-start-${id}`}>
-                <Input
+                <DatePicker
                   id={`volunteer-start-${id}`}
-                  name="startDate"
-                  type="date"
+                  label="Start Date"
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={setStartDate}
                 />
               </SidePanelField>
               <SidePanelField label="Captain" htmlFor={`volunteer-captain-${id}`}>
@@ -278,39 +338,59 @@ function VolunteerContent({ id }: { id: string }) {
                   ]}
                 />
               </SidePanelField>
+              <SidePanelField label="Status" htmlFor={`volunteer-status-${id}`}>
+                <Select
+                  id={`volunteer-status-${id}`}
+                  value={status}
+                  onChange={(v) => setStatus(v as MemberStatus)}
+                  options={VOLUNTEER_STATUS_OPTIONS}
+                />
+              </SidePanelField>
+              {status === "on-vacation" ? (
+                <SidePanelField label="Vacation" htmlFor={`volunteer-vacation-start-${id}`}>
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <DatePicker
+                        id={`volunteer-vacation-start-${id}`}
+                        label="Vacation start"
+                        placeholder="Start date"
+                        value={vacationStart}
+                        onChange={setVacationStart}
+                      />
+                    </div>
+                    <span aria-hidden className="shrink-0 text-md text-tertiary">
+                      →
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <DatePicker
+                        label="Vacation end"
+                        placeholder="End date"
+                        value={vacationEnd}
+                        onChange={setVacationEnd}
+                      />
+                    </div>
+                  </div>
+                </SidePanelField>
+              ) : null}
               {saveError ? (
                 <p className="text-md text-destructive" role="alert" aria-live="polite">
                   {saveError}
                 </p>
               ) : null}
               <div className="flex items-center justify-end gap-2 pt-1">
-                <Button
-                  variant="default"
-                  onClick={cancelEditing}
-                  disabled={updateVolunteer.isPending}
-                >
+                <Button variant="default" onClick={cancelEditing} disabled={saving}>
                   Cancel
                 </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => void saveInfo()}
-                  disabled={updateVolunteer.isPending}
-                >
-                  {updateVolunteer.isPending ? "Saving…" : "Save"}
+                <Button variant="primary" onClick={saveInfo} disabled={saving}>
+                  {saving ? "Saving…" : "Save"}
                 </Button>
               </div>
             </div>
-            <Attribute
-              label="Status"
-              value={
-                volunteer.status === "on-vacation"
-                  ? `On vacation until ${formatDate(volunteer.vacationEnd)}`
-                  : volunteer.status === "retired"
-                    ? `Retired ${formatDate(volunteer.retiredAt)}`
-                    : volunteer.needsAttention
-                      ? "Active (end date passed)"
-                      : "Active"
-              }
+            <RetireMemberDialog
+              member={{ id, role: "volunteer", name: volunteer.displayName }}
+              open={retireOpen}
+              onOpenChange={setRetireOpen}
+              onRetired={() => void applyChanges()}
             />
           </>
         ) : (
@@ -399,6 +479,7 @@ function CaptainContent({ id }: { id: string }) {
   const queryClient = useQueryClient();
   const { data: captain, isPending, isError, error } = useCaptain(id);
   const updateCaptain = useUpdateCaptain(id);
+  const reactivate = useReactivateMember();
   const { data: payouts, isPending: payoutsPending } = useCaptainPayouts(id);
   const territoryId = captain?.territory?.id ?? null;
   const { data: territory, refetch: refetchTerritory } = useTerritory(territoryId);
@@ -413,6 +494,8 @@ function CaptainContent({ id }: { id: string }) {
   const [payType, setPayType] = useState<"bundle" | "paper" | "drop">("bundle");
   const [payCadence, setPayCadence] = useState<"biweekly" | "monthly">("biweekly");
   const [startDate, setStartDate] = useState("");
+  const [status, setStatus] = useState<MemberStatus>("active");
+  const [retireOpen, setRetireOpen] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   if (isError) {
@@ -473,6 +556,7 @@ function CaptainContent({ id }: { id: string }) {
     setPayType(captain!.payType);
     setPayCadence(captain!.payCadence);
     setStartDate(captain!.startDate ?? "");
+    setStatus(captain!.status === "retired" ? "retired" : "active");
     setSaveError(null);
     setEditing(true);
   }
@@ -482,11 +566,9 @@ function CaptainContent({ id }: { id: string }) {
     setSaveError(null);
   }
 
-  async function saveInfo() {
-    const trimmedEmail = email.trim();
-    const trimmedPhone = phone.trim();
+  function saveInfo() {
     const rate = Number(payRate);
-    if (!trimmedEmail || !trimmedPhone) {
+    if (!email.trim() || !phone.trim()) {
       setSaveError("Email and phone are required.");
       return;
     }
@@ -494,6 +576,21 @@ function CaptainContent({ id }: { id: string }) {
       setSaveError("Enter a valid pay rate (0 or greater).");
       return;
     }
+
+    setSaveError(null);
+    // Retiring leaves the territory captain-less, so it goes through the
+    // confirmation dialog, which calls applyChanges once it has gone through.
+    if (status === "retired" && captain!.status !== "retired") {
+      setRetireOpen(true);
+      return;
+    }
+    void applyChanges();
+  }
+
+  async function applyChanges() {
+    const trimmedEmail = email.trim();
+    const trimmedPhone = phone.trim();
+    const rate = Number(payRate);
 
     const body: {
       email?: string | null;
@@ -510,20 +607,19 @@ function CaptainContent({ id }: { id: string }) {
     if (payCadence !== captain!.payCadence) body.payCadence = payCadence;
     if (startDate !== (captain!.startDate ?? "")) body.startDate = startDate || null;
 
-    if (Object.keys(body).length === 0) {
-      setEditing(false);
-      setSaveError(null);
-      return;
-    }
-
     setSaveError(null);
     try {
-      await updateCaptain.mutateAsync(body);
+      if (Object.keys(body).length > 0) await updateCaptain.mutateAsync(body);
+      if (captain!.status === "retired" && status !== "retired") {
+        await reactivate.mutateAsync({ id, role: "captain" });
+      }
       setEditing(false);
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : "Could not save changes.");
     }
   }
+
+  const saving = updateCaptain.isPending || reactivate.isPending;
 
   return (
     <>
@@ -590,12 +686,19 @@ function CaptainContent({ id }: { id: string }) {
                 />
               </SidePanelField>
               <SidePanelField label="Start Date" htmlFor={`captain-start-${id}`}>
-                <Input
+                <DatePicker
                   id={`captain-start-${id}`}
-                  name="startDate"
-                  type="date"
+                  label="Start Date"
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={setStartDate}
+                />
+              </SidePanelField>
+              <SidePanelField label="Status" htmlFor={`captain-status-${id}`}>
+                <Select
+                  id={`captain-status-${id}`}
+                  value={status}
+                  onChange={(v) => setStatus(v as MemberStatus)}
+                  options={CAPTAIN_STATUS_OPTIONS}
                 />
               </SidePanelField>
               {saveError ? (
@@ -604,27 +707,19 @@ function CaptainContent({ id }: { id: string }) {
                 </p>
               ) : null}
               <div className="flex items-center justify-end gap-2 pt-1">
-                <Button
-                  variant="default"
-                  onClick={cancelEditing}
-                  disabled={updateCaptain.isPending}
-                >
+                <Button variant="default" onClick={cancelEditing} disabled={saving}>
                   Cancel
                 </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => void saveInfo()}
-                  disabled={updateCaptain.isPending}
-                >
-                  {updateCaptain.isPending ? "Saving…" : "Save"}
+                <Button variant="primary" onClick={saveInfo} disabled={saving}>
+                  {saving ? "Saving…" : "Save"}
                 </Button>
               </div>
             </div>
-            <Attribute
-              label="Status"
-              value={
-                captain.status === "retired" ? `Retired ${formatDate(captain.retiredAt)}` : "Active"
-              }
+            <RetireMemberDialog
+              member={{ id, role: "captain", name: captain.displayName }}
+              open={retireOpen}
+              onOpenChange={setRetireOpen}
+              onRetired={() => void applyChanges()}
             />
           </>
         ) : (
@@ -902,13 +997,7 @@ function CreateMemberContent({
         />
       </SidePanelField>
       <SidePanelField label="Start Date" htmlFor="cm-start">
-        <Input
-          id="cm-start"
-          type="date"
-          name="startDate"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-        />
+        <DatePicker id="cm-start" label="Start Date" value={startDate} onChange={setStartDate} />
       </SidePanelField>
       <SidePanelField label="Email" htmlFor="cm-email">
         <Input

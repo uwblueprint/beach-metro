@@ -18,10 +18,8 @@ import { cn } from "@/lib/utils";
  * Residential a bulk drop at an apartment or condo. Locked in
  * docs/design_decisions.md.
  *
- * Every row this page can show today is Carrier, because commercial and
- * residential drops have no per-issue delivery record yet
- * (label_printing_flow.md §7). Those two pills filter to nothing until that
- * record exists.
+ * The server derives this per row from the route, so the pills filter on what a
+ * delivery actually is rather than on anything stored twice.
  */
 type TypeFilter = "Carrier" | "Commercial" | "Residential" | "all";
 
@@ -77,6 +75,8 @@ interface Captain {
  */
 const TYPE_LABEL: Record<LabelRoute["type"], Route["type"]> = {
   carrier: "Carrier",
+  commercial: "Commercial",
+  residential: "Residential",
 };
 
 function toCaptains(sheet: LabelSheet | undefined): Captain[] {
