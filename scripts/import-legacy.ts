@@ -334,6 +334,16 @@ function addressInput(line: string) {
   };
 }
 
+/** The one line a person running this actually reads. */
+function tally(out: Outcome, options: Options): string {
+  const verb = options.apply ? "created" : "to create";
+  const parts = [`${out.created} ${verb}`];
+  if (out.updated) parts.push(`${out.updated} ${options.apply ? "updated" : "to update"}`);
+  if (out.unchanged) parts.push(`${out.unchanged} already current`);
+  parts.push(`${out.rejected.length} rejected`);
+  return parts.join(", ");
+}
+
 function section(title: string, out: Outcome): string[] {
   const lines = [`## ${title}`, ""];
   lines.push(`- ${out.created} to create`);
@@ -417,13 +427,13 @@ async function main(): Promise<number> {
 
   if (options.only.includes("captains")) {
     const out = await importCaptains(readSheet(CAPTAIN_SHEET), options, territories);
-    console.log(`Captains  ${out.created} to create, ${out.rejected.length} rejected`);
+    console.log(`Captains  ${tally(out, options)}`);
     lines.push(...section("Captains", out));
   }
 
   if (options.only.includes("people")) {
     const out = await importPeople(readSheet("LABELS"), options, byRt, territories);
-    console.log(`People    ${out.created} to create, ${out.rejected.length} rejected`);
+    console.log(`People    ${tally(out, options)}`);
     lines.push(...section("People", out));
   }
 

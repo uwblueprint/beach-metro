@@ -30,6 +30,14 @@ create table import_rows (
   primary key (source, source_key)
 );
 
+-- `source_key` holds a volunteer's name and home address, so this table carries
+-- personal data and is locked down like the rest. New tables are not exposed to
+-- the Data API roles (supabase/config.toml `auto_expose_new_tables`), so the
+-- importer's service-role client needs the grant to reach it at all.
+alter table import_rows enable row level security;
+
+grant select, insert, update, delete on table import_rows to service_role;
+
 alter table import_rows add constraint import_rows_entity_type_known
   check (entity_type in ('volunteer', 'captain', 'route', 'drop'));
 
