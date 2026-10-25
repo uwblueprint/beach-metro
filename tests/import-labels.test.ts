@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parseCsv } from "@/scripts/lib/csv";
-import { bundleSpec, readLabels } from "@/scripts/lib/labels";
+import { bundleSpec, isTallyLine, readLabels } from "@/scripts/lib/labels";
 
 const HEADER = [
   "Route",
@@ -136,6 +136,22 @@ describe("readLabels", () => {
     expect(rejected).toHaveLength(1);
     expect(rejected[0].reason).toContain("no address");
     expect(rejected[0].firstRow).toBe(2);
+  });
+
+  it("passes over the office's bundle tally without calling it a refused person", () => {
+    const { recipients, rejected, tallyLines } = readLabels([
+      HEADER,
+      row({ name: "4 x 50's   3 x 25's", papers: "0", address: "" }),
+      row({ name: "Real Person" }),
+    ]);
+
+    expect(recipients.map((r) => r.displayName)).toEqual(["Real Person"]);
+    expect(rejected).toHaveLength(0);
+    expect(tallyLines).toBe(1);
+  });
+
+  it("keeps a tally-shaped name that has an address, since then it is a recipient", () => {
+    expect(isTallyLine(["01", "0", "4 x 50's 3 x 25's", "12 Main St."])).toBe(false);
   });
 
   it("refuses a person whose rows add up to no papers", () => {

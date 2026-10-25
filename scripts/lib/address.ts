@@ -33,8 +33,12 @@ export function keptItsBuilding(streetNumber: string | null | undefined): boolea
 /** What the check needs from a resolved address. */
 export interface ResolvedShape {
   streetNumber: string | null;
-  /** The provider's own flag for having inferred or replaced a component. */
-  needsConfirmation: boolean;
+  /** Which of the provider's objections are about the building, not the unit. */
+  doubts: {
+    nextAction: "ACCEPT" | "CONFIRM" | "FIX" | null;
+    houseNumberReplaced: boolean;
+    streetUnclear: boolean;
+  };
 }
 
 export type AddressVerdict = { ok: true } | { ok: false; reason: string; billed: boolean };
@@ -55,9 +59,14 @@ export function checkSource(source: string): AddressVerdict {
 /**
  * The check that needs the lookup, since only the answer shows what was lost.
  *
- * Two signals. Losing the house number means the point is a road rather than a
- * door. The provider's own confirmation flag catches the subtler case, where it
- * swapped a component it was unsure about and still answered with a building.
+ * Three signals, all about the building. Losing the house number means the point
+ * is a road rather than a door. A swapped house number or an unclear street
+ * means the point moved to somewhere nobody wrote down. `FIX` is the provider
+ * saying it could not place the address at all.
+ *
+ * An unverifiable apartment number is not one of them. Google cannot see inside
+ * a building, so it reports every unit as unconfirmed, and refusing those would
+ * hold back a tenth of the roster over addresses that are correct.
  */
 export function checkResolved(source: string, resolved: ResolvedShape): AddressVerdict {
   if (!keptItsBuilding(resolved.streetNumber)) {
@@ -67,10 +76,24 @@ export function checkResolved(source: string, resolved: ResolvedShape): AddressV
       billed: true,
     };
   }
-  if (resolved.needsConfirmation) {
+  if (resolved.doubts.houseNumberReplaced) {
     return {
       ok: false,
-      reason: `the geocoder replaced part of "${source}" and flagged it for confirmation`,
+      reason: `the geocoder swapped the house number in "${source}" for ${resolved.streetNumber}`,
+      billed: true,
+    };
+  }
+  if (resolved.doubts.streetUnclear) {
+    return {
+      ok: false,
+      reason: `"${source}" resolved against a street that was not the one written down`,
+      billed: true,
+    };
+  }
+  if (resolved.doubts.nextAction === "FIX") {
+    return {
+      ok: false,
+      reason: `the geocoder could not place "${source}" and asks for it to be corrected`,
       billed: true,
     };
   }

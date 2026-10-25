@@ -53,6 +53,7 @@ function resolve(placeId: string, formattedAddress: string, line1: string): Reso
     locationType: "ROOFTOP",
     addressComplete: true,
     needsConfirmation: false,
+    doubts: { nextAction: "ACCEPT", houseNumberReplaced: false, streetUnclear: false },
     residential: true,
     components: {
       streetNumber,

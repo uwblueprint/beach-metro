@@ -61,6 +61,8 @@ interface Outcome {
   lookups: number;
   /** Lookups a real run would make, whether or not this one did. */
   wouldLookUp: number;
+  /** Sheet rows that were never anybody, so not counted as refusals. */
+  skippedLines: number;
 }
 
 const emptyOutcome = (): Outcome => ({
@@ -71,6 +73,7 @@ const emptyOutcome = (): Outcome => ({
   disappeared: [],
   lookups: 0,
   wouldLookUp: 0,
+  skippedLines: 0,
 });
 
 function parseArgs(argv: string[]): Options {
@@ -190,7 +193,8 @@ async function importPeople(
   territories: TerritoryMap,
 ): Promise<Outcome> {
   const out = emptyOutcome();
-  const { recipients, rejected } = readLabels(rows);
+  const { recipients, rejected, tallyLines } = readLabels(rows);
+  out.skippedLines = tallyLines;
   for (const r of rejected)
     out.rejected.push({ row: r.firstRow, name: r.displayName, reason: r.reason });
 
@@ -238,7 +242,7 @@ async function importPeople(
     if (resolved) {
       const checked = checkResolved(source, {
         streetNumber: resolved.components.streetNumber,
-        needsConfirmation: resolved.needsConfirmation,
+        doubts: resolved.doubts,
       });
       if (!checked.ok) {
         out.rejected.push({
@@ -309,6 +313,8 @@ function section(title: string, out: Outcome): string[] {
   if (out.updated) lines.push(`- ${out.updated} to update`);
   if (out.unchanged) lines.push(`- ${out.unchanged} unchanged, skipped without a lookup`);
   lines.push(`- ${out.rejected.length} cannot become a record`);
+  if (out.skippedLines)
+    lines.push(`- ${out.skippedLines} rows are the office's own bundle tallies, not people`);
   lines.push(`- ${out.wouldLookUp} address lookups a real run makes`);
   if (out.lookups > 0)
     lines.push(`- ${out.lookups} of them made now, so the results below are real`);

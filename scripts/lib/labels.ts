@@ -57,6 +57,8 @@ export interface Rejection {
 export interface LabelsResult {
   recipients: Recipient[];
   rejected: Rejection[];
+  /** Rows that are the office's own bundle tallies rather than anybody. */
+  tallyLines: number;
 }
 
 /**
@@ -75,6 +77,19 @@ export function bundleSpec(value: string | undefined): { index: number; total: n
   return { index, total };
 }
 
+/**
+ * Whether a row is the office's running tally rather than a recipient.
+ *
+ * The sheet carries a line per route reading `4 x 50's   3 x 25's`, with no
+ * address and no papers, which counts the bundles to tie for that route. It
+ * sits in the name column, so without this it reads as a person with no
+ * address.
+ */
+export function isTallyLine(row: string[]): boolean {
+  if (cleanOrNull(row[COL.address])) return false;
+  return /^\d+\s*x\s*\d+\s*'?s\b/i.test(clean(row[COL.name]));
+}
+
 /** Name, RT and address together. Measured to separate all 338 recipients. */
 export function recipientKey(row: string[]): string {
   return [normalise(row[COL.name]), normalise(row[COL.rt]), normalise(row[COL.address])].join("|");
@@ -90,8 +105,14 @@ export function readLabels(rows: string[][]): LabelsResult {
   const body = rows.slice(1);
   const groups = new Map<string, { rows: string[][]; firstRow: number }>();
 
+  let tallyLines = 0;
+
   body.forEach((row, i) => {
     if (!clean(row[COL.name])) return; // spacer row
+    if (isTallyLine(row)) {
+      tallyLines += 1;
+      return;
+    }
     const key = recipientKey(row);
     const existing = groups.get(key);
     if (existing) existing.rows.push(row);
@@ -151,5 +172,5 @@ export function readLabels(rows: string[][]): LabelsResult {
     });
   }
 
-  return { recipients, rejected };
+  return { recipients, rejected, tallyLines };
 }

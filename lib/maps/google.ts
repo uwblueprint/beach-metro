@@ -99,6 +99,29 @@ function extractComponents(
   };
 }
 
+/**
+ * Which of Google's objections are about the building rather than the unit.
+ *
+ * Google cannot see inside a building, so an apartment number comes back
+ * unconfirmed whether or not it exists, and it reports a Toronto address as
+ * Scarborough or East York. Neither moves the point on the map. A swapped house
+ * number or a second street name does.
+ */
+function extractDoubts(
+  verdict: Record<string, unknown>,
+  components: { componentType?: string; replaced?: boolean; unexpected?: boolean }[],
+): ResolvedAddress["doubts"] {
+  const next = verdict.possibleNextAction;
+  const routes = components.filter((c) => c.componentType === "route");
+  return {
+    nextAction: next === "ACCEPT" || next === "CONFIRM" || next === "FIX" ? next : null,
+    houseNumberReplaced: components.some(
+      (c) => c.componentType === "street_number" && c.replaced === true,
+    ),
+    streetUnclear: routes.some((c) => c.replaced === true || c.unexpected === true),
+  };
+}
+
 export const googleMapsProvider: MapsProvider = {
   /** Address Validation API (research doc §3) — CA region, full verdict. */
   async validateAddress(input: AddressLinesInput): Promise<ResolvedAddress> {
@@ -146,6 +169,7 @@ export const googleMapsProvider: MapsProvider = {
       // confirm parts; inferred components alone are fine.
       needsConfirmation:
         verdict.hasReplacedComponents === true || verdict.hasUnconfirmedComponents === true,
+      doubts: extractDoubts(verdict, result.address?.addressComponents ?? []),
       residential:
         result.metadata?.residential === true
           ? true
@@ -227,6 +251,7 @@ export const googleMapsProvider: MapsProvider = {
       locationType: (top.geometry.location_type as LocationType) ?? "APPROXIMATE",
       addressComplete: true,
       needsConfirmation: false,
+      doubts: { nextAction: "ACCEPT", houseNumberReplaced: false, streetUnclear: false },
       residential: null, // Geocoding has no residential metadata (Address Validation does)
       components: extractComponents(top.address_components ?? []),
     };

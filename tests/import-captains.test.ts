@@ -98,6 +98,12 @@ describe("address checks", () => {
     expect(checkSource("12 Willow Ave").ok).toBe(true);
   });
 
+  const clean = {
+    nextAction: "ACCEPT" as const,
+    houseNumberReplaced: false,
+    streetUnclear: false,
+  };
+
   it("says a free refusal cost nothing, which is the point of checking first", () => {
     const verdict = checkSource("Shoppers World");
     expect(verdict.ok).toBe(false);
@@ -107,24 +113,52 @@ describe("address checks", () => {
   it("refuses a result that came back as a street rather than a building", () => {
     const verdict = checkResolved("danforth dont want", {
       streetNumber: null,
-      needsConfirmation: false,
+      doubts: clean,
     });
     expect(verdict.ok).toBe(false);
     if (!verdict.ok) expect(verdict.reason).toContain("point at the wrong place");
   });
 
-  it("refuses a result the geocoder itself flagged as replaced", () => {
+  it("refuses a result whose house number the geocoder swapped", () => {
     const verdict = checkResolved("1230 Kingston Rd", {
-      streetNumber: "1230",
-      needsConfirmation: true,
+      streetNumber: "1232",
+      doubts: { ...clean, houseNumberReplaced: true },
+    });
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.reason).toContain("swapped the house number");
+  });
+
+  it("refuses a result that resolved against a street nobody wrote down", () => {
+    const verdict = checkResolved("360 Lake Front, Foot of Beech Ave.", {
+      streetNumber: "360",
+      doubts: { ...clean, streetUnclear: true },
     });
     expect(verdict.ok).toBe(false);
   });
 
-  it("accepts a clean result", () => {
+  it("refuses a result the geocoder asks to have corrected", () => {
+    const verdict = checkResolved("7 Balsam Ave., Unit 4", {
+      streetNumber: "7",
+      doubts: { ...clean, nextAction: "FIX" },
+    });
+    expect(verdict.ok).toBe(false);
+  });
+
+  it("accepts an apartment the geocoder cannot verify, since it never can", () => {
+    // Google reports every unit as unconfirmed because it cannot see inside a
+    // building, and the street address below it is right.
     expect(
-      checkResolved("1230 Kingston Rd", { streetNumber: "1230", needsConfirmation: false }).ok,
+      checkResolved("11 Main St. #601", {
+        streetNumber: "11",
+        doubts: { ...clean, nextAction: "CONFIRM" },
+      }).ok,
     ).toBe(true);
+  });
+
+  it("accepts a clean result", () => {
+    expect(checkResolved("1230 Kingston Rd", { streetNumber: "1230", doubts: clean }).ok).toBe(
+      true,
+    );
   });
 });
 
