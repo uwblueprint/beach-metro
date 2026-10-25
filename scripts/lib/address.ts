@@ -5,6 +5,8 @@
 // looks correct forever. So the result is checked rather than trusted, and the
 // cheap check runs first so the obvious ones cost nothing.
 
+import { COVERAGE_CENTER, COVERAGE_RADIUS_M } from "@/lib/maps/google";
+
 /** A leading house number, which is what distinguishes a building from a street. */
 const HOUSE_NUMBER = /^\s*\d+[a-z]?\b/i;
 
@@ -33,6 +35,10 @@ export function keptItsBuilding(streetNumber: string | null | undefined): boolea
 /** What the check needs from a resolved address. */
 export interface ResolvedShape {
   streetNumber: string | null;
+  /** Where the provider put the pin. `APPROXIMATE` means it gave up on a building. */
+  locationType: string;
+  latitude: number;
+  longitude: number;
   /** Which of the provider's objections are about the building, not the unit. */
   doubts: {
     nextAction: "ACCEPT" | "CONFIRM" | "FIX" | null;
@@ -59,12 +65,14 @@ export function checkSource(source: string): AddressVerdict {
 /**
  * The check that needs the lookup, since only the answer shows what was lost.
  *
- * Three signals, all about the building. Losing the house number means the point
- * is a road rather than a door. A swapped house number or an unclear street
- * means the point moved to somewhere nobody wrote down. `FIX` is the provider
- * saying it could not place the address at all.
+ * Four signals, all about where the pin ends up. A swapped house number or an
+ * unclear street means it moved to somewhere nobody wrote down. The last one
+ * matters most, because Google echoes the house number back even when it placed
+ * nothing. Two different streets it could not find both came back carrying
+ * their number and both pinned to the middle of Toronto, so the number surviving
+ * proves nothing on its own and the pin has to be on a building.
  *
- * An unverifiable apartment number is not one of them. Google cannot see inside
+ * An unverifiable apartment number is not one of these. Google cannot see inside
  * a building, so it reports every unit as unconfirmed, and refusing those would
  * hold back a tenth of the roster over addresses that are correct.
  */
@@ -90,12 +98,32 @@ export function checkResolved(source: string, resolved: ResolvedShape): AddressV
       billed: true,
     };
   }
-  if (resolved.doubts.nextAction === "FIX") {
+  if (resolved.locationType === "APPROXIMATE") {
     return {
       ok: false,
-      reason: `the geocoder could not place "${source}" and asks for it to be corrected`,
+      reason: `"${source}" resolved to an area rather than a building`,
+      billed: true,
+    };
+  }
+  const km = distanceKm(resolved.latitude, resolved.longitude);
+  if (km * 1000 > COVERAGE_RADIUS_M) {
+    return {
+      ok: false,
+      reason: `"${source}" resolved ${km.toFixed(0)} km from the delivery area`,
       billed: true,
     };
   }
   return { ok: true };
+}
+
+/** Great-circle kilometres from the middle of the delivery area. */
+function distanceKm(latitude: number, longitude: number): number {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const p1 = toRad(COVERAGE_CENTER.latitude);
+  const p2 = toRad(latitude);
+  const dp = p2 - p1;
+  const dl = toRad(longitude - COVERAGE_CENTER.longitude);
+  const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
 }

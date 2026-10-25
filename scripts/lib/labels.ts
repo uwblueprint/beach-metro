@@ -56,6 +56,8 @@ export interface Rejection {
 
 export interface LabelsResult {
   recipients: Recipient[];
+  /** Entries the office marks as a business or a building, which are drops. */
+  drops: Recipient[];
   rejected: Rejection[];
   /** Rows that are the office's own bundle tallies rather than anybody. */
   tallyLines: number;
@@ -75,6 +77,20 @@ export function bundleSpec(value: string | undefined): { index: number; total: n
   const total = Number(match[2]);
   if (index < 1 || total < 1 || index > total) return null;
   return { index, total };
+}
+
+/**
+ * Whether the office marks this entry as somewhere papers are dropped rather
+ * than a carrier who delivers them.
+ *
+ * The route column reads `BUSINESS` or `BUILDING` on 92 entries. A business
+ * becomes a commercial drop and an unnamed building a residential one, and a
+ * handful are a person at a unit number who looks after their own building, so
+ * telling those apart needs a person rather than a rule. The importer builds
+ * neither kind of drop yet, so these are held back and listed.
+ */
+export function isDropEntry(routeHint: string | null): boolean {
+  return /^(business|building)$/i.test((routeHint ?? "").trim());
 }
 
 /**
@@ -120,6 +136,7 @@ export function readLabels(rows: string[][]): LabelsResult {
   });
 
   const recipients: Recipient[] = [];
+  const drops: Recipient[] = [];
   const rejected: Rejection[] = [];
 
   for (const [sourceKey, group] of groups) {
@@ -153,7 +170,7 @@ export function readLabels(rows: string[][]): LabelsResult {
       .map((r, i) => (specs[i] === null ? cleanOrNull(r[COL.bundles]) : null))
       .filter((v): v is string => v !== null);
 
-    recipients.push({
+    const recipient: Recipient = {
       sourceKey,
       displayName,
       address,
@@ -169,8 +186,10 @@ export function readLabels(rows: string[][]): LabelsResult {
       bundles: greedySplit(papers),
       rowCount: group.rows.length,
       firstRow: group.firstRow,
-    });
+    };
+    if (isDropEntry(recipient.routeHint)) drops.push(recipient);
+    else recipients.push(recipient);
   }
 
-  return { recipients, rejected, tallyLines };
+  return { recipients, drops, rejected, tallyLines };
 }

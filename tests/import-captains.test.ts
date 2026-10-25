@@ -103,6 +103,8 @@ describe("address checks", () => {
     houseNumberReplaced: false,
     streetUnclear: false,
   };
+  /** A point in the Beaches, so the delivery-area check passes. */
+  const inArea = { latitude: 43.6725, longitude: -79.2915 };
 
   it("says a free refusal cost nothing, which is the point of checking first", () => {
     const verdict = checkSource("Shoppers World");
@@ -113,6 +115,8 @@ describe("address checks", () => {
   it("refuses a result that came back as a street rather than a building", () => {
     const verdict = checkResolved("danforth dont want", {
       streetNumber: null,
+      locationType: "ROOFTOP",
+      ...inArea,
       doubts: clean,
     });
     expect(verdict.ok).toBe(false);
@@ -122,6 +126,8 @@ describe("address checks", () => {
   it("refuses a result whose house number the geocoder swapped", () => {
     const verdict = checkResolved("1230 Kingston Rd", {
       streetNumber: "1232",
+      locationType: "ROOFTOP",
+      ...inArea,
       doubts: { ...clean, houseNumberReplaced: true },
     });
     expect(verdict.ok).toBe(false);
@@ -131,17 +137,60 @@ describe("address checks", () => {
   it("refuses a result that resolved against a street nobody wrote down", () => {
     const verdict = checkResolved("360 Lake Front, Foot of Beech Ave.", {
       streetNumber: "360",
+      locationType: "ROOFTOP",
+      ...inArea,
       doubts: { ...clean, streetUnclear: true },
     });
     expect(verdict.ok).toBe(false);
   });
 
-  it("refuses a result the geocoder asks to have corrected", () => {
-    const verdict = checkResolved("7 Balsam Ave., Unit 4", {
-      streetNumber: "7",
+  it("refuses a result pinned to an area although it kept the house number", () => {
+    // Google echoes the number back even when it found nothing, so two streets
+    // it could not place both arrived numbered and pinned to central Toronto.
+    const verdict = checkResolved("26 Northview Ave.", {
+      streetNumber: "26",
+      locationType: "APPROXIMATE",
+      ...inArea,
       doubts: { ...clean, nextAction: "FIX" },
     });
     expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.reason).toContain("resolved to an area rather than a building");
+  });
+
+  it("accepts a building the geocoder could only place approximately nearby", () => {
+    // A hospital and a school both come back this way, on the right block.
+    expect(
+      checkResolved("825 Coxwell Ave.", {
+        streetNumber: "825",
+        locationType: "RANGE_INTERPOLATED",
+        ...inArea,
+        doubts: clean,
+      }).ok,
+    ).toBe(true);
+  });
+
+  it("refuses a result that landed outside the delivery area", () => {
+    // "7 Riviera Dr." resolves to a Riviera Drive in Thornhill.
+    const verdict = checkResolved("7 Riviera Dr.", {
+      streetNumber: "7",
+      locationType: "ROOFTOP",
+      latitude: 43.83524,
+      longitude: -79.33693,
+      doubts: clean,
+    });
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.reason).toContain("from the delivery area");
+  });
+
+  it("accepts a unit the geocoder cannot verify when the pin is on the building", () => {
+    expect(
+      checkResolved("7 Balsam Ave., Unit 4", {
+        streetNumber: "7",
+        locationType: "ROOFTOP",
+        ...inArea,
+        doubts: { ...clean, nextAction: "FIX" },
+      }).ok,
+    ).toBe(true);
   });
 
   it("accepts an apartment the geocoder cannot verify, since it never can", () => {
@@ -150,15 +199,22 @@ describe("address checks", () => {
     expect(
       checkResolved("11 Main St. #601", {
         streetNumber: "11",
+        locationType: "ROOFTOP",
+        ...inArea,
         doubts: { ...clean, nextAction: "CONFIRM" },
       }).ok,
     ).toBe(true);
   });
 
   it("accepts a clean result", () => {
-    expect(checkResolved("1230 Kingston Rd", { streetNumber: "1230", doubts: clean }).ok).toBe(
-      true,
-    );
+    expect(
+      checkResolved("1230 Kingston Rd", {
+        streetNumber: "1230",
+        locationType: "ROOFTOP",
+        ...inArea,
+        doubts: clean,
+      }).ok,
+    ).toBe(true);
   });
 });
 

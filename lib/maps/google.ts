@@ -16,8 +16,9 @@ import type {
 
 // Beach Metro's coverage area (the Beaches, Toronto). Autocomplete results are
 // biased here so local streets rank first instead of same-named ones elsewhere.
-const COVERAGE_CENTER = { latitude: 43.6725, longitude: -79.2915 };
-const COVERAGE_RADIUS_M = 8000;
+/** The middle of the delivery area, used to bias lookups and to sanity check them. */
+export const COVERAGE_CENTER = { latitude: 43.6725, longitude: -79.2915 };
+export const COVERAGE_RADIUS_M = 8000;
 
 function serverKey(): string {
   const key = process.env.GOOGLE_MAPS_SERVER_KEY;

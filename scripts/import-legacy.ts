@@ -63,6 +63,8 @@ interface Outcome {
   wouldLookUp: number;
   /** Sheet rows that were never anybody, so not counted as refusals. */
   skippedLines: number;
+  /** Entries the office marks as a drop, which this importer does not build. */
+  dropEntries: { row: number; name: string; papers: number }[];
 }
 
 const emptyOutcome = (): Outcome => ({
@@ -74,6 +76,7 @@ const emptyOutcome = (): Outcome => ({
   lookups: 0,
   wouldLookUp: 0,
   skippedLines: 0,
+  dropEntries: [],
 });
 
 function parseArgs(argv: string[]): Options {
@@ -202,8 +205,13 @@ async function importPeople(
   territories: TerritoryMap,
 ): Promise<Outcome> {
   const out = emptyOutcome();
-  const { recipients, rejected, tallyLines } = readLabels(rows);
+  const { recipients, drops, rejected, tallyLines } = readLabels(rows);
   out.skippedLines = tallyLines;
+  out.dropEntries = drops.map((d) => ({
+    row: d.firstRow,
+    name: d.displayName,
+    papers: d.papers,
+  }));
   for (const r of rejected)
     out.rejected.push({ row: r.firstRow, name: r.displayName, reason: r.reason });
 
@@ -251,6 +259,9 @@ async function importPeople(
     if (resolved) {
       const checked = checkResolved(source, {
         streetNumber: resolved.components.streetNumber,
+        locationType: resolved.locationType,
+        latitude: resolved.latitude,
+        longitude: resolved.longitude,
         doubts: resolved.doubts,
       });
       if (!checked.ok) {
@@ -352,6 +363,13 @@ function section(title: string, out: Outcome): string[] {
   lines.push(`- ${out.rejected.length} cannot become a record`);
   if (out.skippedLines)
     lines.push(`- ${out.skippedLines} rows are the office's own bundle tallies, not people`);
+  if (out.dropEntries.length > 0) {
+    const papers = out.dropEntries.reduce((sum, d) => sum + d.papers, 0);
+    lines.push(
+      `- ${out.dropEntries.length} entries are a business or a building, ${papers} papers, ` +
+        "held back because drops are not built yet",
+    );
+  }
   lines.push(`- ${out.wouldLookUp} address lookups a real run makes`);
   if (out.lookups > 0)
     lines.push(`- ${out.lookups} of them made now, so the results below are real`);
@@ -370,6 +388,19 @@ function section(title: string, out: Outcome): string[] {
   if (out.rejected.length > 0) {
     lines.push("### Not imported", "", "| Sheet row | Name | Why |", "| --- | --- | --- |");
     for (const r of out.rejected) lines.push(`| ${r.row} | ${r.name} | ${r.reason} |`);
+    lines.push("");
+  }
+  if (out.dropEntries.length > 0) {
+    lines.push(
+      "### Held for the drops phase",
+      "",
+      "A business becomes a commercial drop and an unnamed building a residential one.",
+      "A few are a person at a unit number who looks after their own building.",
+      "",
+      "| Sheet row | Name | Papers |",
+      "| --- | --- | --- |",
+    );
+    for (const d of out.dropEntries) lines.push(`| ${d.row} | ${d.name} | ${d.papers} |`);
     lines.push("");
   }
   return lines;

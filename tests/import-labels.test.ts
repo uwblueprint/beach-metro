@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parseCsv } from "@/scripts/lib/csv";
-import { bundleSpec, isTallyLine, readLabels } from "@/scripts/lib/labels";
+import { bundleSpec, isDropEntry, isTallyLine, readLabels } from "@/scripts/lib/labels";
 
 const HEADER = [
   "Route",
@@ -136,6 +136,25 @@ describe("readLabels", () => {
     expect(rejected).toHaveLength(1);
     expect(rejected[0].reason).toContain("no address");
     expect(rejected[0].firstRow).toBe(2);
+  });
+
+  it("holds back an entry the office marks as a business or a building", () => {
+    const { recipients, drops } = readLabels([
+      HEADER,
+      row({ name: "Corner Store", route: "BUSINESS" }),
+      row({ name: "Real Carrier", route: "Queen St. E. (Lee - Hammersmith)" }),
+    ]);
+
+    expect(recipients.map((r) => r.displayName)).toEqual(["Real Carrier"]);
+    expect(drops.map((d) => d.displayName)).toEqual(["Corner Store"]);
+  });
+
+  it("reads the marker whatever case the office typed it in", () => {
+    expect(isDropEntry("BUILDING")).toBe(true);
+    expect(isDropEntry("Building")).toBe(true);
+    // A street description is a carrier's route, not a marker.
+    expect(isDropEntry("Kingston Rd. (Main - Woodbine)")).toBe(false);
+    expect(isDropEntry(null)).toBe(false);
   });
 
   it("passes over the office's bundle tally without calling it a refused person", () => {
