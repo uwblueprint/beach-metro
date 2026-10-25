@@ -309,10 +309,7 @@ function FilterSegmentGroup<T extends string>({
 
 export default function FinancesPage() {
   const original = useOriginalLook();
-  const tableCell = useTweak(
-    "border-[0.5px] border-hairline",
-    "border-[0.5px] border-border",
-  );
+  const tableCell = useTweak("border-[0.5px] border-hairline", "border-[0.5px] border-border");
   const tableHead = useTweak(
     "sticky top-0 z-10 border-x-[0.5px] border-b-[0.5px] border-hairline bg-bg",
     "border-[0.5px] border-border",
@@ -716,116 +713,115 @@ export default function FinancesPage() {
               className="pr-[18px]"
               root="Finances"
               current={
-              <div
-                className={cn(
-                  "inline-flex min-w-0 items-center",
-                  original
-                    ? "gap-1"
-                    : isEditingTableTitle
-                      ? "gap-1"
-                      : "-ml-1.5",
-                )}
-              >
-                {isEditingTableTitle ? (
-                  <span className="inline-grid items-center [&>*]:col-start-1 [&>*]:row-start-1">
-                    <span aria-hidden className="invisible whitespace-pre px-0 text-md font-medium">
-                      {tableTitleEditValue || tableDisplayLabel}
-                    </span>
-                    <input
-                      autoFocus
-                      value={tableTitleEditValue}
-                      onChange={(event) => setTableTitleEditValue(event.target.value)}
-                      onKeyDown={handleTableTitleKeyDown}
-                      onBlur={cancelTableTitleEdit}
-                      onFocus={(event) => event.target.select()}
-                      aria-label="Table name"
-                      className="w-full min-w-0 border-0 bg-transparent p-0 text-md font-medium text-primary outline outline-2 outline-active -outline-offset-2"
-                    />
-                  </span>
-                ) : null}
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        type="button"
-                        variant="text"
-                        size="sm"
-                        aria-label="Switch table"
-                        className={
-                          original
-                            ? "-ml-1 gap-1 px-1.5 font-medium"
-                            : "h-auto gap-1 px-1.5 font-medium text-md text-secondary"
-                        }
-                        onDoubleClick={!isEditingTableTitle ? startTableTitleEdit : undefined}
+                <div
+                  className={cn(
+                    "inline-flex min-w-0 items-center",
+                    original ? "gap-1" : isEditingTableTitle ? "gap-1" : "-ml-1.5",
+                  )}
+                >
+                  {isEditingTableTitle ? (
+                    <span className="inline-grid items-center [&>*]:col-start-1 [&>*]:row-start-1">
+                      <span
+                        aria-hidden
+                        className="invisible whitespace-pre px-0 text-md font-medium"
+                      >
+                        {tableTitleEditValue || tableDisplayLabel}
+                      </span>
+                      <input
+                        autoFocus
+                        value={tableTitleEditValue}
+                        onChange={(event) => setTableTitleEditValue(event.target.value)}
+                        onKeyDown={handleTableTitleKeyDown}
+                        onBlur={cancelTableTitleEdit}
+                        onFocus={(event) => event.target.select()}
+                        aria-label="Table name"
+                        className="w-full min-w-0 border-0 bg-transparent p-0 text-md font-medium text-primary outline outline-2 outline-active -outline-offset-2"
                       />
-                    }
-                  >
-                    {!isEditingTableTitle && (
-                      <span className="text-md text-tertiary">{tableDisplayLabel}</span>
-                    )}
-                    <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    side="bottom"
-                    sideOffset={4}
-                    className="min-w-56"
-                  >
-                    <DropdownMenuRadioGroup
-                      value={activeYearId ?? ""}
-                      onValueChange={handleSelectTable}
+                    </span>
+                  ) : null}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="text"
+                          size="sm"
+                          aria-label="Switch table"
+                          className={
+                            original
+                              ? "-ml-1 gap-1 px-1.5 font-medium"
+                              : "h-auto gap-1 px-1.5 font-medium text-md text-secondary"
+                          }
+                          onDoubleClick={!isEditingTableTitle ? startTableTitleEdit : undefined}
+                        />
+                      }
                     >
-                      {tableOptions.map((option) => {
-                        const isSelected = option.id === activeYearId;
+                      {!isEditingTableTitle && (
+                        <span className="text-md text-tertiary">{tableDisplayLabel}</span>
+                      )}
+                      <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={2} />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="start"
+                      side="bottom"
+                      sideOffset={4}
+                      className="min-w-56"
+                    >
+                      <DropdownMenuRadioGroup
+                        value={activeYearId ?? ""}
+                        onValueChange={handleSelectTable}
+                      >
+                        {tableOptions.map((option) => {
+                          const isSelected = option.id === activeYearId;
 
-                        return (
-                          <DropdownMenuRadioItem
-                            key={option.id}
-                            value={option.id}
-                            className={cn(
-                              "data-checked:font-medium",
-                              option.archived && !isSelected && "text-muted-foreground",
-                            )}
-                          >
-                            {option.label}
-                          </DropdownMenuRadioItem>
-                        );
-                      })}
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+                          return (
+                            <DropdownMenuRadioItem
+                              key={option.id}
+                              value={option.id}
+                              className={cn(
+                                "data-checked:font-medium",
+                                option.archived && !isSelected && "text-muted-foreground",
+                              )}
+                            >
+                              {option.label}
+                            </DropdownMenuRadioItem>
+                          );
+                        })}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               }
               actions={
                 <>
-                <Button variant="default" size="sm" onClick={handleExportCsv}>
-                  Export as CSV
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        type="button"
-                        variant="text"
-                        size="icon"
-                        aria-label="More actions"
-                        className="text-secondary data-popup-open:bg-bg-tertiary"
-                      />
-                    }
-                  >
-                    <MoreHorizontal className="size-4" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {!isArchivedYear && (
-                      <DropdownMenuItem onClick={handleArchiveTable}>
-                        Archive table
+                  <Button variant="default" size="sm" onClick={handleExportCsv}>
+                    Export as CSV
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="text"
+                          size="icon"
+                          aria-label="More actions"
+                          className="text-secondary data-popup-open:bg-bg-tertiary"
+                        />
+                      }
+                    >
+                      <MoreHorizontal className="size-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {!isArchivedYear && (
+                        <DropdownMenuItem onClick={handleArchiveTable}>
+                          Archive table
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem onClick={openCreateTableDialog}>
+                        Create new table
                       </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem onClick={openCreateTableDialog}>
-                      Create new table
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </>
               }
             />
@@ -833,93 +829,92 @@ export default function FinancesPage() {
             <div className="page-header-container">
               <div className="flex min-w-0 items-center gap-2">
                 <h1 className="shrink-0 text-md text-primary">Finances</h1>
-              <div
-                className={cn(
-                  "inline-flex min-w-0 items-center",
-                  original
-                    ? "gap-1"
-                    : isEditingTableTitle
-                      ? "gap-1"
-                      : "-ml-1.5",
-                )}
-              >
-                {isEditingTableTitle ? (
-                  <span className="inline-grid items-center [&>*]:col-start-1 [&>*]:row-start-1">
-                    <span aria-hidden className="invisible whitespace-pre px-0 text-md font-medium">
-                      {tableTitleEditValue || tableDisplayLabel}
-                    </span>
-                    <input
-                      autoFocus
-                      value={tableTitleEditValue}
-                      onChange={(event) => setTableTitleEditValue(event.target.value)}
-                      onKeyDown={handleTableTitleKeyDown}
-                      onBlur={cancelTableTitleEdit}
-                      onFocus={(event) => event.target.select()}
-                      aria-label="Table name"
-                      className="w-full min-w-0 border-0 bg-transparent p-0 text-md font-medium text-primary outline outline-2 outline-active -outline-offset-2"
-                    />
-                  </span>
-                ) : null}
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        type="button"
-                        variant="text"
-                        size="sm"
-                        aria-label="Switch table"
-                        className={
-                          original
-                            ? "-ml-1 gap-1 px-1.5 font-medium"
-                            : "h-auto gap-1 px-1.5 font-medium text-md text-secondary"
-                        }
-                        onDoubleClick={!isEditingTableTitle ? startTableTitleEdit : undefined}
-                      />
-                    }
-                  >
-                    {!isEditingTableTitle && (
-                      <span className={cn("text-md", !original && "text-secondary")}>
-                        {tableDisplayLabel}
+                <div
+                  className={cn(
+                    "inline-flex min-w-0 items-center",
+                    original ? "gap-1" : isEditingTableTitle ? "gap-1" : "-ml-1.5",
+                  )}
+                >
+                  {isEditingTableTitle ? (
+                    <span className="inline-grid items-center [&>*]:col-start-1 [&>*]:row-start-1">
+                      <span
+                        aria-hidden
+                        className="invisible whitespace-pre px-0 text-md font-medium"
+                      >
+                        {tableTitleEditValue || tableDisplayLabel}
                       </span>
-                    )}
-                    <ChevronDown
-                      className={cn(
-                        "size-3.5",
-                        original ? "text-muted-foreground" : "text-secondary",
-                      )}
-                      strokeWidth={2}
-                    />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    side="bottom"
-                    sideOffset={4}
-                    className="min-w-56"
-                  >
-                    <DropdownMenuRadioGroup
-                      value={activeYearId ?? ""}
-                      onValueChange={handleSelectTable}
+                      <input
+                        autoFocus
+                        value={tableTitleEditValue}
+                        onChange={(event) => setTableTitleEditValue(event.target.value)}
+                        onKeyDown={handleTableTitleKeyDown}
+                        onBlur={cancelTableTitleEdit}
+                        onFocus={(event) => event.target.select()}
+                        aria-label="Table name"
+                        className="w-full min-w-0 border-0 bg-transparent p-0 text-md font-medium text-primary outline outline-2 outline-active -outline-offset-2"
+                      />
+                    </span>
+                  ) : null}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="text"
+                          size="sm"
+                          aria-label="Switch table"
+                          className={
+                            original
+                              ? "-ml-1 gap-1 px-1.5 font-medium"
+                              : "h-auto gap-1 px-1.5 font-medium text-md text-secondary"
+                          }
+                          onDoubleClick={!isEditingTableTitle ? startTableTitleEdit : undefined}
+                        />
+                      }
                     >
-                      {tableOptions.map((option) => {
-                        const isSelected = option.id === activeYearId;
+                      {!isEditingTableTitle && (
+                        <span className={cn("text-md", !original && "text-secondary")}>
+                          {tableDisplayLabel}
+                        </span>
+                      )}
+                      <ChevronDown
+                        className={cn(
+                          "size-3.5",
+                          original ? "text-muted-foreground" : "text-secondary",
+                        )}
+                        strokeWidth={2}
+                      />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="start"
+                      side="bottom"
+                      sideOffset={4}
+                      className="min-w-56"
+                    >
+                      <DropdownMenuRadioGroup
+                        value={activeYearId ?? ""}
+                        onValueChange={handleSelectTable}
+                      >
+                        {tableOptions.map((option) => {
+                          const isSelected = option.id === activeYearId;
 
-                        return (
-                          <DropdownMenuRadioItem
-                            key={option.id}
-                            value={option.id}
-                            className={cn(
-                              "data-checked:font-medium",
-                              option.archived && !isSelected && "text-muted-foreground",
-                            )}
-                          >
-                            {option.label}
-                          </DropdownMenuRadioItem>
-                        );
-                      })}
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+                          return (
+                            <DropdownMenuRadioItem
+                              key={option.id}
+                              value={option.id}
+                              className={cn(
+                                "data-checked:font-medium",
+                                option.archived && !isSelected && "text-muted-foreground",
+                              )}
+                            >
+                              {option.label}
+                            </DropdownMenuRadioItem>
+                          );
+                        })}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <Popover open={filtersOpen} onOpenChange={handleFiltersOpenChange}>
@@ -936,7 +931,7 @@ export default function FinancesPage() {
                       </Button>
                     }
                   />
-<PopoverContent
+                  <PopoverContent
                     align="end"
                     side="bottom"
                     sideOffset={4}
@@ -1120,7 +1115,7 @@ export default function FinancesPage() {
                       </button>
                     }
                   />
-<PopoverContent
+                  <PopoverContent
                     align="end"
                     side="bottom"
                     sideOffset={4}
@@ -1232,312 +1227,299 @@ export default function FinancesPage() {
               </div>
             ) : null}
 
-            <div
-              className={
-                original ? "overflow-hidden bg-bg" : "min-h-0 flex-1 overflow-hidden"
-              }
-            >
-                <Table
-                  containerClassName={original ? undefined : "h-full overflow-auto"}
-                  className="w-full table-fixed border-collapse"
-                >
-                  <colgroup>
-                    <col style={{ width: ISSUE_COLUMN_WIDTH }} />
+            <div className={original ? "overflow-hidden bg-bg" : "min-h-0 flex-1 overflow-hidden"}>
+              <Table
+                containerClassName={original ? undefined : "h-full overflow-auto"}
+                className="w-full table-fixed border-collapse"
+              >
+                <colgroup>
+                  <col style={{ width: ISSUE_COLUMN_WIDTH }} />
+                  {visibleCaptains.map((captain) => (
+                    <col key={captain.id} style={{ width: CAPTAIN_COLUMN_WIDTH }} />
+                  ))}
+                </colgroup>
+                <TableHeader className="[&_tr]:border-0">
+                  <TableRow className="border-0 hover:bg-transparent">
+                    <TableHead
+                      className={cn(
+                        "h-10 font-medium text-muted-foreground",
+                        headerType,
+                        issuePad,
+                        tableHead,
+                      )}
+                      style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span>Issue</span>
+                        {!isEmptyTable && !isArchivedYear && (
+                          <Button
+                            type="button"
+                            variant="text"
+                            size="icon-xs"
+                            aria-label="Add issue"
+                            disabled={!!draftIssue}
+                            onClick={handleAddIssue}
+                            className="size-6 shrink-0 text-muted-foreground hover:text-primary"
+                          >
+                            <Plus className="size-3.5" strokeWidth={1.5} />
+                          </Button>
+                        )}
+                      </div>
+                    </TableHead>
                     {visibleCaptains.map((captain) => (
-                      <col key={captain.id} style={{ width: CAPTAIN_COLUMN_WIDTH }} />
-                    ))}
-                  </colgroup>
-                  <TableHeader className="[&_tr]:border-0">
-                    <TableRow className="border-0 hover:bg-transparent">
                       <TableHead
+                        key={captain.id}
                         className={cn(
-                          "h-10 font-medium text-muted-foreground",
-                          headerType,
-                          issuePad,
+                          cn("h-10 px-4 font-medium text-muted-foreground", headerType),
                           tableHead,
+                        )}
+                        style={{ width: CAPTAIN_COLUMN_WIDTH, minWidth: CAPTAIN_COLUMN_WIDTH }}
+                      >
+                        {captain.name}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="[&_tr:last-child]:border-0">
+                  {isEmptyTable && !isArchivedYear && (
+                    <TableRow className="border-0 hover:bg-transparent">
+                      <TableCell
+                        className={cn(rowHeight, issuePad, tableCell)}
+                        style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
+                      >
+                        <Button type="button" variant="outline" size="sm" onClick={handleAddIssue}>
+                          Add Issue
+                        </Button>
+                      </TableCell>
+                      {visibleCaptains.map((captain) => (
+                        <TableCell
+                          key={`empty-${captain.id}`}
+                          className={cn(rowHeight, tableCell)}
+                          style={{ width: CAPTAIN_COLUMN_WIDTH, minWidth: CAPTAIN_COLUMN_WIDTH }}
+                        />
+                      ))}
+                    </TableRow>
+                  )}
+                  {draftIssue && (
+                    <TableRow className="border-0 hover:bg-transparent">
+                      <TableCell
+                        className={cn(
+                          cn(
+                            "relative z-10 outline outline-2 outline-active -outline-offset-2",
+                            rowHeight,
+                            issuePad,
+                          ),
+                          tableCell,
                         )}
                         style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <span>Issue</span>
-                          {!isEmptyTable && !isArchivedYear && (
-                            <Button
-                              type="button"
-                              variant="text"
-                              size="icon-xs"
-                              aria-label="Add issue"
-                              disabled={!!draftIssue}
-                              onClick={handleAddIssue}
-                              className="size-6 shrink-0 text-muted-foreground hover:text-primary"
-                            >
-                              <Plus className="size-3.5" strokeWidth={1.5} />
-                            </Button>
-                          )}
-                        </div>
-                      </TableHead>
+                        <input
+                          autoFocus
+                          placeholder="Issue Name"
+                          value={draftIssue.label}
+                          onChange={(e) => setDraftIssue({ label: e.target.value })}
+                          onKeyDown={handleDraftKeyDown}
+                          onBlur={handleDraftBlur}
+                          aria-label="Issue name"
+                          className="w-full border-0 bg-transparent p-0 text-md text-primary outline-none placeholder:text-quaternary"
+                        />
+                      </TableCell>
                       {visibleCaptains.map((captain) => (
-                        <TableHead
-                          key={captain.id}
-                          className={cn(
-                            cn("h-10 px-4 font-medium text-muted-foreground", headerType),
-                            tableHead,
-                          )}
+                        <TableCell
+                          key={`draft-${captain.id}`}
+                          className={cn(rowHeight, tableCell)}
                           style={{ width: CAPTAIN_COLUMN_WIDTH, minWidth: CAPTAIN_COLUMN_WIDTH }}
-                        >
-                          {captain.name}
-                        </TableHead>
+                        />
                       ))}
                     </TableRow>
-                  </TableHeader>
-                  <TableBody className="[&_tr:last-child]:border-0">
-                    {isEmptyTable && !isArchivedYear && (
-                      <TableRow className="border-0 hover:bg-transparent">
-                        <TableCell
-                          className={cn(rowHeight, issuePad, tableCell)}
-                          style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
-                        >
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={handleAddIssue}
-                          >
-                            Add Issue
-                          </Button>
-                        </TableCell>
-                        {visibleCaptains.map((captain) => (
-                          <TableCell
-                            key={`empty-${captain.id}`}
-                            className={cn(rowHeight, tableCell)}
-                            style={{ width: CAPTAIN_COLUMN_WIDTH, minWidth: CAPTAIN_COLUMN_WIDTH }}
-                          />
-                        ))}
-                      </TableRow>
-                    )}
-                    {draftIssue && (
-                      <TableRow className="border-0 hover:bg-transparent">
+                  )}
+                  {visibleIssues.map((issue) => {
+                    const isIssueLocked = issue.locked;
+                    const isFrozen = issue.cells.some(
+                      (cell) => cell.calculationStatus === "frozen",
+                    );
+                    const isIssueClosed = issue.status === "closed";
+                    const hasPaidCell = issue.cells.some((cell) => cell.paid);
+                    const canDeleteIssue = !isArchivedYear && !isIssueClosed && !hasPaidCell;
+
+                    return (
+                      <TableRow
+                        key={issue.id}
+                        className="group border-0 hover:bg-transparent has-aria-expanded:bg-transparent"
+                      >
                         <TableCell
                           className={cn(
-                            cn(
-                              "relative z-10 outline outline-2 outline-active -outline-offset-2",
-                              rowHeight,
-                              issuePad,
-                            ),
+                            cn(rowHeight, "py-2 text-md text-primary", issuePad),
                             tableCell,
                           )}
                           style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
                         >
-                          <input
-                            autoFocus
-                            placeholder="Issue Name"
-                            value={draftIssue.label}
-                            onChange={(e) => setDraftIssue({ label: e.target.value })}
-                            onKeyDown={handleDraftKeyDown}
-                            onBlur={handleDraftBlur}
-                            aria-label="Issue name"
-                            className="w-full border-0 bg-transparent p-0 text-md text-primary outline-none placeholder:text-quaternary"
-                          />
-                        </TableCell>
-                        {visibleCaptains.map((captain) => (
-                          <TableCell
-                            key={`draft-${captain.id}`}
-                            className={cn(rowHeight, tableCell)}
-                            style={{ width: CAPTAIN_COLUMN_WIDTH, minWidth: CAPTAIN_COLUMN_WIDTH }}
-                          />
-                        ))}
-                      </TableRow>
-                    )}
-                    {visibleIssues.map((issue) => {
-                      const isIssueLocked = issue.locked;
-                      const isFrozen = issue.cells.some(
-                        (cell) => cell.calculationStatus === "frozen",
-                      );
-                      const isIssueClosed = issue.status === "closed";
-                      const hasPaidCell = issue.cells.some((cell) => cell.paid);
-                      const canDeleteIssue = !isArchivedYear && !isIssueClosed && !hasPaidCell;
-
-                      return (
-                        <TableRow
-                          key={issue.id}
-                          className="group border-0 hover:bg-transparent has-aria-expanded:bg-transparent"
-                        >
-                          <TableCell
-                            className={cn(
-                              cn(rowHeight, "py-2 text-md text-primary", issuePad),
-                              tableCell,
+                          <div className="flex h-full w-full items-center justify-between gap-2">
+                            {editingIssueId === issue.id ? (
+                              <input
+                                autoFocus
+                                type="text"
+                                value={issueNameEditValue}
+                                onChange={(e) => setIssueNameEditValue(e.target.value)}
+                                onKeyDown={(e) => handleIssueNameKeyDown(e, issue.id, issue.name)}
+                                onBlur={() => commitIssueNameEdit(issue.id, issue.name)}
+                                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-md text-primary outline-none"
+                              />
+                            ) : (
+                              <span
+                                className={cn(
+                                  "min-w-0 whitespace-nowrap",
+                                  !isArchivedYear && "cursor-text",
+                                )}
+                                onDoubleClick={
+                                  !isArchivedYear ? () => startIssueNameEdit(issue) : undefined
+                                }
+                              >
+                                {issue.name}
+                              </span>
                             )}
-                            style={{ width: ISSUE_COLUMN_WIDTH, minWidth: ISSUE_COLUMN_WIDTH }}
-                          >
-                            <div className="flex h-full w-full items-center justify-between gap-2">
-                              {editingIssueId === issue.id ? (
-                                <input
-                                  autoFocus
-                                  type="text"
-                                  value={issueNameEditValue}
-                                  onChange={(e) => setIssueNameEditValue(e.target.value)}
-                                  onKeyDown={(e) => handleIssueNameKeyDown(e, issue.id, issue.name)}
-                                  onBlur={() => commitIssueNameEdit(issue.id, issue.name)}
-                                  className="min-w-0 flex-1 border-0 bg-transparent p-0 text-md text-primary outline-none"
-                                />
-                              ) : (
+                            <div className="ml-auto flex shrink-0 items-center">
+                              {!original && isFrozen && (
                                 <span
-                                  className={cn(
-                                    "min-w-0 whitespace-nowrap",
-                                    !isArchivedYear && "cursor-text",
-                                  )}
-                                  onDoubleClick={
-                                    !isArchivedYear ? () => startIssueNameEdit(issue) : undefined
-                                  }
+                                  className="flex size-7 items-center justify-center text-secondary"
+                                  title="Frozen"
+                                  aria-label="Frozen"
                                 >
-                                  {issue.name}
+                                  <ClosedLockIcon />
                                 </span>
                               )}
-                              <div className="ml-auto flex shrink-0 items-center">
-                                {!original && isFrozen && (
-                                  <span
-                                    className="flex size-7 items-center justify-center text-secondary"
-                                    title="Frozen"
-                                    aria-label="Frozen"
-                                  >
-                                    <ClosedLockIcon />
-                                  </span>
-                                )}
-                                {!isArchivedYear &&
-                                  (original ? (
-                                    !isIssueClosed ? (
-                                      <div className="flex shrink-0 items-center">
-                                        {canDeleteIssue && (
-                                          <IssueDeleteButton
-                                            onClick={() =>
-                                              setDeleteIssueTarget({
-                                                id: issue.id,
-                                                name: issue.name,
-                                              })
-                                            }
-                                          />
-                                        )}
-                                        <IssueLockButton
-                                          locked={isIssueLocked}
-                                          onToggle={() =>
-                                            toggleIssueLock(issue.id, isIssueLocked)
+                              {!isArchivedYear &&
+                                (original ? (
+                                  !isIssueClosed ? (
+                                    <div className="flex shrink-0 items-center">
+                                      {canDeleteIssue && (
+                                        <IssueDeleteButton
+                                          onClick={() =>
+                                            setDeleteIssueTarget({
+                                              id: issue.id,
+                                              name: issue.name,
+                                            })
                                           }
                                         />
-                                      </div>
-                                    ) : null
-                                  ) : (
-                                    <IssueRowMenu
-                                      locked={isFrozen}
-                                      canFreeze={!isIssueClosed}
-                                      canDelete={canDeleteIssue}
-                                      deleteDisabledReason={
-                                        isIssueClosed
-                                          ? "Closed issues cannot be deleted."
-                                          : "Issues with a paid cell cannot be deleted."
-                                      }
-                                      onToggleLock={() =>
-                                        toggleIssueLock(issue.id, isFrozen)
-                                      }
-                                      onDelete={() =>
-                                        setDeleteIssueTarget({
-                                          id: issue.id,
-                                          name: issue.name,
-                                        })
-                                      }
-                                    />
-                                  ))}
-                              </div>
+                                      )}
+                                      <IssueLockButton
+                                        locked={isIssueLocked}
+                                        onToggle={() => toggleIssueLock(issue.id, isIssueLocked)}
+                                      />
+                                    </div>
+                                  ) : null
+                                ) : (
+                                  <IssueRowMenu
+                                    locked={isFrozen}
+                                    canFreeze={!isIssueClosed}
+                                    canDelete={canDeleteIssue}
+                                    deleteDisabledReason={
+                                      isIssueClosed
+                                        ? "Closed issues cannot be deleted."
+                                        : "Issues with a paid cell cannot be deleted."
+                                    }
+                                    onToggleLock={() => toggleIssueLock(issue.id, isFrozen)}
+                                    onDelete={() =>
+                                      setDeleteIssueTarget({
+                                        id: issue.id,
+                                        name: issue.name,
+                                      })
+                                    }
+                                  />
+                                ))}
                             </div>
-                          </TableCell>
-                          {visibleCaptains.map((captain) => {
-                            const cell = issue.cells.find((c) => c.captainId === captain.id);
-                            const cellKey = cell?.payoutId ?? `${issue.id}-${captain.id}`;
-                            if (!cell) {
-                              return (
-                                <TableCell
-                                  key={cellKey}
-                                  className={cn(rowHeight, "px-4", tableCell)}
-                                  style={{
-                                    width: CAPTAIN_COLUMN_WIDTH,
-                                    minWidth: CAPTAIN_COLUMN_WIDTH,
-                                  }}
-                                >
-                                  <span className="text-md text-muted-foreground">—</span>
-                                </TableCell>
-                              );
-                            }
-
-                            const key: CellKey = cell.payoutId;
-                            const isEditing = editingCell === key;
-                            const overridden = cell.calculationStatus === "overridden";
-                            const override: CellOverride | undefined = overridden
-                              ? {
-                                  amount: cell.effectiveAmount,
-                                  originalValue: cell.calculatedAmount,
-                                  note: cell.overrideReason ?? "",
-                                }
-                              : undefined;
-                            // Quantity implied by the formula, so the popover can show
-                            // "N x rate" without a request per cell.
-                            const quantity =
-                              captain.payRate > 0
-                                ? Math.round(cell.calculatedAmount / captain.payRate)
-                                : 0;
-
+                          </div>
+                        </TableCell>
+                        {visibleCaptains.map((captain) => {
+                          const cell = issue.cells.find((c) => c.captainId === captain.id);
+                          const cellKey = cell?.payoutId ?? `${issue.id}-${captain.id}`;
+                          if (!cell) {
                             return (
                               <TableCell
                                 key={cellKey}
-                                className={cn("p-0", tableCell)}
+                                className={cn(rowHeight, "px-4", tableCell)}
                                 style={{
                                   width: CAPTAIN_COLUMN_WIDTH,
                                   minWidth: CAPTAIN_COLUMN_WIDTH,
                                 }}
                               >
-                                <PaymentCell
-                                  key={cell.payoutId}
-                                  value={cell.effectiveAmount}
-                                  paid={cell.paid}
-                                  substituteCaptain={cell.substituteCaptainName ?? NO_SUBSTITUTE}
-                                  substituteOptions={[
-                                    NO_SUBSTITUTE,
-                                    ...otherCaptainNames.filter((name) => name !== captain.name),
-                                  ]}
-                                  onSubstituteChange={(nextName) =>
-                                    handleSubstituteChange(key, captain.id, nextName)
-                                  }
-                                  paymentDetail={{
-                                    captainName: captain.name,
-                                    issueLabel: issue.name,
-                                    lastModified: formatIssueDateLong(issue.date),
-                                    territory: `${captain.name}'s territory`,
-                                    bundleCount: quantity,
-                                    ratePerBundle: captain.payRate,
-                                  }}
-                                  comment={cell.comment ?? undefined}
-                                  onCommentChange={(nextComment) =>
-                                    handleCommentChange(key, nextComment)
-                                  }
-                                  overridden={overridden}
-                                  override={override}
-                                  flashTrigger={flashTriggers[key] ?? 0}
-                                  onMarkPaid={() => handleMarkPaid(key)}
-                                  isEditing={isEditing}
-                                  editValue={editValue}
-                                  onEditValueChange={setEditValue}
-                                  onEditSubmit={() => handleEditSubmit(key)}
-                                  onEditCancel={() => setEditingCell(null)}
-                                  onDoubleClick={() => handleDoubleClick(key)}
-                                  readOnly={isArchivedYear}
-                                  issueClosed={isIssueClosed}
-                                  isLocked={isIssueLocked}
-                                />
+                                <span className="text-md text-muted-foreground">—</span>
                               </TableCell>
                             );
-                          })}
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                          }
+
+                          const key: CellKey = cell.payoutId;
+                          const isEditing = editingCell === key;
+                          const overridden = cell.calculationStatus === "overridden";
+                          const override: CellOverride | undefined = overridden
+                            ? {
+                                amount: cell.effectiveAmount,
+                                originalValue: cell.calculatedAmount,
+                                note: cell.overrideReason ?? "",
+                              }
+                            : undefined;
+                          // Quantity implied by the formula, so the popover can show
+                          // "N x rate" without a request per cell.
+                          const quantity =
+                            captain.payRate > 0
+                              ? Math.round(cell.calculatedAmount / captain.payRate)
+                              : 0;
+
+                          return (
+                            <TableCell
+                              key={cellKey}
+                              className={cn("p-0", tableCell)}
+                              style={{
+                                width: CAPTAIN_COLUMN_WIDTH,
+                                minWidth: CAPTAIN_COLUMN_WIDTH,
+                              }}
+                            >
+                              <PaymentCell
+                                key={cell.payoutId}
+                                value={cell.effectiveAmount}
+                                paid={cell.paid}
+                                substituteCaptain={cell.substituteCaptainName ?? NO_SUBSTITUTE}
+                                substituteOptions={[
+                                  NO_SUBSTITUTE,
+                                  ...otherCaptainNames.filter((name) => name !== captain.name),
+                                ]}
+                                onSubstituteChange={(nextName) =>
+                                  handleSubstituteChange(key, captain.id, nextName)
+                                }
+                                paymentDetail={{
+                                  captainName: captain.name,
+                                  issueLabel: issue.name,
+                                  lastModified: formatIssueDateLong(issue.date),
+                                  territory: `${captain.name}'s territory`,
+                                  bundleCount: quantity,
+                                  ratePerBundle: captain.payRate,
+                                }}
+                                comment={cell.comment ?? undefined}
+                                onCommentChange={(nextComment) =>
+                                  handleCommentChange(key, nextComment)
+                                }
+                                overridden={overridden}
+                                override={override}
+                                flashTrigger={flashTriggers[key] ?? 0}
+                                onMarkPaid={() => handleMarkPaid(key)}
+                                isEditing={isEditing}
+                                editValue={editValue}
+                                onEditValueChange={setEditValue}
+                                onEditSubmit={() => handleEditSubmit(key)}
+                                onEditCancel={() => setEditingCell(null)}
+                                onDoubleClick={() => handleDoubleClick(key)}
+                                readOnly={isArchivedYear}
+                                issueClosed={isIssueClosed}
+                                isLocked={isIssueLocked}
+                              />
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </div>
 
             <Dialog

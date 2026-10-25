@@ -620,7 +620,7 @@
 
 /* transitions-dev — number pop-in */
 @keyframes t-digit-pop-in {
-  0%   {
+  0% {
     transform: translate(
       calc(var(--digit-distance) * var(--digit-dir-x)),
       calc(var(--digit-distance) * var(--digit-dir-y))
@@ -628,7 +628,11 @@
     opacity: 0;
     filter: blur(var(--digit-blur));
   }
-  100% { transform: translate(0, 0); opacity: 1; filter: blur(0); }
+  100% {
+    transform: translate(0, 0);
+    opacity: 1;
+    filter: blur(0);
+  }
 }
 
 .t-digit-group {
@@ -650,7 +654,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .t-digit-group .t-digit { animation: none !important; }
+  .t-digit-group .t-digit {
+    animation: none !important;
+  }
 }
 
 /*

@@ -49,12 +49,7 @@ function DropdownMenuContent({
 }: MenuPrimitive.Popup.Props &
   Pick<
     MenuPrimitive.Positioner.Props,
-    | "align"
-    | "alignOffset"
-    | "side"
-    | "sideOffset"
-    | "collisionAvoidance"
-    | "collisionPadding"
+    "align" | "alignOffset" | "side" | "sideOffset" | "collisionAvoidance" | "collisionPadding"
   >) {
   return (
     <MenuPrimitive.Portal>
