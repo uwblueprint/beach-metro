@@ -15,6 +15,7 @@ import {
   useState,
   type ComponentProps,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 import { AddressField } from "@/components/address-field";
 import { BundlePapersTable, papersRowsDiffer } from "@/components/bundle-papers-table";
@@ -55,6 +56,19 @@ import {
   type VacancyFilter,
 } from "./route-map";
 import { RouteStateTag, RouteTag, type RouteState } from "./route-tag";
+
+/** What kind of building a drop serves; see docs/design_decisions.md. */
+const DROP_KIND_OPTIONS = [
+  { value: "commercial", label: "Commercial" },
+  { value: "residential", label: "Residential" },
+];
+
+/** An unset kind reads as commercial, matching what the server derives. */
+const DEFAULT_DROP_KIND = "commercial";
+
+function dropKindLabel(value: string): string {
+  return DROP_KIND_OPTIONS.find((o) => o.value === value)?.label ?? "Commercial";
+}
 
 const SIDE_OPTIONS = [
   { value: "", label: "— none —" },
@@ -145,6 +159,9 @@ interface RouteSummary {
   endLabel: string | null;
 }
 interface RouteDetail extends RouteSummary {
+  /** Drops only: what kind of building receives it, and what it is called. */
+  dropKind: "commercial" | "residential" | null;
+  dropName: string | null;
   notes: string | null;
   bundles: Array<{ papers: number }>;
   startAddress: { formattedAddress: string | null };
@@ -369,14 +386,23 @@ function LegacyRoutesFilterSection(props: {
             shape="rounded"
             aria-label="Toggle filters"
             aria-expanded={props.filterOpen}
-            selected={props.filterOpen || filterClosing}
+            selected={
+              props.filterOpen ||
+              filterClosing ||
+              props.deliveryType !== "all" ||
+              props.vacancy !== "all" ||
+              props.captainId !== "all"
+            }
             onClick={props.onFilterToggle}
           >
             <Filter />
           </Button>
         </div>
 
-        <div className="t-resize overflow-hidden" style={{ height: filterHeight }}>
+        <div
+          className="t-resize overflow-hidden"
+          style={{ height: filterVisible ? filterHeight : 0 }}
+        >
           {filterVisible && (
             <div
               ref={filterInnerRef}
@@ -429,8 +455,6 @@ const TYPE_OPTIONS: { value: DeliveryTypeFilter; label: string }[] = [
   { value: "routes", label: "Routes" },
   { value: "drops", label: "Drops" },
 ];
-
-const NO_CAPTAIN_IDS: string[] = [];
 
 const ASSIGNED_OPTIONS: { value: VacancyFilter; label: string }[] = [
   { value: "assigned", label: "Assigned" },
@@ -558,9 +582,12 @@ function MultiSelectFilterPill({
       <DropdownMenuTrigger
         render={<FilterPillTrigger label={label} summary={summary} hasSelection={hasSelection} />}
       />
-      <DropdownMenuContent align="start" className="min-w-[14rem] p-1">
+      <DropdownMenuContent
+        align="start"
+        className="flex min-w-[14rem] flex-col overflow-x-hidden overflow-y-hidden p-1"
+      >
         <div
-          className="sticky top-0 z-10 mb-1 bg-bg pb-1"
+          className="shrink-0 bg-bg pb-1"
           onKeyDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
@@ -574,26 +601,28 @@ function MultiSelectFilterPill({
             />
           </div>
         </div>
-        {filtered.length === 0 ? (
-          <p className="px-2 py-1.5 text-md text-secondary">No matches</p>
-        ) : (
-          filtered.map((opt) => (
-            <DropdownMenuCheckboxItem
-              key={opt.value}
-              checked={selected.includes(opt.value)}
-              onCheckedChange={(checked) => {
-                if (checked === true) {
-                  onChange([...selected, opt.value]);
-                } else {
-                  onChange(selected.filter((v) => v !== opt.value));
-                }
-              }}
-            >
-              {opt.label}
-            </DropdownMenuCheckboxItem>
-          ))
-        )}
-        <FilterClearItem disabled={!hasSelection} onClear={() => onChange([])} />
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+          {filtered.length === 0 ? (
+            <p className="px-2 py-1.5 text-md text-secondary">No matches</p>
+          ) : (
+            filtered.map((opt) => (
+              <DropdownMenuCheckboxItem
+                key={opt.value}
+                checked={selected.includes(opt.value)}
+                onCheckedChange={(checked) => {
+                  if (checked === true) {
+                    onChange([...selected, opt.value]);
+                  } else {
+                    onChange(selected.filter((v) => v !== opt.value));
+                  }
+                }}
+              >
+                {opt.label}
+              </DropdownMenuCheckboxItem>
+            ))
+          )}
+          <FilterClearItem disabled={!hasSelection} onClear={() => onChange([])} />
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -718,14 +747,23 @@ function RoutesFilterSection(props: {
             shape="rounded"
             aria-label="Toggle filters"
             aria-expanded={props.filterOpen}
-            selected={props.filterOpen || filterClosing}
+            selected={
+              props.filterOpen ||
+              filterClosing ||
+              props.deliveryType != null ||
+              props.vacancy != null ||
+              props.captainIds.length > 0
+            }
             onClick={props.onFilterToggle}
           >
             <Filter />
           </Button>
         </div>
 
-        <div className="t-resize overflow-hidden" style={{ height: filterHeight }}>
+        <div
+          className="t-resize overflow-hidden"
+          style={{ height: filterVisible ? filterHeight : 0 }}
+        >
           {filterVisible && (
             <div
               ref={filterInnerRef}
@@ -766,7 +804,6 @@ export function RoutesClient({ initialRouteId = null }: { initialRouteId?: strin
   const [selectedId, setSelectedId] = useState<string | null>(initialRouteId);
   const [detailMemberHome, setDetailMemberHome] = useState<SelectedMemberHome | null>(null);
   const [creating, setCreating] = useState(false);
-  const [creatingDrop, setCreatingDrop] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [deliveryType, setDeliveryType] = useState<DeliveryTypeFilter | null>(null);
   const [vacancy, setVacancy] = useState<VacancyFilter | null>(null);
@@ -797,22 +834,21 @@ export function RoutesClient({ initialRouteId = null }: { initialRouteId?: strin
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // Selections survive closing the filter panel, but only narrow results while it's open.
-  const activeDeliveryType = filterOpen ? deliveryType : null;
-  const activeVacancy = filterOpen ? vacancy : null;
-  const activeCaptainIds = filterOpen ? captainIds : NO_CAPTAIN_IDS;
+  // Selections keep narrowing results after the filter row is closed.
+  const activeDeliveryType = deliveryType;
+  const activeVacancy = vacancy;
+  const activeCaptainIds = captainIds;
 
   const listUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (activeVacancy) params.set("vacancy", activeVacancy);
     if (activeCaptainIds.length === 1) params.set("captainId", activeCaptainIds[0]);
-    if (q.trim()) params.set("q", q.trim());
     const qs = params.toString();
     return `/api/routes${qs ? `?${qs}` : ""}`;
-  }, [activeVacancy, activeCaptainIds, q]);
+  }, [activeVacancy, activeCaptainIds]);
 
   const routes = useQuery({
-    queryKey: ["routes", activeVacancy, activeCaptainIds, q],
+    queryKey: ["routes", activeVacancy, activeCaptainIds],
     queryFn: () => getJson<RouteSummary[]>(listUrl),
   });
   const volunteers = useQuery({
@@ -886,8 +922,17 @@ export function RoutesClient({ initialRouteId = null }: { initialRouteId?: strin
       list = list.filter((r) => r.captain != null && activeCaptainIds.includes(r.captain.id));
     }
 
+    const term = q.trim().toLowerCase();
+    if (term) {
+      list = list.filter((r) =>
+        [deliveryListLabel(r), r.assignedVolunteer?.displayName, r.captain?.name].some((field) =>
+          field?.toLowerCase().includes(term),
+        ),
+      );
+    }
+
     return list;
-  }, [routes.data, activeDeliveryType, activeVacancy, activeCaptainIds]);
+  }, [routes.data, activeDeliveryType, activeVacancy, activeCaptainIds, q]);
 
   const mapRoutes: MapRoute[] = filteredRoutes.map((r) => {
     const drop = isDropSummary(r);
@@ -921,35 +966,21 @@ export function RoutesClient({ initialRouteId = null }: { initialRouteId?: strin
       <div className="page flex flex-col overflow-hidden">
         <div className="page-header-container">
           <div className="flex items-center gap-2">
-            <h1 className="text-md text-primary">Routes</h1>
+            <h1 className="text-md text-primary">Deliveries</h1>
             <p className="text-md text-tertiary">
               {routes.data ? `Showing ${listRoutes.length}` : "Loading…"}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="default"
-              onClick={() => {
-                selectRoute(null);
-                setCreating(false);
-                setCreatingDrop(true);
-              }}
-            >
-              <Plus data-icon="inline-start" />
-              Add Drop
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                selectRoute(null);
-                setCreatingDrop(false);
-                setCreating(true);
-              }}
-            >
-              <Plus data-icon="inline-start" />
-              Add Route
-            </Button>
-          </div>
+          <Button
+            variant="primary"
+            onClick={() => {
+              selectRoute(null);
+              setCreating(true);
+            }}
+          >
+            <Plus data-icon="inline-start" />
+            Add Delivery
+          </Button>
         </div>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -961,7 +992,6 @@ export function RoutesClient({ initialRouteId = null }: { initialRouteId?: strin
               selectedMemberHome={selectedId ? detailMemberHome : null}
               onSelect={(id) => {
                 setCreating(false);
-                setCreatingDrop(false);
                 selectRoute(id);
               }}
               boundsFitKey={`${activeVacancy ?? "all"}|${q.trim()}|${activeDeliveryType ?? "all"}|${activeCaptainIds.join(",")}|${showHomes ? "homes" : "no-homes"}`}
@@ -986,21 +1016,11 @@ export function RoutesClient({ initialRouteId = null }: { initialRouteId?: strin
             minWidth={320}
             maxWidth={640}
             handleSide="left"
-            handleLabel="Resize routes panel"
+            handleLabel="Resize deliveries panel"
             className="flex flex-col border-l border-border bg-bg"
           >
-            {creatingDrop ? (
-              <CreateDropPanel
-                onClose={() => setCreatingDrop(false)}
-                onCreated={(id) => {
-                  setCreatingDrop(false);
-                  selectRoute(id);
-                  qc.invalidateQueries({ queryKey: ["routes"] });
-                  qc.invalidateQueries({ queryKey: ["route-paths"] });
-                }}
-              />
-            ) : creating ? (
-              <CreateRoutePanel
+            {creating ? (
+              <CreateDeliveryPanel
                 onClose={() => setCreating(false)}
                 onCreated={(id) => {
                   setCreating(false);
@@ -1023,7 +1043,7 @@ export function RoutesClient({ initialRouteId = null }: { initialRouteId?: strin
             ) : (
               <>
                 <div className="page-header-container">
-                  <span className="text-md font-normal text-primary">Routes</span>
+                  <span className="text-md font-normal text-primary">Deliveries</span>
                 </div>
                 {filterPlacement === "pills" ? (
                   <RoutesFilterSection
@@ -1062,7 +1082,6 @@ export function RoutesClient({ initialRouteId = null }: { initialRouteId?: strin
                     selectedId={selectedId}
                     onSelect={(id) => {
                       setCreating(false);
-                      setCreatingDrop(false);
                       selectRoute(id);
                     }}
                     onClearSelection={() => selectRoute(null)}
@@ -1098,6 +1117,7 @@ function RouteList(props: {
     <div className="flex flex-col gap-3">
       {props.routes.map((r) => {
         const captainName = r.captain?.name ?? "No captain";
+        const volunteerName = isDropSummary(r) ? null : r.assignedVolunteer?.displayName;
         const state = routeState(r);
 
         return (
@@ -1123,7 +1143,7 @@ function RouteList(props: {
                 {state && <RouteStateTag state={state} />}
               </div>
               <span className="truncate pl-2 text-md font-normal text-secondary">
-                {captainName}
+                {volunteerName ? `${captainName}; ${volunteerName} (V)` : captainName}
               </span>
             </div>
             <div className="flex shrink-0 items-center self-start">
@@ -1196,10 +1216,18 @@ function RouteVolunteerCaptainHint(props: {
   const captainName =
     props.volunteers?.find((v) => v.id === props.volunteerId)?.territory?.captainName ?? null;
 
+  if (!captainName) {
+    return (
+      <p className="text-md text-tertiary">
+        This volunteer has no captain, so neither does this route
+      </p>
+    );
+  }
+
   return (
     <p className="text-md text-tertiary">
-      The captain responsible for this volunteer, thus this route is{" "}
-      <span className="font-semibold text-primary">{captainName ?? "no captain"}</span>
+      This volunteer and route are under{" "}
+      <span className="font-semibold text-primary">{captainName}</span>
     </p>
   );
 }
@@ -1358,7 +1386,7 @@ function DetailBreadcrumb(props: { title: string; onBack: () => void; actions?: 
           className="shrink-0 cursor-pointer text-secondary hover:text-primary"
           onClick={props.onBack}
         >
-          Routes
+          Deliveries
         </button>
         <span className="text-secondary">&gt;</span>
         <span className="truncate text-primary">{props.title}</span>
@@ -1405,6 +1433,8 @@ function RouteDetailPanel({
   });
 
   const [streetName, setStreetName] = useState<string | null>(null);
+  const [dropKind, setDropKind] = useState<string | null>(null);
+  const [dropName, setDropName] = useState<string | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
   const [volunteerId, setVolunteerId] = useState<string | null>(null);
   const [captainId, setCaptainId] = useState<string | null>(null);
@@ -1458,6 +1488,8 @@ function RouteDetailPanel({
     volunteerId !== null && r && volunteerId !== (r.assignedVolunteer?.id ?? "");
   const dirtyCaptain = captainId !== null && r && captainId !== (r.captain?.id ?? "");
   const dirtySide = side !== null && r && (side || null) !== (r.side || null);
+  const dirtyDropKind = dropKind !== null && r && dropKind !== (r.dropKind ?? DEFAULT_DROP_KIND);
+  const dirtyDropName = dropName !== null && r && (dropName || null) !== (r.dropName || null);
   const dirtyBundles =
     papersRows !== null && r && papersRowsDiffer(papersRows, papersRowsFromRoute(r));
   const dirtyLabels = labelledRows !== null && !labelledArraysEqual(labelledRows, baselineLabelled);
@@ -1467,6 +1499,8 @@ function RouteDetailPanel({
     dirtyVolunteer ||
     dirtyCaptain ||
     dirtySide ||
+    dirtyDropKind ||
+    dirtyDropName ||
     dirtyBundles ||
     dirtyLabels;
 
@@ -1477,6 +1511,8 @@ function RouteDetailPanel({
       if (dirtyNotes) body.note = notes ?? "";
       if (dirtyCaptain) body.assignedCaptainId = captainId || null;
       if (dirtySide) body.side = side || null;
+      if (dirtyDropKind) body.dropKind = dropKind;
+      if (dirtyDropName) body.dropName = dropName?.trim() || null;
       if (dirtyBundles && papersRows) {
         const bundles = toBundles(papersRows);
         if (bundles.length === 0) {
@@ -1548,6 +1584,8 @@ function RouteDetailPanel({
   const currentVolunteerId = volunteerId ?? r.assignedVolunteer?.id ?? "";
   const currentCaptainId = captainId ?? r.captain?.id ?? "";
   const currentSide = side ?? r.side ?? "";
+  const currentDropKind = dropKind ?? r.dropKind ?? DEFAULT_DROP_KIND;
+  const currentDropName = dropName ?? r.dropName ?? "";
   const currentPapersRows = papersRows ?? papersRowsFromRoute(r);
   const asDrop = isDropRoute(r);
 
@@ -1611,13 +1649,28 @@ function RouteDetailPanel({
         )}
 
         {asDrop && (
-          <DropdownField
-            label="Captain"
-            value={currentCaptainId}
-            display={captainDisplay}
-            options={captainOptions}
-            onChange={setCaptainId}
-          />
+          <>
+            <DropdownField
+              label="Captain"
+              value={currentCaptainId}
+              display={captainDisplay}
+              options={captainOptions}
+              onChange={setCaptainId}
+            />
+            <DropdownField
+              label="Type"
+              value={currentDropKind}
+              display={dropKindLabel(currentDropKind)}
+              options={DROP_KIND_OPTIONS}
+              onChange={setDropKind}
+            />
+            <InputField
+              label="Business Name"
+              value={currentDropName}
+              onChange={setDropName}
+              placeholder="Optional"
+            />
+          </>
         )}
 
         <InputField label="Name" value={streetName ?? r.streetName} onChange={setStreetName} />
@@ -1694,13 +1747,54 @@ function RouteDetailPanel({
   );
 }
 
+type CreatePanelProps = {
+  onClose: () => void;
+  onCreated: (id: string) => void;
+  typeField: ReactNode;
+  editPapersOnMount: boolean;
+};
+
+const DELIVERY_TYPE_OPTIONS = [
+  { value: "drop", label: "Drop" },
+  { value: "route", label: "Route" },
+];
+
+/**
+ * One create form for both delivery types. The type picker sits at the top;
+ * switching it remounts the form below, since the fields differ per type.
+ */
+function CreateDeliveryPanel(props: { onClose: () => void; onCreated: (id: string) => void }) {
+  const [type, setType] = useState<"drop" | "route">("drop");
+  const [switched, setSwitched] = useState(false);
+  const typeField = (
+    <DropdownField
+      label="Type"
+      value={type}
+      display={type === "drop" ? "Drop" : "Route"}
+      options={DELIVERY_TYPE_OPTIONS}
+      onChange={(v) => {
+        setType(v === "route" ? "route" : "drop");
+        setSwitched(true);
+      }}
+    />
+  );
+  // After a switch, skip the papers autofocus: it would scroll the panel away
+  // from the type picker.
+  const shared = { ...props, typeField, editPapersOnMount: !switched };
+  return type === "drop" ? (
+    <CreateDropPanel key="drop" {...shared} />
+  ) : (
+    <CreateRoutePanel key="route" {...shared} />
+  );
+}
+
 /**
  * Create a route. Endpoint addresses resolve server-side — by placeId when a
  * suggestion was picked (exact), otherwise by Address Validation on the typed
  * text. Either way the route gets the coordinates the map needs, so it appears
  * on the map as soon as it's saved.
  */
-function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) => void }) {
+function CreateRoutePanel(props: CreatePanelProps) {
   const volunteers = useQuery({
     queryKey: ["volunteers", "assignable"],
     queryFn: () => getJson<VolunteerSummary[]>("/api/volunteers?status=active"),
@@ -1770,9 +1864,11 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
 
   return (
     <div className="flex h-full flex-col">
-      <DetailBreadcrumb title="New route" onBack={props.onClose} />
+      <DetailBreadcrumb title="New delivery" onBack={props.onClose} />
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-4">
+        {props.typeField}
+
         <div className="flex flex-col gap-2">
           <DropdownField
             label="Volunteer"
@@ -1841,7 +1937,7 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
         <BundlePapersTable
           value={papersRows}
           onChange={setPapersRows}
-          startEditingLast
+          startEditingLast={props.editPapersOnMount}
           onValidityChange={setPapersValid}
         />
 
@@ -1884,7 +1980,7 @@ function CreateRoutePanel(props: { onClose: () => void; onCreated: (id: string) 
  * people flow does not model, and Places autocomplete for editing a drop's
  * address from the detail panel.
  */
-function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) => void }) {
+function CreateDropPanel(props: CreatePanelProps) {
   const captains = useQuery({
     queryKey: ["captains", "assignable"],
     queryFn: () =>
@@ -1904,6 +2000,8 @@ function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) =
   const [papersRows, setPapersRows] = useState<number[]>([0]);
   const [papersValid, setPapersValid] = useState(true);
   const [unitCount, setUnitCount] = useState("0");
+  const [dropKind, setDropKind] = useState<string>(DEFAULT_DROP_KIND);
+  const [dropName, setDropName] = useState("");
   const [note, setNote] = useState("");
 
   const address = (line: string, pickedPlaceId: string | null) =>
@@ -1930,6 +2028,8 @@ function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) =
         houseCount: unitCountValue,
         bundles,
         assignedCaptainId: captainId,
+        dropKind,
+        ...(dropName.trim() ? { dropName: dropName.trim() } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
       });
     },
@@ -1956,9 +2056,11 @@ function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) =
 
   return (
     <div className="flex h-full flex-col">
-      <DetailBreadcrumb title="New drop" onBack={props.onClose} />
+      <DetailBreadcrumb title="New delivery" onBack={props.onClose} />
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-4">
+        {props.typeField}
+
         <DropdownField
           label="Captain"
           value={captainId}
@@ -1988,6 +2090,21 @@ function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) =
           }}
         />
 
+        <DropdownField
+          label="Type"
+          value={dropKind}
+          display={dropKindLabel(dropKind)}
+          options={DROP_KIND_OPTIONS}
+          onChange={setDropKind}
+        />
+
+        <InputField
+          label="Business Name"
+          value={dropName}
+          onChange={setDropName}
+          placeholder="Optional"
+        />
+
         <InputField
           label="Unit Count"
           type="number"
@@ -2000,7 +2117,7 @@ function CreateDropPanel(props: { onClose: () => void; onCreated: (id: string) =
         <BundlePapersTable
           value={papersRows}
           onChange={setPapersRows}
-          startEditingLast
+          startEditingLast={props.editPapersOnMount}
           onValidityChange={setPapersValid}
         />
 
