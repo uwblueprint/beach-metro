@@ -14,6 +14,7 @@ import type {
   BundleLabelRow,
   CaptainRow,
   CaptainTerritoryRow,
+  DropKind,
   IssueRow,
   RouteDeliveryRow,
   VolunteerRouteRow,
@@ -21,7 +22,7 @@ import type {
 } from "@/types/db";
 
 import { getAddressDetails } from "./addresses";
-import { routeLabel } from "./derive";
+import { labelType, routeLabel } from "./derive";
 import { db, throwDb } from "./shared";
 
 export interface LabelBundle {
@@ -45,14 +46,9 @@ export interface LabelRoute {
   /**
    * Carrier is a normal volunteer route, Commercial a bulk drop at a business,
    * Residential a bulk drop at an apartment or condo. Locked in
-   * docs/design_decisions.md.
-   *
-   * Always "carrier" today, because this service reads `route_deliveries` and
-   * nothing but `volunteer_routes` feeds that table. Widen the union once
-   * commercial and residential drops get a per-issue delivery record of their
-   * own (label_printing_flow.md §7).
+   * docs/design_decisions.md. Derived from the route, never stored twice.
    */
-  type: "carrier";
+  type: "carrier" | DropKind;
 }
 
 export interface LabelGroup {
@@ -175,7 +171,9 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
   const [routesRes, volunteersRes, territoriesRes, captainsRes, labelsRes] = await Promise.all([
     client
       .from("volunteer_routes")
-      .select("id, street_name, assigned_volunteer_id, start_address_id, end_address_id")
+      .select(
+        "id, street_name, assigned_volunteer_id, assigned_captain_id, start_address_id, end_address_id, drop_kind, drop_name",
+      )
       .in(
         "id",
         deliveries.map((d) => d.route_id),
@@ -200,7 +198,14 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
 
   const routes = (routesRes.data ?? []) as Pick<
     VolunteerRouteRow,
-    "id" | "street_name" | "assigned_volunteer_id" | "start_address_id" | "end_address_id"
+    | "id"
+    | "street_name"
+    | "assigned_volunteer_id"
+    | "assigned_captain_id"
+    | "start_address_id"
+    | "end_address_id"
+    | "drop_kind"
+    | "drop_name"
   >[];
   const volunteers = (volunteersRes.data ?? []) as Pick<
     VolunteerRow,
@@ -242,15 +247,20 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
     // after delete does not keep showing.
     if (!route) continue;
 
+    const isDropRoute = route.start_address_id === route.end_address_id;
     const volunteer = route.assigned_volunteer_id
       ? (volunteerById.get(route.assigned_volunteer_id) ?? null)
       : null;
     const territory = volunteer?.captain_territory_id
       ? (territoryById.get(volunteer.captain_territory_id) ?? null)
       : null;
-    const assigned = territory?.assigned_captain_id
-      ? (captainById.get(territory.assigned_captain_id) ?? null)
-      : null;
+    // Who carries this, by the same rule routeLifecycle applies. A drop names a
+    // captain directly and holds no volunteer; a street route reaches one
+    // through the territory its volunteer belongs to.
+    const carrierId = isDropRoute
+      ? route.assigned_captain_id
+      : (territory?.assigned_captain_id ?? null);
+    const assigned = carrierId ? (captainById.get(carrierId) ?? null) : null;
     // A captain who retired after the issue was created must not still head the group.
     const captain = assigned && assigned.retired_at === null ? assigned : null;
 
@@ -270,13 +280,20 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
         addresses.get(route.start_address_id)?.formattedAddress ?? null,
         addresses.get(route.end_address_id)?.formattedAddress ?? null,
       ),
-      volunteerName: volunteer ? volunteer.display_name : null,
-      address: volunteer ? (addresses.get(volunteer.address_id)?.formattedAddress ?? null) : null,
+      // A drop is carried by a captain and has no volunteer, so the label's
+      // name line takes the drop's own name and its address line the drop's
+      // address. A street route keeps showing the volunteer and their home.
+      volunteerName: isDropRoute ? route.drop_name : (volunteer?.display_name ?? null),
+      address: isDropRoute
+        ? (addresses.get(route.start_address_id)?.formattedAddress ?? null)
+        : volunteer
+          ? (addresses.get(volunteer.address_id)?.formattedAddress ?? null)
+          : null,
       papers: delivery.paper_count,
       bundles,
       bundleCount: bundles.length,
       labelledCount: labelledHere,
-      type: "carrier",
+      type: labelType({ isDrop: isDropRoute, dropKind: route.drop_kind }),
     };
 
     const key = captain?.id ?? "unassigned";
@@ -389,6 +406,13 @@ async function assertBundlesExist(
  * Marking happens AFTER the bytes render, so a failed render leaves the flags
  * untouched and the office can just hit export again.
  */
+/** The label's name line, blank for an unnamed drop and never "Vacant" for one. */
+function labelName(route: LabelRoute | undefined): string {
+  if (route?.volunteerName) return route.volunteerName;
+  if (route && route.type !== "carrier") return "";
+  return "Vacant route";
+}
+
 export async function exportLabelSheet(
   input: z.infer<typeof exportLabels>,
 ): Promise<{ filename: string; bytes: Uint8Array; labelCount: number }> {
@@ -418,7 +442,10 @@ export async function exportLabelSheet(
       // than inventing a number that would look authoritative.
       routeCode: rtByDelivery.get(ref.deliveryId) ?? "XX",
       papers: delivery?.bundles[ref.bundleIndex]?.papers ?? 0,
-      name: route?.volunteerName ?? "Vacant route",
+      // "Vacant route" is a statement about a street route nobody carries. A
+      // drop is carried by a captain, so an unnamed one leaves the line empty
+      // rather than calling itself vacant.
+      name: labelName(route),
       address: route?.address ?? "",
       bundleLine: total > 1 ? `Bundle ${ref.bundleIndex + 1} of ${total}` : "",
     };

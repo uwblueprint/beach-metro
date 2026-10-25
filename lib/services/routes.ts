@@ -14,6 +14,7 @@ import type {
 import type {
   CaptainRow,
   CaptainTerritoryRow,
+  DropKind,
   RouteBundle,
   RouteSide,
   VolunteerRouteRow,
@@ -45,6 +46,10 @@ export interface RouteSummary {
    * and the client has no coordinates to compare.
    */
   isDrop: boolean;
+  /** Drops only: what kind of building receives it. Null on a street route. */
+  dropKind: DropKind | null;
+  /** Drops only: what it is called, printed on the label. */
+  dropName: string | null;
   lifecycle: "assigned" | "vacant";
   suspended: boolean; // derived: assigned volunteer is on vacation
   needsAttention: boolean; // derived: assigned volunteer retired or past end date
@@ -135,6 +140,8 @@ function toSummary(
     streetName: r.street_name,
     side: r.side,
     isDrop,
+    dropKind: r.drop_kind,
+    dropName: r.drop_name,
     lifecycle: routeLifecycle({
       isDrop,
       assignedVolunteerId: r.assigned_volunteer_id,
@@ -337,6 +344,10 @@ export async function createRouteRecord(input: z.infer<typeof createRoute>): Pro
       house_count: input.houseCount ?? 0,
       papers,
       bundles,
+      // Confined to drops by a database constraint as well, so a street route
+      // cannot pick these up from a caller that sends them by mistake.
+      drop_kind: sameEndpoint ? (input.dropKind ?? "commercial") : null,
+      drop_name: sameEndpoint ? (input.dropName ?? null) : null,
       notes: input.note ?? null,
     })
     .select()
@@ -386,6 +397,23 @@ export async function updateRouteRecord(
     if (input.endAddress !== undefined) {
       patch.end_address_id = (await createAddress(input.endAddress, "residential")).address.id;
     }
+  }
+
+  // A drop can only ever move, never split: the branch above gives both
+  // endpoints the same new row whenever one is touched. So the single
+  // transition to handle here is the other direction, a street route whose two
+  // endpoints are set to one place and which therefore becomes a drop.
+  const startAfter = (patch.start_address_id as string | undefined) ?? existing.start_address_id;
+  const endAfter = (patch.end_address_id as string | undefined) ?? existing.end_address_id;
+  const isDropAfter = startAfter === endAfter;
+
+  // Only a drop carries these. Ignoring them on a street route matches what
+  // create does with the same input, instead of letting the write reach the
+  // database constraint and come back as a Postgres message.
+  if (isDropAfter) {
+    if (input.dropKind !== undefined) patch.drop_kind = input.dropKind;
+    if (input.dropName !== undefined) patch.drop_name = input.dropName;
+    if (!wasDrop && patch.drop_kind === undefined) patch.drop_kind = "commercial";
   }
 
   if (input.bundles !== undefined) {
