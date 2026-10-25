@@ -25,7 +25,7 @@
     "create-admin": "node --env-file=.env.local scripts/create-admin.ts",
     "refresh-coords": "node --env-file=.env.local scripts/refresh-coords.ts",
     "import:convert": "python3 scripts/decrypt-workbook.py",
-    "import:legacy": "tsx --tsconfig tsconfig.scripts.json scripts/import-legacy.ts"
+    "import:legacy": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/import-legacy.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
