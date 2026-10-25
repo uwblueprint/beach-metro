@@ -18,6 +18,10 @@ function subscribe(onStoreChange: () => void) {
 }
 
 function getSnapshot() {
+  // Outside development the comparison is unavailable, whatever the key says.
+  // The keyboard shortcut and badge were already gated, but the hooks below
+  // were not, so a set key would have swapped values in a real deployment.
+  if (process.env.NODE_ENV !== "development") return false;
   return sessionStorage.getItem(STORAGE_KEY) === "1";
 }
 
