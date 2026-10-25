@@ -4,9 +4,11 @@
 -- `pnpm tsx scripts/create-admin.ts <email> <password>` (Supabase Auth, service role).
 --
 -- Contents: 3 captains (one zero-rate) + their territories, 5 volunteers (one on
--- vacation, one retired, one unassigned), 8 routes (assigned / vacant / suspended-
--- by-vacation / soft-deleted), 1 commercial drop, 1 financial year. Issues are NOT
--- seeded — create them through the API so the auto-population logic is exercised.
+-- vacation, one retired, one unassigned), 8 street routes (assigned / vacant /
+-- suspended-by-vacation / soft-deleted) plus 2 captain-carried drops (one
+-- commercial, one residential), 2 commercial drop addresses, 1 financial year.
+-- Issues are NOT seeded — create them through the API so the auto-population
+-- logic is exercised.
 --
 -- Geography: coordinates are hand-placed in the Beaches so each route is a short,
 -- coherent segment ALONG its named street (start and end on the same street, a few
@@ -16,6 +18,9 @@
 
 -- Google Maps rows (seed-stable stand-ins for geocoded locations).
 insert into google_maps_locations (id, cached_latitude, cached_longitude, cached_formatted_address, cached_at, street_number, street_name, locality, sublocality, administrative_area, postal_code, country_code, location_type) values
+  -- Where the two captain-carried drops are dropped.
+  ('seed-place-drop-rt-1', 43.6812, -79.2874, '1230 Kingston Rd, Toronto, ON M1N 1P3, Canada', now(), '1230', 'Kingston Rd',  'Toronto', 'The Beaches', 'ON', 'M1N 1P3', 'CA', 'ROOFTOP'),
+  ('seed-place-drop-rt-2', 43.6723, -79.2901, '2075 Queen St E, Toronto, ON M4L 1J2, Canada',   now(), '2075', 'Queen St E',   'Toronto', 'The Beaches', 'ON', 'M4L 1J2', 'CA', 'ROOFTOP'),
   -- Volunteer homes (clustered near their routes in the Beaches).
   ('seed-place-vol-1',  43.6696, -79.2946, '12 Willow Ave, Toronto, ON M4E 3K1, Canada',      now(), '12',  'Willow Ave',    'Toronto', 'The Beaches', 'ON', 'M4E 3K1', 'CA', 'ROOFTOP'),
   ('seed-place-vol-2',  43.6699, -79.2936, '48 Beech Ave, Toronto, ON M4E 3H6, Canada',       now(), '48',  'Beech Ave',     'Toronto', 'The Beaches', 'ON', 'M4E 3H6', 'CA', 'ROOFTOP'),
@@ -91,8 +96,13 @@ insert into addresses (id, google_maps_id, type, territory_id) values
   ('b0000000-0000-4000-8000-000000000114', 'seed-rt7e', 'residential', null),
   ('b0000000-0000-4000-8000-000000000115', 'seed-rt8s', 'residential', null),
   ('b0000000-0000-4000-8000-000000000116', 'seed-rt8e', 'residential', null),
-  -- One commercial drop in Emily's territory, with a standing bundle count, plus
-  -- one with an UNKNOWN count so the panel's empty state is exercised too.
+  -- Endpoints of the two captain-carried drops. Stored 'residential' like every
+  -- other route endpoint; what kind of building a drop serves lives on the
+  -- route, not on the address (docs/design_decisions.md).
+  ('b0000000-0000-4000-8000-000000000201', 'seed-place-drop-rt-1', 'residential', null),
+  ('b0000000-0000-4000-8000-000000000202', 'seed-place-drop-rt-2', 'residential', null),
+  -- Two commercial drops in Emily's territory, one with a standing bundle count
+  -- and one with an UNKNOWN count so the panel's empty state is exercised too.
   ('b0000000-0000-4000-8000-000000000021', 'seed-place-drop-1', 'commercial', 'a0000000-0000-4000-8000-000000000001'),
   ('b0000000-0000-4000-8000-000000000022', 'seed-place-drop-2', 'commercial', 'a0000000-0000-4000-8000-000000000001');
 
@@ -128,6 +138,13 @@ insert into volunteer_routes (id, start_address_id, end_address_id, street_name,
   ('e0000000-0000-4000-8000-000000000007', 'b0000000-0000-4000-8000-000000000113', 'b0000000-0000-4000-8000-000000000114', 'Blantyre Ave', 'SOUTH', null,                                     0,  35,   35,  greedy_split_papers(35),  'Open Data returned 0; manual count 35', null),
   -- SOFT-DELETED: must be hidden from all views but keep resolving historically.
   ('e0000000-0000-4000-8000-000000000008', 'b0000000-0000-4000-8000-000000000115', 'b0000000-0000-4000-8000-000000000116', 'Balsam Ave',   'NORTH', null,                                     30, null, 30,  greedy_split_papers(30),  null, now());
+
+-- Drops: one address worn as both endpoints, carried by a captain rather than a
+-- volunteer. One of each kind, so the labels screen has a real Commercial and a
+-- real Residential row to filter on.
+insert into volunteer_routes (id, start_address_id, end_address_id, street_name, side, assigned_captain_id, house_count, papers, bundles, drop_kind, drop_name) values
+  ('e0000000-0000-4000-8000-000000000009', 'b0000000-0000-4000-8000-000000000201', 'b0000000-0000-4000-8000-000000000201', 'Kingston Rd', null, 'c0000000-0000-4000-8000-000000000002', 0, 125, greedy_split_papers(125), 'commercial', 'Councillor''s office'),
+  ('e0000000-0000-4000-8000-000000000010', 'b0000000-0000-4000-8000-000000000202', 'b0000000-0000-4000-8000-000000000202', 'Queen St E',  null, 'c0000000-0000-4000-8000-000000000002', 0, 75,  greedy_split_papers(75),  'residential', null);
 
 -- Member notes. Multiple notes on one person, each with its own timestamp, so the
 -- side panel has real history to render (and to prove ordering is newest-first).
@@ -187,7 +204,12 @@ insert into route_deliveries (issue_id, route_id, paper_count, bundles, drop_cou
   -- I04: the live one, still tracking the formula.
   ('11000000-0000-4000-8000-000000000004', 'e0000000-0000-4000-8000-000000000001', 90, '[{"papers":50},{"papers":25},{"papers":15}]', 1, 0),
   ('11000000-0000-4000-8000-000000000004', 'e0000000-0000-4000-8000-000000000002', 40, '[{"papers":25},{"papers":15}]', 1, 0),
-  ('11000000-0000-4000-8000-000000000004', 'e0000000-0000-4000-8000-000000000006', 50, '[{"papers":50}]',               1, 0);
+  ('11000000-0000-4000-8000-000000000004', 'e0000000-0000-4000-8000-000000000006', 50, '[{"papers":50}]',               1, 0),
+  -- The two drops, on the live issue, so the labels screen has a Commercial and
+  -- a Residential row. They move no payout amount: the rollup runs through the
+  -- assigned volunteer and a drop has none, so it reaches no captain.
+  ('11000000-0000-4000-8000-000000000004', 'e0000000-0000-4000-8000-000000000009', 125, '[{"papers":50},{"papers":50},{"papers":25}]', 1, 0),
+  ('11000000-0000-4000-8000-000000000004', 'e0000000-0000-4000-8000-000000000010', 75,  '[{"papers":50},{"papers":25}]',               1, 0);
 
 -- Payout cells: one per captain per issue, exactly as issue creation makes them.
 -- Between them they cover every state the finances grid can render: paid, unpaid,
