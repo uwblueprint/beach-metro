@@ -81,16 +81,26 @@ function getCalendarDays(viewMonth: Date): CalendarDay[] {
   return days;
 }
 
+function isOutsideBounds(iso: string, min?: string, max?: string) {
+  if (min && iso < min) return true;
+  if (max && iso > max) return true;
+  return false;
+}
+
 function DatePickerCalendar({
   selected,
   onSelect,
   viewMonth,
   onViewMonthChange,
+  min,
+  max,
 }: {
   selected: string;
   onSelect: (iso: string) => void;
   viewMonth: Date;
   onViewMonthChange: (date: Date) => void;
+  min?: string;
+  max?: string;
 }) {
   const today = React.useMemo(() => {
     const date = new Date();
@@ -140,6 +150,7 @@ function DatePickerCalendar({
           const iso = formatISODate(date);
           const isSelected = selectedDate ? isSameDay(date, selectedDate) : false;
           const isToday = isSameDay(date, today);
+          const isDisabled = isOutsideBounds(iso, min, max);
 
           return (
             <button
@@ -147,13 +158,15 @@ function DatePickerCalendar({
               type="button"
               aria-label={iso}
               aria-pressed={isSelected}
+              disabled={isDisabled}
               onClick={() => onSelect(iso)}
               className={cn(
                 "flex size-8 items-center justify-center rounded-md text-sm transition-colors",
-                !isSelected && "hover:bg-bg-secondary",
+                !isSelected && !isDisabled && "hover:bg-bg-secondary",
                 isToday && !isSelected && "font-medium",
                 isSelected && "bg-active text-white",
-                outside && !isSelected && "text-muted-foreground opacity-40",
+                outside && !isSelected && !isDisabled && "text-muted-foreground opacity-40",
+                isDisabled && "cursor-default text-disabled",
               )}
             >
               {date.getDate()}
@@ -169,10 +182,16 @@ function DatePicker({
   label,
   value,
   onChange,
+  min,
+  max,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  /** Inclusive earliest selectable day, as an ISO date. */
+  min?: string;
+  /** Inclusive latest selectable day, as an ISO date. */
+  max?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [viewMonth, setViewMonth] = React.useState(() => parseISODate(value) ?? new Date());
@@ -228,6 +247,8 @@ function DatePicker({
           onSelect={handleSelect}
           viewMonth={viewMonth}
           onViewMonthChange={setViewMonth}
+          min={min}
+          max={max}
         />
       </PopoverContent>
     </Popover>

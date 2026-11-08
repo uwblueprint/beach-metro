@@ -271,6 +271,8 @@ export async function getOverview(filters: z.infer<typeof periodQuery>): Promise
         date: i.date,
         papers: papersForIssue(i),
       }))
+      // Newest first, same direction as the finances grid. The query is
+      // date-ascending so "next issue" can take the earliest upcoming date.
       .sort((a, b) => b.date.localeCompare(a.date)),
   };
 }

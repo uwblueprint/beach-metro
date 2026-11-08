@@ -34,7 +34,7 @@ export function monthLabel(isoMonth: string): string {
   return MONTHS_SHORT[month - 1] ?? isoMonth;
 }
 
-/** "2026-03" -> "Mar 2026". Used in the chart hover summary. */
+/** "2026-03" -> "Mar 2026". */
 export function monthYearLabel(isoMonth: string): string {
   const [year, month] = isoMonth.split("-");
   const monthIndex = Number(month);

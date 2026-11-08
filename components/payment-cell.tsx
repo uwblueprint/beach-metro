@@ -1,15 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { Check, ArrowLeftRight, MoreHorizontal, Pencil } from "lucide-react";
+import { Check, ArrowLeftRight, MoreHorizontal } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useOriginalLook } from "@/components/dev-look-toggle";
 import { cn } from "@/lib/utils";
 
 import type {
@@ -47,10 +49,10 @@ function PopoverComment({
 }) {
   // Optimistic cache updates the `comment` prop quickly; keep a short-lived local
   // override so the note stays visible if the parent is a frame behind.
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const skipCommitRef = React.useRef(false);
   const [pendingComment, setPendingComment] = React.useState<string | undefined>(undefined);
-  const [draft, setDraft] = React.useState(comment);
-  const [editSession, setEditSession] = React.useState(false);
-  const [actionTaken, setActionTaken] = React.useState(false);
+  const [focused, setFocused] = React.useState(false);
 
   const displayComment = pendingComment !== undefined ? pendingComment : comment;
 
@@ -59,100 +61,67 @@ function PopoverComment({
     setPendingComment(undefined);
   }
 
-  // Entering an edit session (pencil or ⋯ → Add comment) seeds the draft once.
-  if (editing && !editSession) {
-    setEditSession(true);
-    setActionTaken(false);
+  const [draft, setDraft] = React.useState(displayComment);
+  if (!focused && draft !== displayComment) {
     setDraft(displayComment);
-  } else if (!editing && editSession) {
-    setEditSession(false);
   }
 
-  function startEditing() {
-    setActionTaken(false);
-    setDraft(displayComment);
-    onEditingChange(true);
-  }
+  React.useEffect(() => {
+    if (!editing) return;
+    textareaRef.current?.focus();
+  }, [editing]);
 
   function commit(raw: string) {
-    if (actionTaken) return;
-    setActionTaken(true);
     const next = raw.trim() || null;
-    setPendingComment(next ?? "");
-    onSave?.(next);
+    const current = displayComment.trim() || null;
+    if (next !== current) {
+      setPendingComment(next ?? "");
+      onSave?.(next);
+    }
     onEditingChange(false);
   }
-
-  function cancel() {
-    setActionTaken(true);
-    setDraft(displayComment);
-    onEditingChange(false);
-  }
-
-  const isEmpty = !displayComment.trim();
-  const commentRowClassName =
-    "relative flex min-h-6 w-full min-w-0 items-center overflow-visible outline-none focus:outline-none focus-visible:outline-none";
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-1 overflow-visible whitespace-normal rounded-lg bg-bg-tertiary p-2">
-      <p className="shrink-0 text-md text-primary">Note</p>
-      {editing ? (
-        <div className={commentRowClassName}>
-          <input
-            autoFocus
-            type="text"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              event.stopPropagation();
-              if (event.nativeEvent.isComposing) return;
-              if (event.key === "Enter") {
-                event.preventDefault();
-                commit(event.currentTarget.value);
-              } else if (event.key === "Escape") {
-                event.preventDefault();
-                cancel();
-              }
-            }}
-            onBlur={(event) => commit(event.currentTarget.value)}
-            onFocus={(event) => event.target.select()}
-            aria-label={isEmpty ? "Add comment" : "Edit comment"}
-            placeholder="Add a note…"
-            className="h-6 min-h-6 w-full min-w-0 appearance-none border-0 bg-transparent p-0 text-md leading-[1.3] text-primary outline-none placeholder:text-quaternary"
-          />
-        </div>
-      ) : (
-        <div className={cn("group/comment-row gap-1", commentRowClassName)}>
-          {!readOnly && isEmpty ? (
-            <button
-              type="button"
-              className="flex h-6 min-w-0 flex-1 cursor-text items-center text-left text-md leading-[1.3] break-words text-muted-foreground outline-none focus:outline-none focus-visible:outline-none"
-              onClick={startEditing}
-            >
-              Add a note…
-            </button>
-          ) : (
-            <p className="flex min-h-6 min-w-0 flex-1 items-center text-md leading-[1.3] break-words text-primary">
-              {displayComment}
-            </p>
-          )}
-          {!readOnly && (
-            <div className="flex h-6 shrink-0 items-center self-center opacity-0 transition-opacity group-hover/comment-row:opacity-100 group-focus-within/comment-row:opacity-100">
-              <button
-                type="button"
-                aria-label={isEmpty ? "Add comment" : "Edit comment"}
-                className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[4px] border-0 bg-transparent text-muted-foreground outline-none transition-colors hover:bg-bg-secondary focus:outline-none focus-visible:outline-none [&_svg]:block [&_svg]:fill-none [&_svg]:stroke-current"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  startEditing();
-                }}
-              >
-                <Pencil className="size-3 fill-none" />
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+    <div className="flex w-full min-w-0 flex-col gap-1 whitespace-normal">
+      <p className="text-md text-tertiary">Note</p>
+      <Textarea
+        ref={textareaRef}
+        rows={2}
+        value={draft}
+        readOnly={readOnly}
+        placeholder="Add a note"
+        aria-label={displayComment.trim() ? "Edit comment" : "Add comment"}
+        className={cn("min-h-16 resize-none", readOnly && "cursor-not-allowed")}
+        onChange={(event) => setDraft(event.target.value)}
+        onFocus={() => setFocused(true)}
+        onPointerDown={(event) => {
+          if (readOnly) {
+            event.preventDefault();
+            return;
+          }
+          onEditingChange(true);
+        }}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.nativeEvent.isComposing) return;
+          if (event.key === "Escape") {
+            event.preventDefault();
+            skipCommitRef.current = true;
+            setDraft(displayComment);
+            onEditingChange(false);
+            event.currentTarget.blur();
+          }
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          if (skipCommitRef.current) {
+            skipCommitRef.current = false;
+            return;
+          }
+          if (readOnly) return;
+          commit(event.currentTarget.value);
+        }}
+      />
     </div>
   );
 }
@@ -181,6 +150,7 @@ type PaymentCellProps = {
   comment?: string;
   onCommentChange?: (comment: string | null) => void;
   readOnly?: boolean;
+  issueClosed?: boolean;
   isLocked?: boolean;
   className?: string;
 };
@@ -195,6 +165,7 @@ function PaymentAmountPopover({
   comment,
   onCommentChange,
   readOnly,
+  issueClosed = false,
   commentEditRequest = 0,
   dismissRef,
 }: {
@@ -207,15 +178,30 @@ function PaymentAmountPopover({
   comment?: string;
   onCommentChange?: (comment: string | null) => void;
   readOnly?: boolean;
+  /** Closed issues reject note edits, same as the other payment changes. */
+  issueClosed?: boolean;
   commentEditRequest?: number;
   /** Parent calls this when the pointer moves onto the check or ⋯. */
   dismissRef?: React.RefObject<() => void>;
 }) {
+  const original = useOriginalLook();
   const [open, setOpen] = React.useState(false);
   const [editingComment, setEditingComment] = React.useState(false);
   const openTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const isEditingCommentRef = React.useRef(false);
+  const openRef = React.useRef(false);
+  const triggerRef = React.useRef<HTMLSpanElement>(null);
+  const popupInnerRef = React.useRef<HTMLDivElement>(null);
+  const pointerRef = React.useRef({ x: 0, y: 0, seen: false });
+
+  // These refs exist so the hover callbacks, which are created once, can read
+  // the current value without being rebuilt on every render. They are written
+  // after the render commits, since a render React discards must not leave a
+  // value behind. Every read of them happens inside a later callback.
+  React.useEffect(() => {
+    openRef.current = open;
+  });
 
   const clearOpenTimeout = React.useCallback(() => {
     if (openTimeoutRef.current) {
@@ -229,6 +215,15 @@ function PaymentAmountPopover({
       clearTimeout(closeTimeoutRef.current);
       closeTimeoutRef.current = null;
     }
+  }, []);
+
+  const pointerInside = React.useCallback(() => {
+    if (!pointerRef.current.seen) return false;
+    const el = document.elementFromPoint(pointerRef.current.x, pointerRef.current.y);
+    if (!el) return false;
+    if (triggerRef.current?.contains(el)) return true;
+    const shell = popupInnerRef.current?.parentElement;
+    return Boolean(shell?.contains(el));
   }, []);
 
   const dismissDetail = React.useCallback(() => {
@@ -245,24 +240,88 @@ function PaymentAmountPopover({
     };
   }, [dismissRef, dismissDetail]);
 
-  const handleHoverEnter = React.useCallback(() => {
-    clearCloseTimeout();
-    if (openTimeoutRef.current) return;
-    openTimeoutRef.current = setTimeout(() => {
-      openTimeoutRef.current = null;
-      setOpen(true);
-    }, HOVER_OPEN_DELAY_MS);
-  }, [clearCloseTimeout]);
+  const rememberPointer = React.useCallback((event: { clientX: number; clientY: number }) => {
+    pointerRef.current = { x: event.clientX, y: event.clientY, seen: true };
+  }, []);
 
-  const handleHoverLeave = React.useCallback(() => {
+  const pointerInsideRef = React.useRef(pointerInside);
+  const clearCloseTimeoutRef = React.useRef(clearCloseTimeout);
+  React.useEffect(() => {
+    pointerInsideRef.current = pointerInside;
+    clearCloseTimeoutRef.current = clearCloseTimeout;
+  });
+
+  const stopTrackingRef = React.useRef<(() => void) | null>(null);
+  const scheduleCloseRef = React.useRef<() => void>(() => {});
+
+  const ensureTracking = React.useCallback(() => {
+    if (stopTrackingRef.current) return;
+    function onPointerMove(event: PointerEvent) {
+      pointerRef.current = { x: event.clientX, y: event.clientY, seen: true };
+      if (pointerInsideRef.current()) {
+        clearCloseTimeoutRef.current();
+        return;
+      }
+      clearOpenTimeout();
+      if (openRef.current) scheduleCloseRef.current();
+      else stopTrackingRef.current?.();
+    }
+    function onScroll() {
+      if (pointerInsideRef.current()) return;
+      clearOpenTimeout();
+      if (openRef.current) scheduleCloseRef.current();
+    }
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("scroll", onScroll, true);
+    stopTrackingRef.current = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("scroll", onScroll, true);
+      stopTrackingRef.current = null;
+    };
+  }, [clearOpenTimeout]);
+
+  const scheduleClose = React.useCallback(() => {
     if (isEditingCommentRef.current) return;
     clearOpenTimeout();
-    clearCloseTimeout();
+    if (closeTimeoutRef.current) return;
     closeTimeoutRef.current = setTimeout(() => {
       closeTimeoutRef.current = null;
+      if (isEditingCommentRef.current || pointerInside()) return;
       setOpen(false);
+      stopTrackingRef.current?.();
     }, HOVER_CLOSE_DELAY_MS);
-  }, [clearOpenTimeout, clearCloseTimeout]);
+  }, [clearOpenTimeout, pointerInside]);
+  React.useEffect(() => {
+    scheduleCloseRef.current = scheduleClose;
+  });
+
+  const handleHoverEnter = React.useCallback(
+    (event: React.MouseEvent) => {
+      rememberPointer(event);
+      ensureTracking();
+      clearCloseTimeout();
+      if (openTimeoutRef.current || openRef.current) return;
+      openTimeoutRef.current = setTimeout(() => {
+        openTimeoutRef.current = null;
+        if (pointerInside()) setOpen(true);
+        else stopTrackingRef.current?.();
+      }, HOVER_OPEN_DELAY_MS);
+    },
+    [clearCloseTimeout, ensureTracking, pointerInside, rememberPointer],
+  );
+
+  const handleHoverLeave = React.useCallback(
+    (event: React.MouseEvent) => {
+      const next = event.relatedTarget;
+      if (next instanceof Node) {
+        if (triggerRef.current?.contains(next)) return;
+        const shell = popupInnerRef.current?.parentElement;
+        if (shell?.contains(next)) return;
+      }
+      scheduleClose();
+    },
+    [scheduleClose],
+  );
 
   const handleCommentEditingChange = React.useCallback(
     (editing: boolean) => {
@@ -271,9 +330,11 @@ function PaymentAmountPopover({
       if (editing) {
         clearCloseTimeout();
         setOpen(true);
+        return;
       }
+      if (!pointerInside()) scheduleClose();
     },
-    [clearCloseTimeout],
+    [clearCloseTimeout, pointerInside, scheduleClose],
   );
 
   React.useEffect(() => {
@@ -284,9 +345,26 @@ function PaymentAmountPopover({
   }, [commentEditRequest, handleCommentEditingChange]);
 
   React.useEffect(() => {
+    if (!open) return;
+    // The popup can flip after it opens (rows like issue 04). That move does
+    // not fire mouseleave, so re-check once layout settles.
+    let frame2 = 0;
+    const frame1 = requestAnimationFrame(() => {
+      frame2 = requestAnimationFrame(() => {
+        if (!pointerInside()) scheduleClose();
+      });
+    });
+    return () => {
+      cancelAnimationFrame(frame1);
+      cancelAnimationFrame(frame2);
+    };
+  }, [open, pointerInside, scheduleClose]);
+
+  React.useEffect(() => {
     return () => {
       clearOpenTimeout();
       clearCloseTimeout();
+      stopTrackingRef.current?.();
     };
   }, [clearOpenTimeout, clearCloseTimeout]);
 
@@ -307,18 +385,22 @@ function PaymentAmountPopover({
         nativeButton={false}
         render={
           <span
+            ref={triggerRef}
             className={cn(
               "inline-flex w-full min-w-0 cursor-default flex-col items-start justify-center text-md tabular-nums outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0",
               paid ? "text-muted-foreground opacity-40" : "text-primary",
             )}
-            onMouseEnter={handleHoverEnter}
+            onMouseEnter={(event) => {
+              triggerRef.current = event.currentTarget;
+              handleHoverEnter(event);
+            }}
             onMouseLeave={handleHoverLeave}
             onClick={(event) => event.preventDefault()}
           >
-            {hasComment && <CommentCornerIndicator />}
+            {(hasComment || (!original && overridden)) && <CommentCornerIndicator />}
             <span className="max-w-full truncate">
               ${value.toFixed(2)}
-              {overridden && <span aria-hidden>*</span>}
+              {original && overridden ? <span aria-hidden>*</span> : null}
             </span>
             {hasSubstitute && (
               <span className="max-w-full truncate text-xs leading-tight text-muted-foreground">
@@ -338,11 +420,12 @@ function PaymentAmountPopover({
           align: "shift",
           fallbackAxisSide: "end",
         }}
+        initialFocus={false}
         className="box-border w-max min-w-[200px] max-w-[400px] gap-3 overflow-visible rounded-lg bg-bg p-3 text-md smooth-shadow-ring-sm!"
         onMouseEnter={handleHoverEnter}
         onMouseLeave={handleHoverLeave}
       >
-        <div className="flex w-full min-w-0 flex-col gap-3 whitespace-nowrap">
+        <div ref={popupInnerRef} className="flex w-full min-w-0 flex-col gap-3 whitespace-nowrap">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-1">
               <p className="shrink-0 text-md text-primary">
@@ -350,7 +433,7 @@ function PaymentAmountPopover({
               </p>
               {hasSubstitute && <ArrowLeftRight className="size-3 shrink-0 text-secondary" />}
             </div>
-            <p className="shrink-0 text-md text-secondary">
+            <p className="shrink-0 text-md text-tertiary">
               {paymentDetail.issueLabel} • Last Modified {paymentDetail.lastModified}
             </p>
           </div>
@@ -358,29 +441,26 @@ function PaymentAmountPopover({
           <div className="border-t border-border" />
 
           <div className="flex flex-col gap-1">
-            <p className="shrink-0 text-md text-secondary">Routes</p>
-            <div className="flex items-center justify-between gap-3">
-              <span className="shrink-0 text-md text-primary">{paymentDetail.territory}</span>
-              <span className="shrink-0 text-md text-secondary">{bundleLabel}</span>
-            </div>
+            <p className="shrink-0 text-md text-tertiary">Routes</p>
+            <p className="shrink-0 text-md text-primary">{paymentDetail.territory}</p>
           </div>
 
           <div className="border-t border-border" />
 
           <div className="flex items-center justify-between gap-3">
-            <span className="shrink-0 text-md text-secondary">
+            <span className="shrink-0 text-md text-tertiary">
               {bundleLabel} × {formatCurrency(paymentDetail.ratePerBundle)}
             </span>
             <span className="shrink-0 text-md tabular-nums text-primary">
               {formatCurrency(calculatedValue)}
-              {overridden && <span aria-hidden>*</span>}
+              {original && overridden ? <span aria-hidden>*</span> : null}
             </span>
           </div>
 
-          {(hasComment || (onCommentChange && !readOnly && !paid)) && (
+          {(hasComment || (onCommentChange && !readOnly && !issueClosed && !paid)) && (
             <PopoverComment
               comment={comment ?? ""}
-              readOnly={readOnly || paid || !onCommentChange}
+              readOnly={readOnly || issueClosed || paid || !onCommentChange}
               editing={editingComment}
               onSave={onCommentChange}
               onEditingChange={handleCommentEditingChange}
@@ -388,14 +468,16 @@ function PaymentAmountPopover({
           )}
 
           {override && (
-            <div className="rounded-lg bg-amber-50 p-3">
-              <p className="shrink-0 text-md font-medium text-amber-700">Manually overridden</p>
-              <p className="mt-0.5 shrink-0 text-md text-primary">
-                {formatCurrency(override.originalValue)} → {formatCurrency(value)}
-              </p>
-              <p className="mt-2 shrink-0 text-md font-medium text-amber-700">Note</p>
-              <p className="mt-0.5 shrink-0 text-md text-primary">{override.note}</p>
-            </div>
+            <>
+              <div className="border-t border-border" />
+              <div className="flex w-full min-w-0 flex-col gap-1 whitespace-normal">
+                <p className="text-md text-tertiary">Manually overridden</p>
+                <p className="text-md tabular-nums text-primary">
+                  {formatCurrency(override.originalValue)} → {formatCurrency(value)}
+                </p>
+                {override.note ? <p className="text-md text-secondary">{override.note}</p> : null}
+              </div>
+            </>
           )}
         </div>
       </PopoverContent>
@@ -551,9 +633,12 @@ export function PaymentCell({
   comment,
   onCommentChange,
   readOnly = false,
+  issueClosed = false,
   isLocked = false,
   className,
 }: PaymentCellProps) {
+  const original = useOriginalLook();
+  const cellHeight = original ? "h-12" : "h-10";
   const hasSubstitute = substituteCaptain !== "None";
   const hasComment = Boolean(comment?.trim());
   const nonInteractive = readOnly || isLocked;
@@ -565,7 +650,8 @@ export function PaymentCell({
     return (
       <div
         className={cn(
-          "relative z-10 flex h-12 w-full min-w-0 items-center bg-bg px-3 outline outline-2 outline-active -outline-offset-2",
+          "relative z-10 flex w-full min-w-0 items-center bg-bg px-3 outline outline-2 outline-active -outline-offset-2",
+          cellHeight,
           className,
         )}
       >
@@ -608,7 +694,8 @@ export function PaymentCell({
   return (
     <div
       className={cn(
-        "group/cell relative flex h-12 w-full min-w-0 items-center gap-1 overflow-hidden px-3 outline-none transition-colors focus:outline-none focus-visible:outline-none",
+        "group/cell relative flex w-full min-w-0 items-center gap-1 overflow-hidden px-3 outline-none transition-colors focus:outline-none focus-visible:outline-none",
+        cellHeight,
         !readOnly && "hover:bg-bg-secondary",
         flashTrigger > 0 && "payment-cell-flash",
         className,
@@ -629,6 +716,7 @@ export function PaymentCell({
             comment={comment}
             onCommentChange={onCommentChange}
             readOnly={readOnly}
+            issueClosed={issueClosed}
             commentEditRequest={commentEditRequest}
             dismissRef={dismissDetailRef}
           />
@@ -639,10 +727,10 @@ export function PaymentCell({
               paid ? "text-muted-foreground opacity-40" : "text-primary",
             )}
           >
-            {hasComment && <CommentCornerIndicator />}
+            {(hasComment || (!original && overridden)) && <CommentCornerIndicator />}
             <span className="max-w-full truncate">
               ${value.toFixed(2)}
-              {overridden && <span aria-hidden>*</span>}
+              {original && overridden ? <span aria-hidden>*</span> : null}
             </span>
             {hasSubstitute && (
               <span className="max-w-full truncate text-xs leading-tight text-muted-foreground">
