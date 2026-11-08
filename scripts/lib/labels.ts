@@ -56,7 +56,7 @@ export interface Rejection {
 
 export interface LabelsResult {
   recipients: Recipient[];
-  /** Entries the office marks as a business or a building, which are drops. */
+  /** Entries the office marks as a kind of place rather than a street, which are drops. */
   drops: Recipient[];
   rejected: Rejection[];
   /** Rows that are the office's own bundle tallies rather than anybody. */
@@ -83,14 +83,15 @@ export function bundleSpec(value: string | undefined): { index: number; total: n
  * Whether the office marks this entry as somewhere papers are dropped rather
  * than a carrier who delivers them.
  *
- * The route column reads `BUSINESS` or `BUILDING` on 92 entries. A business
- * becomes a commercial drop and an unnamed building a residential one, and a
- * handful are a person at a unit number who looks after their own building, so
- * telling those apart needs a person rather than a rule. The importer builds
- * neither kind of drop yet, so these are held back and listed.
+ * A carrier's route column names a street. A drop's names the kind of place
+ * instead, as `BUSINESS`, `BUILDING`, `SCHOOL`, `CHURCH`, `LIBRARY` or
+ * `HOSPITAL`. A business becomes a commercial drop and an unnamed building a
+ * residential one, and a handful are a person at a unit number who looks after
+ * their own building, so telling those apart needs a person rather than a rule.
+ * The importer builds no kind of drop yet, so these are held back and listed.
  */
 export function isDropEntry(routeHint: string | null): boolean {
-  return /^(business|building)$/i.test((routeHint ?? "").trim());
+  return /^(business|building|school|church|library|hospital)$/i.test((routeHint ?? "").trim());
 }
 
 /**
@@ -109,6 +110,41 @@ export function isTallyLine(row: string[]): boolean {
 /** Name, RT and address together. Measured to separate all 338 recipients. */
 export function recipientKey(row: string[]): string {
   return [normalise(row[COL.name]), normalise(row[COL.rt]), normalise(row[COL.address])].join("|");
+}
+
+/**
+ * Pairs each recipient new to this workbook with the one gone from it that is
+ * the same person, after the office moved them to another RT or corrected their
+ * address. Keyed by the new recipient, valued by the one it replaces.
+ *
+ * The two must share a name and one of RT or address, since a shared name alone
+ * does not make two entries one person. A pair is made only when each side is
+ * the other's one candidate, so two people sharing a name stay apart.
+ */
+export function pairMoved(gone: string[], fresh: string[]): Map<string, string> {
+  const related = (a: string, b: string) => {
+    const [nameA, rtA, addressA, ...restA] = a.split("|");
+    const [nameB, rtB, addressB, ...restB] = b.split("|");
+    if (restA.length > 0 || restB.length > 0) return false;
+    return nameA === nameB && (rtA === rtB || addressA === addressB);
+  };
+  const pairs = new Map<string, string>();
+  for (const key of fresh) {
+    const candidates = gone.filter((old) => related(old, key));
+    if (candidates.length !== 1) continue;
+    if (fresh.filter((other) => related(candidates[0], other)).length !== 1) continue;
+    pairs.set(key, candidates[0]);
+  }
+  return pairs;
+}
+
+/**
+ * The key of everyone on the QUITS sheet, which is where the office moves a
+ * recipient's rows once they stop delivering. Those rows keep the roster's
+ * first columns, so they key the same way. The sheet has no header row.
+ */
+export function quitKeys(rows: string[][]): Set<string> {
+  return new Set(rows.filter((row) => clean(row[COL.name])).map(recipientKey));
 }
 
 /**

@@ -6,10 +6,11 @@
 -- from that row.
 --
 -- A later run compares hashes. An unchanged row is skipped entirely, with no
--- write and no geocode. A changed row patches only the fields that moved. A row
--- that has vanished from the workbook is reported and left alone, because a row
--- can disappear because the office reorganised the sheet rather than because
--- the person left.
+-- write and no geocode. A changed row patches only the fields that moved, and a
+-- person the office moved to another RT or address keeps their row under the new
+-- key. A row that has vanished from the workbook is retired when the office has
+-- moved it to the QUITS sheet, and otherwise reported and left alone, because a
+-- row can also disappear when the office reorganises the sheet.
 --
 -- The address hash is kept apart from the rest because resolving an address
 -- costs a billed call, so a corrected phone number must not trigger one.

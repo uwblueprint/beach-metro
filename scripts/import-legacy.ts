@@ -10,20 +10,22 @@
 //   --only <names>     comma separated phases, such as --only captains
 //   --limit <n>        stop each phase after n records, for a rehearsal
 //   --check-addresses  resolve addresses during a dry run. Costs one lookup per
-//                      person and is the only way to find an address that comes
-//                      back as a street rather than a building.
+//                      new person or changed address, and is the only way to
+//                      find an address that comes back as a street rather than
+//                      a building.
 //
-// A dry run reads the same sheets, resolves the same addresses and makes the
-// same decisions as the real run, so the only step it skips is the write. That
-// includes the last phase, because a step a rehearsal skips is the one nobody
-// rehearsed.
+// A dry run reads the same sheets and the same record of earlier runs, resolves
+// the same addresses and makes the same decisions as the real run, so the only
+// step it skips is the write. That includes the last phase, because a step a
+// rehearsal skips is the one nobody rehearsed.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { checkResolved, checkSource } from "./lib/address";
 import { readCaptains } from "./lib/captains";
 import { normalise, parseCsv } from "./lib/csv";
-import { readLabels } from "./lib/labels";
+import { pairMoved, quitKeys, readLabels } from "./lib/labels";
 import { hash, Ledger } from "./lib/ledger";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -43,7 +45,7 @@ const ASSUMED_CADENCE = "biweekly" as const;
 const PHASES = ["captains", "people"] as const;
 type Phase = (typeof PHASES)[number];
 
-interface Options {
+export interface Options {
   apply: boolean;
   /** Resolve addresses during a dry run, which costs lookups but finds the bad ones. */
   checkAddresses: boolean;
@@ -51,12 +53,19 @@ interface Options {
   limit: number | null;
 }
 
-interface Outcome {
+export interface Outcome {
   created: number;
   updated: number;
   unchanged: number;
   rejected: { row: number; name: string; reason: string }[];
+  /** Ledger keys of earlier imports this run does not import, left untouched. */
   disappeared: string[];
+  /** People kept as the same record after a new RT or a corrected address. */
+  moved: string[];
+  /** People on the QUITS sheet, retired in the app. */
+  retired: string[];
+  /** Notes on the sheet that the person's notes in the app did not have yet. */
+  notesAdded: number;
   /** Address lookups actually made, which a plain dry run does not do. */
   lookups: number;
   /** Lookups a real run would make, whether or not this one did. */
@@ -73,6 +82,9 @@ const emptyOutcome = (): Outcome => ({
   unchanged: 0,
   rejected: [],
   disappeared: [],
+  moved: [],
+  retired: [],
+  notesAdded: 0,
   lookups: 0,
   wouldLookUp: 0,
   skippedLines: 0,
@@ -118,12 +130,14 @@ function readSheet(name: string): string[][] {
 }
 
 /** Territory id per captain source key, built as captains are created. */
-type TerritoryMap = Map<string, string>;
+export type TerritoryMap = Map<string, string>;
 
-async function importCaptains(
+/** `ledgerSource` names this sheet in the ledger, and differs only in tests. */
+export async function importCaptains(
   rows: string[][],
   options: Options,
   territories: TerritoryMap,
+  ledgerSource = CAPTAIN_SHEET,
 ): Promise<Outcome> {
   const out = emptyOutcome();
   const { captains, rejected } = readCaptains(rows);
@@ -131,8 +145,8 @@ async function importCaptains(
     out.rejected.push({ row: r.firstRow, name: r.displayName, reason: r.reason });
 
   const chosen = options.limit === null ? captains : captains.slice(0, options.limit);
-  const ledger = options.apply ? await Ledger.load(CAPTAIN_SHEET) : null;
-  const services = options.apply ? await import("@/lib/services/captains") : null;
+  const ledger = await Ledger.load(ledgerSource);
+  const services = await import("@/lib/services/captains");
 
   for (const captain of chosen) {
     const rowHash = hash([
@@ -142,27 +156,28 @@ async function importCaptains(
       captain.rtCodes.join(","),
       captain.notes.join(" "),
     ]);
-    const verdict = ledger?.decide(captain.sourceKey, rowHash, null) ?? { kind: "create" as const };
+    const verdict = ledger.decide(captain.sourceKey, rowHash, null);
 
     if (verdict.kind === "unchanged") {
       // The territory is still needed even though nothing about the captain
       // changed, because the people phase reads this map to place a volunteer.
       // Skipping it would send a later run's volunteer patch through with no
       // captain and clear the link an earlier run made.
-      const existing = await services!.getCaptain(verdict.entityId);
+      const existing = await services.getCaptain(verdict.entityId);
       if (existing.territory) territories.set(captain.sourceKey, existing.territory.id);
       out.unchanged += 1;
-      await ledger!.touch(captain.sourceKey);
+      if (options.apply) await ledger.touch(captain.sourceKey);
       continue;
     }
 
     if (!options.apply) {
-      out.created += 1;
+      if (verdict.kind === "create") out.created += 1;
+      else out.updated += 1;
       continue;
     }
 
     if (verdict.kind === "create") {
-      const created = await services!.createCaptainRecord({
+      const created = await services.createCaptainRecord({
         displayName: captain.displayName,
         payType: captain.payType,
         payRate: captain.payRate,
@@ -177,32 +192,34 @@ async function importCaptains(
         note: captain.notes.length > 0 ? captain.notes.join(" ") : null,
       });
       if (created.territory) territories.set(captain.sourceKey, created.territory.id);
-      await ledger!.record(captain.sourceKey, "captain", created.id, rowHash, null);
+      await ledger.record(captain.sourceKey, "captain", created.id, rowHash, null);
       out.created += 1;
     } else {
-      const updated = await services!.updateCaptainRecord(verdict.entityId, {
+      const updated = await services.updateCaptainRecord(verdict.entityId, {
         displayName: captain.displayName,
         payType: captain.payType,
         payRate: captain.payRate,
       });
       if (updated.territory) territories.set(captain.sourceKey, updated.territory.id);
-      await ledger!.record(captain.sourceKey, "captain", verdict.entityId, rowHash, null);
+      await ledger.record(captain.sourceKey, "captain", verdict.entityId, rowHash, null);
       out.updated += 1;
     }
   }
 
   // Only a run that read every row can tell a row that is gone from one this
   // run never looked at.
-  if (options.limit === null)
-    out.disappeared = (ledger?.disappeared() ?? []).map((r) => r.sourceKey);
+  if (options.limit === null) out.disappeared = ledger.disappeared().map((r) => r.sourceKey);
   return out;
 }
 
-async function importPeople(
+/** `ledgerSource` names this sheet in the ledger, and differs only in tests. */
+export async function importPeople(
   rows: string[][],
+  quitsRows: string[][],
   options: Options,
   byRt: Map<string, string>,
   territories: TerritoryMap,
+  ledgerSource = "LABELS",
 ): Promise<Outcome> {
   const out = emptyOutcome();
   const { recipients, drops, rejected, tallyLines } = readLabels(rows);
@@ -216,9 +233,19 @@ async function importPeople(
     out.rejected.push({ row: r.firstRow, name: r.displayName, reason: r.reason });
 
   const chosen = options.limit === null ? recipients : recipients.slice(0, options.limit);
-  const ledger = options.apply ? await Ledger.load("LABELS") : null;
-  const volunteers = options.apply ? await import("@/lib/services/volunteers") : null;
+  const ledger = await Ledger.load(ledgerSource);
+  const volunteers = await import("@/lib/services/volunteers");
+  const notes = await import("@/lib/services/notes");
   const addresses = options.checkAddresses ? await import("@/lib/services/addresses") : null;
+
+  // Someone the sheet still lists has not left, even when this run refuses them,
+  // so only the rest of the ledger can have moved or quit.
+  ledger.see([...recipients, ...rejected].map((r) => r.sourceKey));
+  const formerKeys = pairMoved(
+    ledger.disappeared().map((r) => r.sourceKey),
+    recipients.map((r) => r.sourceKey).filter((key) => !ledger.knows(key)),
+  );
+  ledger.see(formerKeys.values());
 
   for (const person of chosen) {
     const source = person.address ?? "";
@@ -239,22 +266,22 @@ async function importPeople(
       person.papers,
       person.notes.join(" "),
     ]);
-    const verdict = ledger?.decide(person.sourceKey, rowHash, addressHash) ?? {
-      kind: "create" as const,
-    };
+    const formerKey = formerKeys.get(person.sourceKey);
+    const verdict = ledger.decide(person.sourceKey, rowHash, addressHash, formerKey);
 
     if (verdict.kind === "unchanged") {
       out.unchanged += 1;
-      await ledger!.touch(person.sourceKey);
+      if (options.apply) await ledger.touch(person.sourceKey);
       continue;
     }
 
     // Resolving is what reveals an address that answers with a street instead of
-    // a building, so it happens in a dry run too. It is the billed step.
-    out.wouldLookUp += 1;
-    const resolved = options.checkAddresses
-      ? await addresses!.resolveAddress(addressInput(source))
-      : null;
+    // a building, so it happens in a dry run too. It is the billed step, so a
+    // change elsewhere on the row does not repeat it.
+    const needsLookup = verdict.kind === "create" || verdict.addressChanged;
+    if (needsLookup) out.wouldLookUp += 1;
+    const resolved =
+      needsLookup && addresses ? await addresses.resolveAddress(addressInput(source)) : null;
     if (resolved) out.lookups += 1;
     if (resolved) {
       const checked = checkResolved(source, {
@@ -274,38 +301,49 @@ async function importPeople(
       }
     }
 
+    // The app keeps notes as a running log that people also write to, so a note
+    // on the sheet is added to it once rather than replacing what is there.
+    const note = person.notes.length > 0 ? person.notes.join(" ") : null;
+    const newNote =
+      verdict.kind === "update" &&
+      note !== null &&
+      !(await notes.listNotes("volunteer", verdict.entityId)).some((n) => n.text === note)
+        ? note
+        : null;
+    if (newNote) out.notesAdded += 1;
+    if (formerKey) out.moved.push(person.displayName);
+
     if (!options.apply) {
-      out.created += 1;
+      if (verdict.kind === "create") out.created += 1;
+      else out.updated += 1;
       continue;
     }
     // A record needs the place id the lookup returned, which is why --apply
     // turns address checking on. Stated here so a future change to that cannot
     // quietly write volunteers with no address.
-    if (!resolved) throw new Error("a run that writes needs resolved addresses");
+    if (needsLookup && !resolved) throw new Error("a run that writes needs resolved addresses");
 
     const territoryId = person.rt
       ? (territories.get(byRt.get(normalise(person.rt)) ?? "") ?? null)
       : null;
 
     if (verdict.kind === "create") {
-      const created = await volunteers!.createVolunteerRecord({
+      const created = await volunteers.createVolunteerRecord({
         displayName: person.displayName,
         // The place id is reused so the lookup above is not paid for twice.
-        address: { placeId: resolved.placeId },
+        address: { placeId: resolved!.placeId },
         email: person.email,
         phone: person.phone,
         startDate: person.startDate,
         endDate: null,
         captainTerritoryId: territoryId,
-        // Notes are written once and never rewritten, so a second run cannot
-        // duplicate them. A changed note is reported instead.
-        note: person.notes.length > 0 ? person.notes.join(" ") : null,
+        note,
       });
       // The record exists before the ledger knows about it, and only for these
       // few lines. If the ledger write fails the run stops, so say which record
       // it was, since a re-run would otherwise create a second copy of them.
       try {
-        await ledger!.record(person.sourceKey, "volunteer", created.id, rowHash, addressHash);
+        await ledger.record(person.sourceKey, "volunteer", created.id, rowHash, addressHash);
       } catch (err) {
         console.error(`${person.displayName} was created as ${created.id} but not recorded.`);
         console.error("Delete that volunteer before re-running, or they will come in twice.");
@@ -313,7 +351,7 @@ async function importPeople(
       }
       out.created += 1;
     } else {
-      await volunteers!.updateVolunteerRecord(verdict.entityId, {
+      await volunteers.updateVolunteerRecord(verdict.entityId, {
         displayName: person.displayName,
         email: person.email,
         phone: person.phone,
@@ -321,17 +359,42 @@ async function importPeople(
         // Sent only when a territory was worked out. Sending null instead would
         // clear a placement somebody made in the app by hand.
         ...(territoryId ? { captainTerritoryId: territoryId } : {}),
-        ...(verdict.addressChanged ? { address: { placeId: resolved.placeId } } : {}),
+        ...(verdict.addressChanged ? { address: { placeId: resolved!.placeId } } : {}),
       });
-      await ledger!.record(person.sourceKey, "volunteer", verdict.entityId, rowHash, addressHash);
+      if (newNote) await notes.createNoteRecord("volunteer", verdict.entityId, { text: newNote });
+      await ledger.record(
+        person.sourceKey,
+        "volunteer",
+        verdict.entityId,
+        rowHash,
+        addressHash,
+        formerKey,
+      );
       out.updated += 1;
     }
   }
 
   // Only a run that read every row can tell a row that is gone from one this
   // run never looked at.
-  if (options.limit === null)
-    out.disappeared = (ledger?.disappeared() ?? []).map((r) => r.sourceKey);
+  if (options.limit === null) {
+    const quit = quitKeys(quitsRows);
+    for (const row of ledger.disappeared()) {
+      if (!quit.has(row.sourceKey)) {
+        out.disappeared.push(row.sourceKey);
+        continue;
+      }
+      // The office moves a person to QUITS once they stop delivering, so they
+      // are retired the way the app retires anyone, which also frees their routes.
+      const current = await volunteers.getVolunteer(row.entityId);
+      if (current.status === "retired") continue;
+      if (options.apply) {
+        await volunteers.retireVolunteer(row.entityId, {
+          note: "Listed on the QUITS sheet of the office workbook.",
+        });
+      }
+      out.retired.push(current.displayName);
+    }
+  }
   return out;
 }
 
@@ -366,7 +429,7 @@ function section(title: string, out: Outcome): string[] {
   if (out.dropEntries.length > 0) {
     const papers = out.dropEntries.reduce((sum, d) => sum + d.papers, 0);
     lines.push(
-      `- ${out.dropEntries.length} entries are a business or a building, ${papers} papers, ` +
+      `- ${out.dropEntries.length} entries are a business, a building or an institution, ${papers} papers, ` +
         "held back because drops are not built yet",
     );
   }
@@ -379,12 +442,24 @@ function section(title: string, out: Outcome): string[] {
         "Re-run with `--check-addresses` to find those before committing to a run.",
     );
   }
+  if (out.moved.length > 0)
+    lines.push(`- ${out.moved.length} moved to another RT or address, kept as the same person`);
+  if (out.notesAdded > 0) lines.push(`- ${out.notesAdded} new notes from the sheet to add`);
+  if (out.retired.length > 0) lines.push(`- ${out.retired.length} on the QUITS sheet, to retire`);
   if (out.disappeared.length > 0) {
     lines.push(
-      `- ${out.disappeared.length} previously imported rows are no longer in the workbook, left untouched`,
+      `- ${out.disappeared.length} previously imported rows are not imported this time, left untouched`,
     );
   }
   lines.push("");
+  for (const [heading, names] of [
+    ["Moved, kept as the same person", out.moved],
+    ["On the QUITS sheet, to retire", out.retired],
+    ["Imported before but not this time, and not on QUITS, left untouched", out.disappeared],
+  ] as const) {
+    if (names.length === 0) continue;
+    lines.push(`### ${heading}`, "", ...names.map((name) => `- ${name}`), "");
+  }
   if (out.rejected.length > 0) {
     lines.push("### Not imported", "", "| Sheet row | Name | Why |", "| --- | --- | --- |");
     for (const r of out.rejected) lines.push(`| ${r.row} | ${r.name} | ${r.reason} |`);
@@ -395,6 +470,7 @@ function section(title: string, out: Outcome): string[] {
       "### Held for the drops phase",
       "",
       "A business becomes a commercial drop and an unnamed building a residential one.",
+      "A school, church, library or hospital is a drop too.",
       "A few are a person at a unit number who looks after their own building.",
       "",
       "| Sheet row | Name | Papers |",
@@ -418,8 +494,8 @@ async function main(): Promise<number> {
     console.error("Set it in .env.local, or drop --check-addresses to skip resolving.");
     return 1;
   }
-  if (options.apply && !process.env.SUPABASE_SECRET_KEY) {
-    console.error("SUPABASE_SECRET_KEY is not set, so there is nothing to write to.");
+  if (!process.env.SUPABASE_SECRET_KEY) {
+    console.error("SUPABASE_SECRET_KEY is not set, so earlier imports cannot be read.");
     return 1;
   }
   // A person is placed in their captain's territory, and the captains phase is
@@ -463,7 +539,13 @@ async function main(): Promise<number> {
   }
 
   if (options.only.includes("people")) {
-    const out = await importPeople(readSheet("LABELS"), options, byRt, territories);
+    const out = await importPeople(
+      readSheet("LABELS"),
+      readSheet("QUITS"),
+      options,
+      byRt,
+      territories,
+    );
     console.log(`People    ${tally(out, options)}`);
     lines.push(...section("People", out));
   }
@@ -476,10 +558,13 @@ async function main(): Promise<number> {
   return 0;
 }
 
-main().then(
-  (code) => process.exit(code),
-  (err) => {
-    console.error(err);
-    process.exit(1);
-  },
-);
+// Runs only when started as a script, so the tests can import the phases.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().then(
+    (code) => process.exit(code),
+    (err) => {
+      console.error(err);
+      process.exit(1);
+    },
+  );
+}

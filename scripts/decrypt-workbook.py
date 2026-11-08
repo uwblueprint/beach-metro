@@ -2,13 +2,13 @@
 
     pnpm import:convert ~/Downloads/RouteLabelsFileBMN.xlsx
 
-The workbook is Office-encrypted, which Node cannot open, so this step runs in
-Python and the importer reads the CSVs it writes. Output goes to .data/sheets/,
-which is gitignored. The file holds real names, home addresses and phone
-numbers, so nothing it produces belongs anywhere near a commit.
+The workbook is usually Office-encrypted, which Node cannot open, so this step
+runs in Python and the importer reads the CSVs it writes. Output goes to
+.data/sheets/, which is gitignored. The file holds real names, home addresses
+and phone numbers, so nothing it produces belongs anywhere near a commit.
 
-Needs msoffcrypto-tool and openpyxl. The password is prompted for unless
-BMN_WORKBOOK_PASSWORD is set.
+Needs msoffcrypto-tool and openpyxl. An encrypted workbook's password is prompted
+for unless BMN_WORKBOOK_PASSWORD is set.
 """
 
 from __future__ import annotations
@@ -68,17 +68,21 @@ def main() -> int:
         print(f"error: {source} not found", file=sys.stderr)
         return 1
 
-    password = os.environ.get("BMN_WORKBOOK_PASSWORD") or getpass.getpass("workbook password: ")
-
     decrypted = io.BytesIO()
     with source.open("rb") as handle:
         office = msoffcrypto.OfficeFile(handle)
-        try:
-            office.load_key(password=password)
-            office.decrypt(decrypted)
-        except Exception as err:
-            print(f"error: could not decrypt {source.name} ({err})", file=sys.stderr)
-            return 1
+        if office.is_encrypted():
+            password = os.environ.get("BMN_WORKBOOK_PASSWORD") or getpass.getpass(
+                "workbook password: "
+            )
+            try:
+                office.load_key(password=password)
+                office.decrypt(decrypted)
+            except Exception as err:
+                print(f"error: could not decrypt {source.name} ({err})", file=sys.stderr)
+                return 1
+        else:
+            decrypted.write(source.read_bytes())
 
     workbook = openpyxl.load_workbook(decrypted, data_only=True, read_only=True)
     OUT_DIR.mkdir(parents=True, exist_ok=True)

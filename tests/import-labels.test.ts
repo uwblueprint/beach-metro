@@ -5,7 +5,15 @@
 import { describe, expect, it } from "vitest";
 
 import { parseCsv } from "@/scripts/lib/csv";
-import { bundleSpec, isDropEntry, isTallyLine, readLabels } from "@/scripts/lib/labels";
+import {
+  bundleSpec,
+  isDropEntry,
+  isTallyLine,
+  pairMoved,
+  quitKeys,
+  readLabels,
+  recipientKey,
+} from "@/scripts/lib/labels";
 
 const HEADER = [
   "Route",
@@ -149,6 +157,12 @@ describe("readLabels", () => {
     expect(drops.map((d) => d.displayName)).toEqual(["Corner Store"]);
   });
 
+  it("holds back a school, church, library or hospital, since none of them carries a route", () => {
+    for (const place of ["SCHOOL", "CHURCH", "LIBRARY", "HOSPITAL"]) {
+      expect(isDropEntry(place)).toBe(true);
+    }
+  });
+
   it("reads the marker whatever case the office typed it in", () => {
     expect(isDropEntry("BUILDING")).toBe(true);
     expect(isDropEntry("Building")).toBe(true);
@@ -205,6 +219,71 @@ describe("readLabels", () => {
     ]);
 
     expect(recipients.find((r) => r.displayName === "Second")!.firstRow).toBe(3);
+  });
+});
+
+describe("pairMoved", () => {
+  const key = (name: string, rt: string, address: string) =>
+    recipientKey(row({ name, rt, address }));
+
+  it("pairs a carrier the office moved to another RT at the same house", () => {
+    const before = key("Pat Lee", "22", "81 Queensbury Ave.");
+    const after = key("Pat Lee", "23", "81 Queensbury Ave.");
+
+    expect(pairMoved([before], [after])).toEqual(new Map([[after, before]]));
+  });
+
+  it("pairs a carrier whose address the office corrected on the same RT", () => {
+    const before = key("Pat Lee", "15", "90 Edgewood Ave.");
+    const after = key("Pat Lee", "15", "90 Edgewood Rd.");
+
+    expect(pairMoved([before], [after])).toEqual(new Map([[after, before]]));
+  });
+
+  it("keeps apart a carrier who changed both RT and address, since only the name is left", () => {
+    const before = key("Pat Lee", "22", "81 Queensbury Ave.");
+    const after = key("Pat Lee", "23", "5 Lee Ave.");
+
+    expect(pairMoved([before], [after]).size).toBe(0);
+  });
+
+  it("keeps apart a leaver and a newcomer on the same RT with different names", () => {
+    const before = key("Pat Lee", "04", "179 Neville Park Blvd.");
+    const after = key("Sam Roy", "04", "188 Neville Park Blvd.");
+
+    expect(pairMoved([before], [after]).size).toBe(0);
+  });
+
+  it("pairs nobody when two newcomers could be the one who moved", () => {
+    const before = key("Pat Lee", "22", "81 Queensbury Ave.");
+    const first = key("Pat Lee", "23", "81 Queensbury Ave.");
+    const second = key("Pat Lee", "22", "4 Lee Ave.");
+
+    expect(pairMoved([before], [first, second]).size).toBe(0);
+  });
+
+  it("pairs nobody when two who left could be the one who moved", () => {
+    const first = key("Pat Lee", "22", "81 Queensbury Ave.");
+    const second = key("Pat Lee", "23", "4 Lee Ave.");
+    const after = key("Pat Lee", "23", "81 Queensbury Ave.");
+
+    expect(pairMoved([first, second], [after]).size).toBe(0);
+  });
+});
+
+describe("quitKeys", () => {
+  it("keys a QUITS row the way the roster keyed the same person", () => {
+    const person = row({ name: "Pat Lee", rt: "07", address: "277 Lee Ave." });
+
+    expect(quitKeys([person]).has(recipientKey(person))).toBe(true);
+  });
+
+  it("reads the first row as a person, since the sheet has no header", () => {
+    expect(quitKeys([row({ name: "Pat Lee" }), row({ name: "Sam Roy" })]).size).toBe(2);
+  });
+
+  it("skips a spacer row", () => {
+    expect(quitKeys([row({ name: "" })]).size).toBe(0);
   });
 });
 

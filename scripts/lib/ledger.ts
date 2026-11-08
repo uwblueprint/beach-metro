@@ -60,15 +60,33 @@ export class Ledger {
     return ledger;
   }
 
+  /** Whether a previous run recorded this key. */
+  knows(sourceKey: string): boolean {
+    return this.rows.has(sourceKey);
+  }
+
+  /** Mark rows as still on the sheet, including ones this run refuses or skips. */
+  see(sourceKeys: Iterable<string>): void {
+    for (const key of sourceKeys) this.seen.add(key);
+  }
+
   /**
    * What to do with one row, and a note that this run has seen it.
    *
    * Marking it seen here rather than at write time means a row that is skipped
    * still counts as present, so it is not reported as having vanished.
+   *
+   * `formerKey` is the key the same record was recorded under before the office
+   * moved the person to another RT or corrected their address.
    */
-  decide(sourceKey: string, rowHash: string, addressHash: string | null): Verdict {
+  decide(
+    sourceKey: string,
+    rowHash: string,
+    addressHash: string | null,
+    formerKey?: string,
+  ): Verdict {
     this.seen.add(sourceKey);
-    const known = this.rows.get(sourceKey);
+    const known = this.rows.get(formerKey ?? sourceKey);
     if (!known) return { kind: "create" };
     if (known.rowHash === rowHash) return { kind: "unchanged", entityId: known.entityId };
     return {
@@ -83,27 +101,43 @@ export class Ledger {
     return [...this.rows.values()].filter((r) => !this.seen.has(r.sourceKey));
   }
 
-  /** Record a row and the record it produced. Safe to call again for the same key. */
+  /**
+   * Record a row and the record it produced. Safe to call again for the same key.
+   *
+   * With `formerKey` the existing row moves to the new key in one update, since
+   * a second row for the same record would break the one-row-per-record index.
+   */
   async record(
     sourceKey: string,
     entityType: EntityType,
     entityId: string,
     rowHash: string,
     addressHash: string | null,
+    formerKey?: string,
   ): Promise<void> {
-    const { error } = await createAdminClient().from("import_rows").upsert(
-      {
-        source: this.source,
-        source_key: sourceKey,
-        entity_type: entityType,
-        entity_id: entityId,
-        row_hash: rowHash,
-        address_hash: addressHash,
-        last_seen: new Date().toISOString(),
-      },
-      { onConflict: "source,source_key" },
-    );
+    const row = {
+      source: this.source,
+      source_key: sourceKey,
+      entity_type: entityType,
+      entity_id: entityId,
+      row_hash: rowHash,
+      address_hash: addressHash,
+      last_seen: new Date().toISOString(),
+    };
+    const { data, error } = formerKey
+      ? await createAdminClient()
+          .from("import_rows")
+          .update(row)
+          .eq("source", this.source)
+          .eq("source_key", formerKey)
+          .select("source_key")
+      : await createAdminClient()
+          .from("import_rows")
+          .upsert(row, { onConflict: "source,source_key" })
+          .select("source_key");
     if (error) throw new Error(`cannot write the import ledger: ${error.message}`);
+    if (data.length !== 1) throw new Error(`the import ledger has no row for ${formerKey}`);
+    if (formerKey) this.rows.delete(formerKey);
     this.rows.set(sourceKey, {
       source: this.source,
       sourceKey,
