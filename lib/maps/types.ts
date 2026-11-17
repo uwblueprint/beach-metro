@@ -21,6 +21,20 @@ export interface ResolvedAddress {
   addressComplete: boolean;
   /** True when the provider inferred/replaced components — UI should confirm. */
   needsConfirmation: boolean;
+  /**
+   * What the provider objected to, for a caller that needs to tell a harmless
+   * doubt from a real one. An unverifiable apartment number and a wrong street
+   * both set `needsConfirmation`, and only the second should stop a record
+   * being stored.
+   */
+  doubts: {
+    /** The provider's own recommendation, `ACCEPT`, `CONFIRM` or `FIX`. */
+    nextAction: "ACCEPT" | "CONFIRM" | "FIX" | null;
+    /** The house number was swapped for a different one. */
+    houseNumberReplaced: boolean;
+    /** A street name was swapped, or a second one turned up that was not sent. */
+    streetUnclear: boolean;
+  };
   /** residential/business metadata when the provider supplies it. */
   residential: boolean | null;
   components: {

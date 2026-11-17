@@ -130,8 +130,9 @@ describe.skipIf(!RUN)("members list", () => {
       expect(m.name.trim().length).toBeGreaterThan(0);
       expect(m.routeInfo.trim().length).toBeGreaterThan(0);
       expect(m.captainName.trim().length).toBeGreaterThan(0);
-      // ISO, so the UI can format it however it likes.
-      expect(m.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      // ISO, so the UI can format it however it likes. The office's roster has
+      // no start date for most of its people, so it is optional.
+      if (m.startDate !== null) expect(m.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     }
   });
 

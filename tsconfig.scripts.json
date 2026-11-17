@@ -1,0 +1,17 @@
+{
+  // Config for scripts run through tsx rather than Next. Two things differ.
+  // `server-only` resolves only inside Next's bundler, so it points at the same
+  // empty stand-in the tests use, and the `@/` paths are kept so a script can
+  // import the service layer the app uses.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "paths": {
+      "@/*": ["./*"],
+      "server-only": ["./tests/stubs/server-only.ts"]
+    }
+  },
+  "include": ["scripts/**/*.ts", "lib/**/*.ts", "types/**/*.ts"]
+}
