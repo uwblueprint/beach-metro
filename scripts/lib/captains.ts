@@ -7,12 +7,15 @@
 import { clean, normalise } from "./csv";
 import type { PayType } from "@/types/db";
 
+/**
+ * The sheet's Car column is left unread. The office no longer pays a car
+ * allowance, so it is not modelled (docs/reference/route_labels_spreadsheet.md §2.3).
+ */
 const COL = {
   rt: 0,
   name: 2,
   per: 6,
   rate: 7,
-  car: 8,
 } as const;
 
 /** How the sheet writes a pay basis against what the app stores. */
@@ -22,6 +25,17 @@ const PAY_BASIS: Record<string, PayType> = {
   dropoff: "drop",
   drop: "drop",
 };
+
+/** How a note names each pay basis the sheet uses. */
+const PAY_BASIS_WORDS: Record<string, string> = {
+  bundle: "bundle",
+  paper: "paper",
+  dropoff: "drop off",
+  drop: "drop off",
+};
+
+/** What the sheet puts in the name column for an area nobody covers. */
+const NO_CAPTAIN = "no captain";
 
 export interface Captain {
   sourceKey: string;
@@ -39,6 +53,23 @@ export interface CaptainsResult {
   rejected: { sourceKey: string; displayName: string; firstRow: number; reason: string }[];
   /** RT code to captain source key, for placing people in a territory. */
   byRt: Map<string, string>;
+  /** RT codes the sheet marks as having no captain, whose carriers come in without one. */
+  uncovered: string[];
+}
+
+/** One area's pay as the sheet states it, such as `$0.18 per paper in RT 24`. */
+function areaPay(row: string[]): string {
+  const basis = PAY_BASIS_WORDS[normalise(row[COL.per])];
+  const pay = basis
+    ? `$${clean(row[COL.rate])} per ${basis}`
+    : `on a pay basis of "${clean(row[COL.per])}"`;
+  return `${pay} in RT ${clean(row[COL.rt])}`;
+}
+
+/** `a`, `a and b`, or `a, b and c`. */
+function listed(items: string[]): string {
+  if (items.length < 2) return items.join("");
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
 /**
@@ -51,10 +82,15 @@ export interface CaptainsResult {
 export function readCaptains(rows: string[][]): CaptainsResult {
   const body = rows.slice(1);
   const groups = new Map<string, { rows: string[][]; firstRow: number }>();
+  const uncovered: string[] = [];
 
   body.forEach((row, i) => {
     if (!clean(row[COL.name])) return;
     const key = normalise(row[COL.name]);
+    if (key === NO_CAPTAIN) {
+      uncovered.push(clean(row[COL.rt]));
+      return;
+    }
     const existing = groups.get(key);
     if (existing) existing.rows.push(row);
     else groups.set(key, { rows: [row], firstRow: i + 2 });
@@ -96,12 +132,13 @@ export function readCaptains(rows: string[][]): CaptainsResult {
       notes.push(`Also covers RT ${rtCodes.slice(1).join(", ")}.`);
     }
 
-    // The car allowance has nowhere to live in a payout, which is quantity
-    // times rate. Keeping the figure means the gap is visible rather than silent.
-    const car = Number(clean(first[COL.car]));
-    if (Number.isFinite(car) && car > 0) {
-      notes.push(`Car or gas allowance of $${car} on the office sheet, not included in payouts.`);
-    }
+    // The app holds one pay arrangement per captain, the first area's, so an
+    // area paid any other way is written down rather than lost.
+    const otherPay = group.rows
+      .slice(1)
+      .filter((r) => normalise(r[COL.per]) !== per || clean(r[COL.rate]) !== rateRaw)
+      .map(areaPay);
+    if (otherPay.length > 0) notes.push(`Paid ${listed(otherPay)}.`);
 
     for (const code of rtCodes) byRt.set(normalise(code), sourceKey);
 
@@ -116,7 +153,7 @@ export function readCaptains(rows: string[][]): CaptainsResult {
     });
   }
 
-  return { captains, rejected, byRt };
+  return { captains, rejected, byRt, uncovered };
 }
 
 /** The note text for a captain, or null when there is nothing worth recording. */

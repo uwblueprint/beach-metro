@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 import { checkResolved, checkSource } from "./lib/address";
 import { readCaptains } from "./lib/captains";
 import { normalise, parseCsv } from "./lib/csv";
-import { pairMoved, quitKeys, readLabels } from "./lib/labels";
+import { pairMoved, quitKeys, readLabels, type SplitRoute } from "./lib/labels";
 import { hash, Ledger } from "./lib/ledger";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -74,6 +74,10 @@ export interface Outcome {
   skippedLines: number;
   /** Entries the office marks as a drop, which this importer does not build. */
   dropEntries: { row: number; name: string; papers: number }[];
+  /** RT codes the payments sheet says nobody covers. */
+  uncovered: string[];
+  /** Entries whose other bundles sit under another name or address, for a person to check. */
+  splitRoutes: SplitRoute[];
 }
 
 const emptyOutcome = (): Outcome => ({
@@ -89,6 +93,8 @@ const emptyOutcome = (): Outcome => ({
   wouldLookUp: 0,
   skippedLines: 0,
   dropEntries: [],
+  uncovered: [],
+  splitRoutes: [],
 });
 
 function parseArgs(argv: string[]): Options {
@@ -140,13 +146,15 @@ export async function importCaptains(
   ledgerSource = CAPTAIN_SHEET,
 ): Promise<Outcome> {
   const out = emptyOutcome();
-  const { captains, rejected } = readCaptains(rows);
+  const { captains, rejected, uncovered } = readCaptains(rows);
+  out.uncovered = uncovered;
   for (const r of rejected)
     out.rejected.push({ row: r.firstRow, name: r.displayName, reason: r.reason });
 
   const chosen = options.limit === null ? captains : captains.slice(0, options.limit);
   const ledger = await Ledger.load(ledgerSource);
   const services = await import("@/lib/services/captains");
+  const notes = await import("@/lib/services/notes");
 
   for (const captain of chosen) {
     const rowHash = hash([
@@ -170,6 +178,17 @@ export async function importCaptains(
       continue;
     }
 
+    // The app keeps notes as a running log, so a note from the sheet is added
+    // to it once rather than replacing what is there.
+    const note = captain.notes.length > 0 ? captain.notes.join(" ") : null;
+    const newNote =
+      verdict.kind === "update" &&
+      note !== null &&
+      !(await notes.listNotes("captain", verdict.entityId)).some((n) => n.text === note)
+        ? note
+        : null;
+    if (newNote) out.notesAdded += 1;
+
     if (!options.apply) {
       if (verdict.kind === "create") out.created += 1;
       else out.updated += 1;
@@ -189,7 +208,7 @@ export async function importCaptains(
         rtNumber: null,
         startDate: null,
         endDate: null,
-        note: captain.notes.length > 0 ? captain.notes.join(" ") : null,
+        note,
       });
       if (created.territory) territories.set(captain.sourceKey, created.territory.id);
       await ledger.record(captain.sourceKey, "captain", created.id, rowHash, null);
@@ -201,6 +220,7 @@ export async function importCaptains(
         payRate: captain.payRate,
       });
       if (updated.territory) territories.set(captain.sourceKey, updated.territory.id);
+      if (newNote) await notes.createNoteRecord("captain", verdict.entityId, { text: newNote });
       await ledger.record(captain.sourceKey, "captain", verdict.entityId, rowHash, null);
       out.updated += 1;
     }
@@ -222,8 +242,9 @@ export async function importPeople(
   ledgerSource = "LABELS",
 ): Promise<Outcome> {
   const out = emptyOutcome();
-  const { recipients, drops, rejected, tallyLines } = readLabels(rows);
+  const { recipients, drops, rejected, tallyLines, splitRoutes } = readLabels(rows);
   out.skippedLines = tallyLines;
+  out.splitRoutes = splitRoutes;
   out.dropEntries = drops.map((d) => ({
     row: d.firstRow,
     name: d.displayName,
@@ -246,6 +267,7 @@ export async function importPeople(
     recipients.map((r) => r.sourceKey).filter((key) => !ledger.knows(key)),
   );
   ledger.see(formerKeys.values());
+  const splitKeys = new Set(splitRoutes.map((s) => s.sourceKey));
 
   for (const person of chosen) {
     const source = person.address ?? "";
@@ -268,6 +290,18 @@ export async function importPeople(
     ]);
     const formerKey = formerKeys.get(person.sourceKey);
     const verdict = ledger.decide(person.sourceKey, rowHash, addressHash, formerKey);
+
+    // Half a route filed under another name or address would become a second
+    // record for the same household, so it waits until the sheet puts the route
+    // together. Someone already imported is updated as usual.
+    if (verdict.kind === "create" && splitKeys.has(person.sourceKey)) {
+      out.rejected.push({
+        row: person.firstRow,
+        name: person.displayName,
+        reason: "part of a route whose other bundles are under another name or address",
+      });
+      continue;
+    }
 
     if (verdict.kind === "unchanged") {
       out.unchanged += 1;
@@ -426,6 +460,12 @@ function section(title: string, out: Outcome): string[] {
   lines.push(`- ${out.rejected.length} cannot become a record`);
   if (out.skippedLines)
     lines.push(`- ${out.skippedLines} rows are the office's own bundle tallies, not people`);
+  if (out.uncovered.length > 0) {
+    lines.push(
+      `- RT ${out.uncovered.join(", ")} ${out.uncovered.length === 1 ? "has" : "have"} no captain ` +
+        "on the payments sheet, so those carriers come in without one",
+    );
+  }
   if (out.dropEntries.length > 0) {
     const papers = out.dropEntries.reduce((sum, d) => sum + d.papers, 0);
     lines.push(
@@ -463,6 +503,21 @@ function section(title: string, out: Outcome): string[] {
   if (out.rejected.length > 0) {
     lines.push("### Not imported", "", "| Sheet row | Name | Why |", "| --- | --- | --- |");
     for (const r of out.rejected) lines.push(`| ${r.row} | ${r.name} | ${r.reason} |`);
+    lines.push("");
+  }
+  if (out.splitRoutes.length > 0) {
+    lines.push(
+      "### Bundle markers that do not add up",
+      "",
+      "Each is part of a route whose other bundles sit under another name or address.",
+      "One not imported before waits until the sheet puts the route together.",
+      "",
+      "| Sheet row | Name | Bundles on these rows |",
+      "| --- | --- | --- |",
+    );
+    for (const s of out.splitRoutes) {
+      lines.push(`| ${s.firstRow} | ${s.displayName} | ${s.found.join(", ")} of ${s.total} |`);
+    }
     lines.push("");
   }
   if (out.dropEntries.length > 0) {

@@ -54,6 +54,16 @@ export interface Rejection {
   reason: string;
 }
 
+/** An entry whose `N of M` markers name fewer than M bundles. */
+export interface SplitRoute {
+  sourceKey: string;
+  displayName: string;
+  firstRow: number;
+  /** The bundle numbers this entry's rows carry, such as [1] of a total of 2. */
+  found: number[];
+  total: number;
+}
+
 export interface LabelsResult {
   recipients: Recipient[];
   /** Entries the office marks as a kind of place rather than a street, which are drops. */
@@ -61,6 +71,11 @@ export interface LabelsResult {
   rejected: Rejection[];
   /** Rows that are the office's own bundle tallies rather than anybody. */
   tallyLines: number;
+  /**
+   * Entries whose route's other bundles sit under a different name or address,
+   * so one household can come in as two people.
+   */
+  splitRoutes: SplitRoute[];
 }
 
 /**
@@ -174,6 +189,7 @@ export function readLabels(rows: string[][]): LabelsResult {
   const recipients: Recipient[] = [];
   const drops: Recipient[] = [];
   const rejected: Rejection[] = [];
+  const splitRoutes: SplitRoute[] = [];
 
   for (const [sourceKey, group] of groups) {
     const first = group.rows[0];
@@ -225,7 +241,15 @@ export function readLabels(rows: string[][]): LabelsResult {
     };
     if (isDropEntry(recipient.routeHint)) drops.push(recipient);
     else recipients.push(recipient);
+
+    const [total] = totals;
+    const found = [
+      ...new Set(specs.map((s) => s?.index).filter((i): i is number => i !== undefined)),
+    ].sort((a, b) => a - b);
+    if (total !== undefined && found.length < total) {
+      splitRoutes.push({ sourceKey, displayName, firstRow: group.firstRow, found, total });
+    }
   }
 
-  return { recipients, drops, rejected, tallyLines };
+  return { recipients, drops, rejected, tallyLines, splitRoutes };
 }

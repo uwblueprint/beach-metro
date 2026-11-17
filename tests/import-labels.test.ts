@@ -222,6 +222,41 @@ describe("readLabels", () => {
   });
 });
 
+describe("splitRoutes", () => {
+  it("passes a route whose bundles are all under one name", () => {
+    const { splitRoutes } = readLabels([
+      HEADER,
+      row({ name: "Pat Lee", bundles: "1 of 2" }),
+      row({ name: "Pat Lee", bundles: "2 of 2" }),
+    ]);
+
+    expect(splitRoutes).toEqual([]);
+  });
+
+  it("flags both halves of a household filed under two spellings of its address", () => {
+    const { recipients, splitRoutes } = readLabels([
+      HEADER,
+      row({ name: "Pat & Sam Lee", address: "65 Glenmount Park Rd.", bundles: "2 of 2" }),
+      row({ name: "Pat Lee", address: "65 Glenmount Park", bundles: "1 of 2" }),
+    ]);
+
+    expect(recipients).toHaveLength(2);
+    expect(splitRoutes.map((s) => [s.displayName, s.found, s.total])).toEqual([
+      ["Pat & Sam Lee", [2], 2],
+      ["Pat Lee", [1], 2],
+    ]);
+  });
+
+  it("orders the bundles it found by number, not as text", () => {
+    const rows = [
+      HEADER,
+      ...[10, 2, 1].map((i) => row({ name: "Pat Lee", bundles: `${i} of 12` })),
+    ];
+
+    expect(readLabels(rows).splitRoutes[0].found).toEqual([1, 2, 10]);
+  });
+});
+
 describe("pairMoved", () => {
   const key = (name: string, rt: string, address: string) =>
     recipientKey(row({ name, rt, address }));

@@ -53,23 +53,37 @@ const OPTIONS: Options = {
   limit: null,
 };
 
-/** The captain block of a payments sheet, two captains with one RT each. */
+/** The captain block of a payments sheet, two captains and an area nobody covers. */
 const PAYMENTS = [
   ["RT", "", "Captain", "", "", "", "Per", "Rate", "Car"],
   ["T1", "", named("Captain One"), "", "", "", "bundle", "1", ""],
   ["T2", "", named("Captain Two"), "", "", "", "bundle", "1", ""],
+  ["T9", "", "No Captain", "", "", "", "N/A", "0", ""],
+];
+
+/** The next copy, where the second captain also takes an area paid per paper. */
+const LATER_PAYMENTS = [
+  ...PAYMENTS,
+  ["T3", "", named("Captain Two"), "", "", "", "paper", "0.18", ""],
 ];
 
 const ROSTER_HEADER = ["Route", "Papers", "Name", "Address", "Bundles", "", "Phone", "Email"];
 
 /** One roster row in the sheet's column order. */
-function person(o: { who: string; rt?: string; address: string; phone?: string; note?: string }) {
+function person(o: {
+  who: string;
+  rt?: string;
+  address: string;
+  bundles?: string;
+  phone?: string;
+  note?: string;
+}) {
   return [
     o.rt ?? "T1",
     "50",
     named(o.who),
     o.address,
-    "",
+    o.bundles ?? "",
     "",
     o.phone ?? "",
     "",
@@ -86,6 +100,10 @@ const FIRST = {
   noted: person({ who: "Noted", address: "14 Testing Ave." }),
   quitter: person({ who: "Quitter", address: "15 Testing Ave." }),
   vanisher: person({ who: "Vanisher", address: "16 Testing Ave." }),
+  uncovered: person({ who: "Uncovered", rt: "T9", address: "17 Testing Ave." }),
+  // One household's route, its two bundles under two spellings of its address.
+  splitFirst: person({ who: "Household", address: "18 Testing Ave.", bundles: "1 of 2" }),
+  splitSecond: person({ who: "Household", address: "18 Testing Avenue", bundles: "2 of 2" }),
 };
 
 const NOTE = "Daughter is taking over the route.";
@@ -96,13 +114,23 @@ const SECOND = {
   phone: person({ who: "Phone", address: "12 Testing Ave.", phone: "416 555-0199" }),
   mover: person({ who: "Mover", rt: "T2", address: "13 Testing Ave." }),
   noted: person({ who: "Noted", address: "14 Testing Ave.", note: NOTE }),
+  uncovered: FIRST.uncovered,
 };
 
-async function runImport(roster: string[][], quits: string[][]): Promise<Outcome> {
+async function runImport(
+  roster: string[][],
+  quits: string[][],
+  payments = PAYMENTS,
+): Promise<{ captains: Outcome; people: Outcome }> {
   const territories = new Map<string, string>();
-  const { byRt } = readCaptains(PAYMENTS);
-  await S().importer.importCaptains(PAYMENTS, OPTIONS, territories, SOURCE.captains);
-  return S().importer.importPeople(
+  const { byRt } = readCaptains(payments);
+  const captains = await S().importer.importCaptains(
+    payments,
+    OPTIONS,
+    territories,
+    SOURCE.captains,
+  );
+  const people = await S().importer.importPeople(
     [ROSTER_HEADER, ...roster],
     quits,
     OPTIONS,
@@ -110,6 +138,19 @@ async function runImport(roster: string[][], quits: string[][]): Promise<Outcome
     territories,
     SOURCE.people,
   );
+  return { captains, people };
+}
+
+/** The captain the ledger holds for a fixture captain, by the name it was given. */
+async function captainId(who: string): Promise<string> {
+  const { data, error } = await createAdminClient()
+    .from("import_rows")
+    .select("entity_id")
+    .eq("source", SOURCE.captains)
+    .eq("source_key", named(who).toLowerCase());
+  if (error) throw new Error(error.message);
+  expect(data).toHaveLength(1);
+  return data[0].entity_id;
 }
 
 /** The volunteer the ledger holds for a fixture person, by the name it was given. */
@@ -162,24 +203,55 @@ afterAll(async () => {
 
 describe.skipIf(!RUN)("a later copy of the workbook", () => {
   let first: Outcome;
+  let firstCaptains: Outcome;
   let second: Outcome;
+  let secondCaptains: Outcome;
   let third: Outcome;
+  let thirdCaptains: Outcome;
   const ids: Record<string, string> = {};
 
   beforeAll(async () => {
-    first = await runImport(Object.values(FIRST), []);
-    for (const who of ["Steady", "Phone", "Mover", "Noted", "Quitter", "Vanisher"]) {
+    ({ people: first, captains: firstCaptains } = await runImport(Object.values(FIRST), []));
+    for (const who of ["Steady", "Phone", "Mover", "Noted", "Quitter", "Vanisher", "Uncovered"]) {
       ids[who] = await volunteerId(who);
     }
     // The office moves the quitter's row to QUITS, and the vanisher's row is
     // simply gone, as when the sheet is reorganised.
-    second = await runImport(Object.values(SECOND), [FIRST.quitter]);
-    third = await runImport(Object.values(SECOND), [FIRST.quitter]);
+    ({ people: second, captains: secondCaptains } = await runImport(
+      Object.values(SECOND),
+      [FIRST.quitter],
+      LATER_PAYMENTS,
+    ));
+    ({ people: third, captains: thirdCaptains } = await runImport(
+      Object.values(SECOND),
+      [FIRST.quitter],
+      LATER_PAYMENTS,
+    ));
   }, 120_000);
 
   it("creates everyone on the first copy", () => {
-    expect(first.created).toBe(6);
-    expect(first.rejected).toHaveLength(0);
+    expect(first.created).toBe(7);
+  });
+
+  it("holds back both halves of a route split across two addresses, rather than two people", () => {
+    expect(first.splitRoutes).toHaveLength(2);
+    expect(first.rejected.map((r) => r.name)).toEqual([named("Household"), named("Household")]);
+    expect(first.rejected.every((r) => r.reason.includes("other bundles"))).toBe(true);
+  });
+
+  it("brings in a carrier from an area nobody covers without a captain", async () => {
+    expect(firstCaptains.created).toBe(2);
+    expect(firstCaptains.uncovered).toEqual(["T9"]);
+    expect((await S().volunteers.getVolunteer(ids.Uncovered)).territory).toBeNull();
+  });
+
+  it("adds a captain's new area and its pay to their notes once", async () => {
+    const captain = await captainId("Captain Two");
+    expect(secondCaptains.updated).toBe(1);
+    expect(secondCaptains.notesAdded).toBe(1);
+    expect(thirdCaptains.notesAdded).toBe(0);
+    const notes = await S().notes.listNotes("captain", captain);
+    expect(notes.map((n) => n.text)).toEqual(["Also covers RT T3. Paid $0.18 per paper in RT T3."]);
   });
 
   it("keeps a carrier moved to another RT as the same person, under the new captain", async () => {
@@ -195,7 +267,7 @@ describe.skipIf(!RUN)("a later copy of the workbook", () => {
 
   it("patches a changed phone without looking the unchanged address up again", async () => {
     expect(second.updated).toBe(3);
-    expect(second.unchanged).toBe(1);
+    expect(second.unchanged).toBe(2);
     expect(second.lookups).toBe(0);
     expect((await S().volunteers.getVolunteer(ids.Phone)).phone).toBe("416 555-0199");
   });
@@ -220,7 +292,7 @@ describe.skipIf(!RUN)("a later copy of the workbook", () => {
   it("changes nothing when the same copy is imported again", async () => {
     expect(third.created).toBe(0);
     expect(third.updated).toBe(0);
-    expect(third.unchanged).toBe(4);
+    expect(third.unchanged).toBe(5);
     expect(third.lookups).toBe(0);
     expect(third.notesAdded).toBe(0);
     expect(third.retired).toEqual([]);

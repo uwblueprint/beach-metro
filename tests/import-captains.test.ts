@@ -70,13 +70,42 @@ describe("readCaptains", () => {
     expect(captains[0].notes.join(" ")).toContain("N/A");
   });
 
-  it("keeps a car allowance in the notes, since a payout has nowhere for it", () => {
+  it("leaves a car allowance out, since the office no longer pays one", () => {
     const { captains } = readCaptains([
       HEADER,
-      row({ rt: "91", name: "Driving Person", car: "50" }),
+      row({ rt: "81", name: "Driving Person", per: "Dropoff", car: "50" }),
+      row({ rt: "91", name: "Driving Person", per: "Dropoff", rate: "1.5", car: "15" }),
     ]);
 
-    expect(captains[0].notes.join(" ")).toContain("$50");
+    expect(captains[0].notes.join(" ")).not.toMatch(/\$50|\$15|allowance/);
+  });
+
+  it("notes every area paid differently from the first, since a captain keeps one rate", () => {
+    const { captains } = readCaptains([
+      HEADER,
+      row({ rt: "23", name: "Many Areas", per: "Bundle", rate: "1.55" }),
+      row({ rt: "24", name: "Many Areas", per: "Paper", rate: "0.18" }),
+      row({ rt: "25", name: "Many Areas", per: "Bundle", rate: "1.55" }),
+      row({ rt: "26", name: "Many Areas", per: "Bundle", rate: "1" }),
+      row({ rt: "31-71", name: "Many Areas", per: "Dropoff", rate: "1.25" }),
+    ]);
+
+    expect(captains[0].payRate).toBe(1.55);
+    expect(captains[0].notes).toContain(
+      "Paid $0.18 per paper in RT 24, $1 per bundle in RT 26 and $1.25 per drop off in RT 31-71.",
+    );
+  });
+
+  it("reads No Captain as an area nobody covers, not a person", () => {
+    const { captains, byRt, uncovered } = readCaptains([
+      HEADER,
+      row({ rt: "17", name: "Wally Driver" }),
+      row({ rt: "18", name: "No Captain", per: "N/A", rate: "0" }),
+    ]);
+
+    expect(captains.map((c) => c.displayName)).toEqual(["Wally Driver"]);
+    expect(byRt.has("18")).toBe(false);
+    expect(uncovered).toEqual(["18"]);
   });
 
   it("refuses a pay rate that is not a number rather than storing a guess", () => {
