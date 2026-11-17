@@ -22,10 +22,12 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { greedySplit } from "@/lib/services/derive";
+
 import { checkResolved, checkSource } from "./lib/address";
 import { readCaptains } from "./lib/captains";
 import { normalise, parseCsv } from "./lib/csv";
-import { pairMoved, quitKeys, readLabels, type SplitRoute } from "./lib/labels";
+import { isResidentialDrop, pairMoved, quitKeys, readLabels, type SplitRoute } from "./lib/labels";
 import { hash, Ledger } from "./lib/ledger";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -42,7 +44,7 @@ const CAPTAIN_SHEET = "Payments2026";
  */
 const ASSUMED_CADENCE = "biweekly" as const;
 
-const PHASES = ["captains", "people"] as const;
+const PHASES = ["captains", "people", "drops"] as const;
 type Phase = (typeof PHASES)[number];
 
 export interface Options {
@@ -72,7 +74,7 @@ export interface Outcome {
   wouldLookUp: number;
   /** Sheet rows that were never anybody, so not counted as refusals. */
   skippedLines: number;
-  /** Entries the office marks as a drop, which this importer does not build. */
+  /** Entries the office marks as a drop, which the drops phase brings in. */
   dropEntries: { row: number; name: string; papers: number }[];
   /** RT codes the payments sheet says nobody covers. */
   uncovered: string[];
@@ -203,9 +205,9 @@ export async function importCaptains(
         payCadence: ASSUMED_CADENCE,
         email: null,
         phone: null,
-        // The RT number stays unset until the office settles whether a code
-        // belongs to a person or an area. Labels print RTXX meanwhile.
-        rtNumber: null,
+        // The app holds one RT number per captain, so it takes the first and the
+        // notes list the rest.
+        rtNumber: captain.rtCodes[0] ?? null,
         startDate: null,
         endDate: null,
         note,
@@ -218,6 +220,7 @@ export async function importCaptains(
         displayName: captain.displayName,
         payType: captain.payType,
         payRate: captain.payRate,
+        rtNumber: captain.rtCodes[0] ?? null,
       });
       if (updated.territory) territories.set(captain.sourceKey, updated.territory.id);
       if (newNote) await notes.createNoteRecord("captain", verdict.entityId, { text: newNote });
@@ -260,16 +263,32 @@ export async function importPeople(
   const addresses = options.checkAddresses ? await import("@/lib/services/addresses") : null;
 
   // Someone the sheet still lists has not left, even when this run refuses them,
-  // so only the rest of the ledger can have moved or quit.
-  ledger.see([...recipients, ...rejected].map((r) => r.sourceKey));
+  // so only the rest of the ledger can have moved or quit. Drop-offs share the
+  // roster's ledger and are the drops phase's to judge.
+  ledger.see([...recipients, ...rejected, ...drops].map((r) => r.sourceKey));
+  const goneCarriers = () => ledger.disappeared().filter((r) => r.entityType === "volunteer");
   const formerKeys = pairMoved(
-    ledger.disappeared().map((r) => r.sourceKey),
+    goneCarriers().map((r) => r.sourceKey),
     recipients.map((r) => r.sourceKey).filter((key) => !ledger.knows(key)),
   );
   ledger.see(formerKeys.values());
   const splitKeys = new Set(splitRoutes.map((s) => s.sourceKey));
+  const captainNames = new Set(byRt.values());
 
   for (const person of chosen) {
+    const notCarrier = (reason: string) =>
+      out.rejected.push({ row: person.firstRow, name: person.displayName, reason });
+    // A captain who delivers a route carries it as the captain, so their own
+    // roster row does not make a second record of them.
+    if (captainNames.has(normalise(person.displayName))) {
+      notCarrier("a captain on the payments sheet, who carries this route as the captain");
+      continue;
+    }
+    if (ledger.recorded(person.sourceKey)?.entityType === "drop") {
+      notCarrier("made a drop-off by hand, so not a carrier");
+      continue;
+    }
+
     const source = person.address ?? "";
     const cheap = checkSource(source);
     if (!cheap.ok) {
@@ -412,7 +431,7 @@ export async function importPeople(
   // run never looked at.
   if (options.limit === null) {
     const quit = quitKeys(quitsRows);
-    for (const row of ledger.disappeared()) {
+    for (const row of goneCarriers()) {
       if (!quit.has(row.sourceKey)) {
         out.disappeared.push(row.sourceKey);
         continue;
@@ -428,6 +447,139 @@ export async function importPeople(
       }
       out.retired.push(current.displayName);
     }
+  }
+  return out;
+}
+
+/**
+ * The roster's businesses, buildings and institutions, as drop-offs carried by
+ * the captain of their RT. They share the roster's ledger with the people phase,
+ * so one entry stays one record whichever kind it is. `ledgerSource` and
+ * `captainSource` differ only in tests.
+ */
+export async function importDrops(
+  rows: string[][],
+  options: Options,
+  byRt: Map<string, string>,
+  ledgerSource = "LABELS",
+  captainSource = CAPTAIN_SHEET,
+): Promise<Outcome> {
+  const out = emptyOutcome();
+  const { recipients, drops, rejected } = readLabels(rows);
+  const chosen = options.limit === null ? drops : drops.slice(0, options.limit);
+  const ledger = await Ledger.load(ledgerSource);
+  const captainLedger = await Ledger.load(captainSource);
+  const routes = await import("@/lib/services/routes");
+  const addresses = options.checkAddresses ? await import("@/lib/services/addresses") : null;
+  ledger.see([...recipients, ...rejected, ...drops].map((r) => r.sourceKey));
+
+  for (const drop of chosen) {
+    const reject = (reason: string) =>
+      out.rejected.push({ row: drop.firstRow, name: drop.displayName, reason });
+    if (ledger.recorded(drop.sourceKey)?.entityType === "volunteer") {
+      reject(
+        "came in as a carrier before the sheet marked it, so it stays one until moved by hand",
+      );
+      continue;
+    }
+    const source = drop.address ?? "";
+    const cheap = checkSource(source);
+    if (!cheap.ok) {
+      reject(cheap.reason);
+      continue;
+    }
+
+    const addressHash = hash([source]);
+    const rowHash = hash([
+      drop.displayName,
+      source,
+      drop.rt,
+      drop.routeHint,
+      drop.papers,
+      drop.notes.join(" "),
+    ]);
+    const verdict = ledger.decide(drop.sourceKey, rowHash, addressHash);
+    if (verdict.kind === "unchanged") {
+      out.unchanged += 1;
+      if (options.apply) await ledger.touch(drop.sourceKey);
+      continue;
+    }
+
+    const needsLookup = verdict.kind === "create" || verdict.addressChanged;
+    if (needsLookup) out.wouldLookUp += 1;
+    const resolved =
+      needsLookup && addresses ? await addresses.resolveAddress(addressInput(source)) : null;
+    if (resolved) {
+      out.lookups += 1;
+      const checked = checkResolved(source, {
+        streetNumber: resolved.components.streetNumber,
+        locationType: resolved.locationType,
+        latitude: resolved.latitude,
+        longitude: resolved.longitude,
+        doubts: resolved.doubts,
+      });
+      if (!checked.ok) {
+        reject(checked.reason);
+        continue;
+      }
+    }
+
+    if (!options.apply) {
+      if (verdict.kind === "create") out.created += 1;
+      else out.updated += 1;
+      continue;
+    }
+    if (needsLookup && !resolved) throw new Error("a run that writes needs resolved addresses");
+
+    const captainKey = drop.rt ? byRt.get(normalise(drop.rt)) : undefined;
+    const captainId = captainKey ? (captainLedger.recorded(captainKey)?.entityId ?? null) : null;
+    const dropKind = isResidentialDrop(drop.routeHint) ? "residential" : "commercial";
+    if (verdict.kind === "create") {
+      const place = { placeId: resolved!.placeId };
+      const created = await routes.createRouteRecord({
+        startAddress: place,
+        endAddress: place,
+        streetName: resolved!.components.streetName ?? source,
+        houseCount: 0,
+        papers: drop.papers,
+        dropKind,
+        dropName: drop.displayName,
+        assignedCaptainId: captainId,
+        note: drop.notes.length > 0 ? drop.notes.join(" ") : null,
+      });
+      try {
+        await ledger.record(drop.sourceKey, "drop", created.id, rowHash, addressHash);
+      } catch (err) {
+        console.error(`${drop.displayName} was created as drop ${created.id} but not recorded.`);
+        console.error("Delete that drop before re-running, or it will come in twice.");
+        throw err;
+      }
+      out.created += 1;
+    } else {
+      // The note is left alone, since it is the drop's only note and people edit it.
+      await routes.updateRouteRecord(verdict.entityId, {
+        papers: drop.papers,
+        bundles: greedySplit(drop.papers),
+        dropKind,
+        dropName: drop.displayName,
+        ...(captainId ? { assignedCaptainId: captainId } : {}),
+        ...(verdict.addressChanged
+          ? {
+              startAddress: { placeId: resolved!.placeId },
+              endAddress: { placeId: resolved!.placeId },
+            }
+          : {}),
+      });
+      await ledger.record(drop.sourceKey, "drop", verdict.entityId, rowHash, addressHash);
+      out.updated += 1;
+    }
+  }
+
+  if (options.limit === null) {
+    out.disappeared = ledger
+      .disappeared()
+      .filter((r) => r.entityType === "drop")
+      .map((r) => r.sourceKey);
   }
   return out;
 }
@@ -470,7 +622,7 @@ function section(title: string, out: Outcome): string[] {
     const papers = out.dropEntries.reduce((sum, d) => sum + d.papers, 0);
     lines.push(
       `- ${out.dropEntries.length} entries are a business, a building or an institution, ${papers} papers, ` +
-        "held back because drops are not built yet",
+        "which come in as drop-offs under Drops",
     );
   }
   lines.push(`- ${out.wouldLookUp} address lookups a real run makes`);
@@ -522,11 +674,11 @@ function section(title: string, out: Outcome): string[] {
   }
   if (out.dropEntries.length > 0) {
     lines.push(
-      "### Held for the drops phase",
+      "### Drop-offs on the roster",
       "",
-      "A business becomes a commercial drop and an unnamed building a residential one.",
-      "A school, church, library or hospital is a drop too.",
-      "A few are a person at a unit number who looks after their own building.",
+      "A building becomes a residential drop-off, and a business, school, church, library",
+      "or hospital a commercial one, carried by the captain of its RT. A few are a person",
+      "at a unit number who looks after their own building.",
       "",
       "| Sheet row | Name | Papers |",
       "| --- | --- | --- |",
@@ -603,6 +755,12 @@ async function main(): Promise<number> {
     );
     console.log(`People    ${tally(out, options)}`);
     lines.push(...section("People", out));
+  }
+
+  if (options.only.includes("drops")) {
+    const out = await importDrops(readSheet("LABELS"), options, byRt);
+    console.log(`Drops     ${tally(out, options)}`);
+    lines.push(...section("Drops", out));
   }
 
   mkdirSync(REPORTS, { recursive: true });

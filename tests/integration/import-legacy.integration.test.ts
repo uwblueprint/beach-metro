@@ -35,6 +35,7 @@ const services = RUN
   ? {
       importer: await import("@/scripts/import-legacy"),
       notes: await import("@/lib/services/notes"),
+      routes: await import("@/lib/services/routes"),
       volunteers: await import("@/lib/services/volunteers"),
     }
   : null;
@@ -73,21 +74,23 @@ const ROSTER_HEADER = ["Route", "Papers", "Name", "Address", "Bundles", "", "Pho
 function person(o: {
   who: string;
   rt?: string;
+  papers?: string;
   address: string;
   bundles?: string;
   phone?: string;
+  route?: string;
   note?: string;
 }) {
   return [
     o.rt ?? "T1",
-    "50",
+    o.papers ?? "50",
     named(o.who),
     o.address,
     o.bundles ?? "",
     "",
     o.phone ?? "",
     "",
-    "",
+    o.route ?? "",
     o.note ?? "",
     "2026-01-06",
   ];
@@ -104,6 +107,11 @@ const FIRST = {
   // One household's route, its two bundles under two spellings of its address.
   splitFirst: person({ who: "Household", address: "18 Testing Ave.", bundles: "1 of 2" }),
   splitSecond: person({ who: "Household", address: "18 Testing Avenue", bundles: "2 of 2" }),
+  shop: person({ who: "Corner Shop", address: "20 Testing Ave.", route: "BUSINESS" }),
+  flats: person({ who: "Flats", rt: "T2", address: "21 Testing Ave.", route: "BUILDING" }),
+  // A captain who delivers a route of their own is on the roster too.
+  captainRoute: person({ who: "Captain One", address: "22 Testing Ave." }),
+  converted: person({ who: "Converted", address: "23 Testing Ave." }),
 };
 
 const NOTE = "Daughter is taking over the route.";
@@ -115,13 +123,23 @@ const SECOND = {
   mover: person({ who: "Mover", rt: "T2", address: "13 Testing Ave." }),
   noted: person({ who: "Noted", address: "14 Testing Ave.", note: NOTE }),
   uncovered: FIRST.uncovered,
+  shop: FIRST.shop,
+  flats: person({
+    who: "Flats",
+    rt: "T2",
+    papers: "75",
+    address: "21 Testing Ave.",
+    route: "BUILDING",
+  }),
+  captainRoute: FIRST.captainRoute,
+  converted: FIRST.converted,
 };
 
 async function runImport(
   roster: string[][],
   quits: string[][],
   payments = PAYMENTS,
-): Promise<{ captains: Outcome; people: Outcome }> {
+): Promise<{ captains: Outcome; people: Outcome; drops: Outcome }> {
   const territories = new Map<string, string>();
   const { byRt } = readCaptains(payments);
   const captains = await S().importer.importCaptains(
@@ -138,7 +156,27 @@ async function runImport(
     territories,
     SOURCE.people,
   );
-  return { captains, people };
+  const drops = await S().importer.importDrops(
+    [ROSTER_HEADER, ...roster],
+    OPTIONS,
+    byRt,
+    SOURCE.people,
+    SOURCE.captains,
+  );
+  return { captains, people, drops };
+}
+
+/** The drop-off the ledger holds for a fixture entry, by the name it was given. */
+async function dropId(who: string): Promise<string> {
+  const { data, error } = await createAdminClient()
+    .from("import_rows")
+    .select("source_key, entity_id")
+    .eq("source", SOURCE.people)
+    .eq("entity_type", "drop");
+  if (error) throw new Error(error.message);
+  const matches = data.filter((r) => r.source_key.startsWith(`${named(who).toLowerCase()}|`));
+  expect(matches).toHaveLength(1);
+  return matches[0].entity_id;
 }
 
 /** The captain the ledger holds for a fixture captain, by the name it was given. */
@@ -172,6 +210,23 @@ afterAll(async () => {
     .from("import_rows")
     .select("entity_type, entity_id")
     .in("source", [SOURCE.captains, SOURCE.people]);
+  const { data: strayDrops } = await client
+    .from("volunteer_routes")
+    .select("id")
+    .like("drop_name", `ITImport % ${RUN_ID}`);
+  const routeIds = [
+    ...(ledger ?? []).filter((r) => r.entity_type === "drop").map((r) => r.entity_id),
+    ...((strayDrops ?? []) as { id: string }[]).map((r) => r.id),
+  ];
+  const { data: stops } = await client
+    .from("volunteer_routes")
+    .select("start_address_id")
+    .in("id", routeIds);
+  await client.from("route_deliveries").delete().in("route_id", routeIds);
+  await client.from("volunteer_routes").delete().in("id", routeIds);
+  const stopIds = ((stops ?? []) as { start_address_id: string }[]).map((s) => s.start_address_id);
+  await client.from("addresses").delete().in("id", stopIds);
+
   const { data: strays } = await client
     .from("volunteers")
     .select("id")
@@ -204,39 +259,115 @@ afterAll(async () => {
 describe.skipIf(!RUN)("a later copy of the workbook", () => {
   let first: Outcome;
   let firstCaptains: Outcome;
+  let firstDrops: Outcome;
   let second: Outcome;
   let secondCaptains: Outcome;
+  let secondDrops: Outcome;
   let third: Outcome;
   let thirdCaptains: Outcome;
+  let thirdDrops: Outcome;
   const ids: Record<string, string> = {};
 
   beforeAll(async () => {
-    ({ people: first, captains: firstCaptains } = await runImport(Object.values(FIRST), []));
-    for (const who of ["Steady", "Phone", "Mover", "Noted", "Quitter", "Vanisher", "Uncovered"]) {
+    ({
+      people: first,
+      captains: firstCaptains,
+      drops: firstDrops,
+    } = await runImport(Object.values(FIRST), []));
+    for (const who of [
+      "Steady",
+      "Phone",
+      "Mover",
+      "Noted",
+      "Quitter",
+      "Vanisher",
+      "Uncovered",
+      "Converted",
+    ]) {
       ids[who] = await volunteerId(who);
     }
+
+    // A person turns a carrier who is really a business into a drop-off by hand,
+    // pointing the roster entry's ledger row at the new drop.
+    const converted = await S().volunteers.getVolunteer(ids.Converted);
+    const place = { placeId: converted.address.placeId };
+    const drop = await S().routes.createRouteRecord({
+      startAddress: place,
+      endAddress: place,
+      streetName: "Testing Ave",
+      houseCount: 0,
+      papers: 50,
+      dropName: named("Converted"),
+    });
+    await S().volunteers.deleteVolunteer(ids.Converted);
+    await createAdminClient()
+      .from("import_rows")
+      .update({ entity_type: "drop", entity_id: drop.id })
+      .eq("source", SOURCE.people)
+      .eq("entity_id", ids.Converted);
+
     // The office moves the quitter's row to QUITS, and the vanisher's row is
     // simply gone, as when the sheet is reorganised.
-    ({ people: second, captains: secondCaptains } = await runImport(
-      Object.values(SECOND),
-      [FIRST.quitter],
-      LATER_PAYMENTS,
-    ));
-    ({ people: third, captains: thirdCaptains } = await runImport(
-      Object.values(SECOND),
-      [FIRST.quitter],
-      LATER_PAYMENTS,
-    ));
-  }, 120_000);
+    ({
+      people: second,
+      captains: secondCaptains,
+      drops: secondDrops,
+    } = await runImport(Object.values(SECOND), [FIRST.quitter], LATER_PAYMENTS));
+    ({
+      people: third,
+      captains: thirdCaptains,
+      drops: thirdDrops,
+    } = await runImport(Object.values(SECOND), [FIRST.quitter], LATER_PAYMENTS));
+  }, 180_000);
 
   it("creates everyone on the first copy", () => {
-    expect(first.created).toBe(7);
+    expect(first.created).toBe(8);
   });
 
   it("holds back both halves of a route split across two addresses, rather than two people", () => {
     expect(first.splitRoutes).toHaveLength(2);
-    expect(first.rejected.map((r) => r.name)).toEqual([named("Household"), named("Household")]);
-    expect(first.rejected.every((r) => r.reason.includes("other bundles"))).toBe(true);
+    const held = first.rejected.filter((r) => r.reason.includes("other bundles"));
+    expect(held.map((r) => r.name)).toEqual([named("Household"), named("Household")]);
+  });
+
+  it("keeps a captain who delivers a route as the captain, not a second record", async () => {
+    const refused = first.rejected.find((r) => r.name === named("Captain One"));
+    expect(refused?.reason).toContain("captain");
+    const { data } = await createAdminClient()
+      .from("volunteers")
+      .select("id")
+      .eq("display_name", named("Captain One"));
+    expect(data).toEqual([]);
+  });
+
+  it("brings in the roster's drop-offs, carried by the captain of their area", async () => {
+    expect(firstDrops.created).toBe(2);
+    const shop = await S().routes.getRoute(await dropId("Corner Shop"));
+    expect(shop.isDrop).toBe(true);
+    expect(shop.dropKind).toBe("commercial");
+    expect(shop.dropName).toBe(named("Corner Shop"));
+    expect(shop.captain?.id).toBe(await captainId("Captain One"));
+    const flats = await S().routes.getRoute(await dropId("Flats"));
+    expect(flats.dropKind).toBe("residential");
+    expect(flats.captain?.id).toBe(await captainId("Captain Two"));
+  });
+
+  it("updates a drop-off whose papers changed, and leaves the rest alone", async () => {
+    expect(secondDrops.updated).toBe(1);
+    expect(secondDrops.unchanged).toBe(1);
+    expect((await S().routes.getRoute(await dropId("Flats"))).papers).toBe(75);
+    expect(thirdDrops.created + thirdDrops.updated).toBe(0);
+    expect(thirdDrops.unchanged).toBe(2);
+  });
+
+  it("leaves an entry made a drop-off by hand as a drop-off", async () => {
+    const skipped = second.rejected.find((r) => r.name === named("Converted"));
+    expect(skipped?.reason).toContain("drop-off by hand");
+    const { data } = await createAdminClient()
+      .from("volunteers")
+      .select("id")
+      .eq("display_name", named("Converted"));
+    expect(data).toEqual([]);
   });
 
   it("brings in a carrier from an area nobody covers without a captain", async () => {

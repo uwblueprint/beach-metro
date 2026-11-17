@@ -103,10 +103,18 @@ export function bundleSpec(value: string | undefined): { index: number; total: n
  * `HOSPITAL`. A business becomes a commercial drop and an unnamed building a
  * residential one, and a handful are a person at a unit number who looks after
  * their own building, so telling those apart needs a person rather than a rule.
- * The importer builds no kind of drop yet, so these are held back and listed.
+ * The drops phase brings these in as drop-offs carried by their RT's captain.
  */
 export function isDropEntry(routeHint: string | null): boolean {
   return /^(business|building|school|church|library|hospital)$/i.test((routeHint ?? "").trim());
+}
+
+/**
+ * Whether a drop is a residential one. A building is; a business, school,
+ * church, library or hospital is a commercial drop.
+ */
+export function isResidentialDrop(routeHint: string | null): boolean {
+  return /^building$/i.test((routeHint ?? "").trim());
 }
 
 /**

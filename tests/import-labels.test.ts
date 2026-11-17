@@ -8,6 +8,7 @@ import { parseCsv } from "@/scripts/lib/csv";
 import {
   bundleSpec,
   isDropEntry,
+  isResidentialDrop,
   isTallyLine,
   pairMoved,
   quitKeys,
@@ -160,6 +161,14 @@ describe("readLabels", () => {
   it("holds back a school, church, library or hospital, since none of them carries a route", () => {
     for (const place of ["SCHOOL", "CHURCH", "LIBRARY", "HOSPITAL"]) {
       expect(isDropEntry(place)).toBe(true);
+    }
+  });
+
+  it("reads a building as a residential drop and every other kind of place as commercial", () => {
+    expect(isResidentialDrop("BUILDING")).toBe(true);
+    expect(isResidentialDrop("Building ")).toBe(true);
+    for (const place of ["BUSINESS", "SCHOOL", "CHURCH", "LIBRARY", "HOSPITAL"]) {
+      expect(isResidentialDrop(place)).toBe(false);
     }
   });
 

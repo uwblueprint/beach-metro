@@ -65,6 +65,11 @@ export class Ledger {
     return this.rows.has(sourceKey);
   }
 
+  /** What a previous run recorded for this key, including which kind of record it made. */
+  recorded(sourceKey: string): LedgerRow | undefined {
+    return this.rows.get(sourceKey);
+  }
+
   /** Mark rows as still on the sheet, including ones this run refuses or skips. */
   see(sourceKeys: Iterable<string>): void {
     for (const key of sourceKeys) this.seen.add(key);
