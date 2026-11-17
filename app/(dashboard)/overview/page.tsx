@@ -89,7 +89,8 @@ function formatAxisCurrency(amount: number) {
     const digits = Number.isInteger(compact) ? 0 : 1;
     return `$${compact.toFixed(digits)}k`;
   }
-  return `$${Math.round(amount).toLocaleString("en-US")}`;
+  // A small axis has a half-dollar midpoint, such as $0.50 on a $1 axis.
+  return Number.isInteger(amount) ? `$${amount.toLocaleString("en-US")}` : `$${amount.toFixed(2)}`;
 }
 
 function getTodayLineLeft(monthIndex: number, monthCount: number) {

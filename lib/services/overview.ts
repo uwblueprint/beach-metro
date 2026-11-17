@@ -19,7 +19,7 @@ import type {
   VolunteerRow,
 } from "@/types/db";
 
-import { effectiveAmount, volunteerStatus } from "./derive";
+import { effectiveAmount, routeLifecycle, volunteerStatus } from "./derive";
 import { db, throwDb, today } from "./shared";
 
 export type Period = "ytd" | "q1" | "q2" | "q3" | "q4";
@@ -257,7 +257,14 @@ export async function getOverview(filters: z.infer<typeof periodQuery>): Promise
       // deleting is what removes them from both.
       activeVolunteers: volunteers.filter((v) => volunteerStatus(v, date) === "active").length,
       totalVolunteers: volunteers.length,
-      routesMissingCarrier: routes.filter((r) => r.assigned_volunteer_id === null).length,
+      routesMissingCarrier: routes.filter(
+        (r) =>
+          routeLifecycle({
+            isDrop: r.start_address_id === r.end_address_id,
+            assignedVolunteerId: r.assigned_volunteer_id,
+            assignedCaptainId: r.assigned_captain_id,
+          }) === "vacant",
+      ).length,
       captainCosts: round(payouts.reduce((s, p) => s + effectiveAmount(p), 0)),
       issueCount: inRange.length,
     },
