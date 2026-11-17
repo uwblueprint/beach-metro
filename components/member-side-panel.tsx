@@ -168,10 +168,6 @@ function VolunteerContent({ id }: { id: string }) {
     const trimmedEmail = email.trim();
     const trimmedPhone = phone.trim();
     const trimmedAddress = address.trim();
-    if (!trimmedEmail || !trimmedPhone) {
-      setSaveError("Email and phone are required.");
-      return;
-    }
     if (!trimmedAddress) {
       setSaveError("Address is required.");
       return;
@@ -486,10 +482,6 @@ function CaptainContent({ id }: { id: string }) {
     const trimmedEmail = email.trim();
     const trimmedPhone = phone.trim();
     const rate = Number(payRate);
-    if (!trimmedEmail || !trimmedPhone) {
-      setSaveError("Email and phone are required.");
-      return;
-    }
     if (payRate.trim() === "" || Number.isNaN(rate) || rate < 0) {
       setSaveError("Enter a valid pay rate (0 or greater).");
       return;
