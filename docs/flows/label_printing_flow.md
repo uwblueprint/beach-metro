@@ -63,9 +63,10 @@ already printed are stale anyway. If this bites, bundles gain a stable id and
 
 ## 3. Which issue
 
-Labels belong to the **most recent open issue**, resolved server-side. There is
-no issue picker: the flow is inherently "the run we are about to send out", and a
-closed issue has already shipped.
+Labels belong to the **next open issue**, the earliest open one dated today or
+later, resolved server-side and matching the issue Overview calls next. With no
+open issue still to come it is the most recent open one. The flow is inherently
+"the run we are about to send out", and a closed issue has already shipped.
 
 Scoping falls out of the schema for free — `bundle_labels.delivery_id` points at
 a `route_deliveries` row, which belongs to exactly one issue — so a new issue

@@ -71,3 +71,27 @@ export function today(): string {
     day: "2-digit",
   }).format(new Date());
 }
+
+/**
+ * How many ids one lookup sends. PostgREST puts an `in` list in the request URL,
+ * and about 400 UUIDs pass the 16KB header limit, so 100 leaves room for the rest
+ * of the query.
+ */
+const IDS_PER_LOOKUP = 100;
+
+/**
+ * Read the rows matching a list of ids, in batches, for a list that can run to
+ * hundreds, such as the addresses of every route on an issue.
+ */
+export async function selectByIds<T>(
+  ids: readonly string[],
+  lookup: (batch: string[]) => PromiseLike<{ data: unknown[] | null; error: PgError | null }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let i = 0; i < ids.length; i += IDS_PER_LOOKUP) {
+    const { data, error } = await lookup(ids.slice(i, i + IDS_PER_LOOKUP));
+    if (error) throwDb(error);
+    rows.push(...((data ?? []) as T[]));
+  }
+  return rows;
+}

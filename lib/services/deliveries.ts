@@ -8,7 +8,7 @@ import type { IssueRow, RouteBundle, RouteDeliveryRow, VolunteerRouteRow } from 
 
 import { bundleCount, greedySplit } from "./derive";
 import { recalculateIssue } from "./recalc";
-import { db, throwDb } from "./shared";
+import { db, selectByIds, throwDb } from "./shared";
 
 export interface DeliverySummary {
   id: string;
@@ -38,17 +38,10 @@ function toSummary(d: RouteDeliveryRow, streetName: string): DeliverySummary {
 
 async function streetNames(routeIds: string[]): Promise<Map<string, string>> {
   if (routeIds.length === 0) return new Map();
-  const { data, error } = await db()
-    .from("volunteer_routes")
-    .select("id, street_name")
-    .in("id", routeIds);
-  if (error) throwDb(error);
-  return new Map(
-    ((data ?? []) as Pick<VolunteerRouteRow, "id" | "street_name">[]).map((r) => [
-      r.id,
-      r.street_name,
-    ]),
+  const data = await selectByIds<Pick<VolunteerRouteRow, "id" | "street_name">>(routeIds, (batch) =>
+    db().from("volunteer_routes").select("id, street_name").in("id", batch),
   );
+  return new Map(data.map((r) => [r.id, r.street_name]));
 }
 
 export async function listDeliveries(issueId: string): Promise<DeliverySummary[]> {

@@ -6,7 +6,7 @@ import type { ResolvedAddress } from "@/lib/maps";
 import type { AddressInput } from "@/lib/validation/common";
 import type { AddressRow, AddressType } from "@/types/db";
 
-import { db, throwDb } from "./shared";
+import { db, selectByIds, throwDb } from "./shared";
 
 /** Resolve raw input or a known placeId to a normalized address. */
 export async function resolveAddress(input: AddressInput): Promise<ResolvedAddress> {
@@ -82,18 +82,19 @@ export interface AddressDetail {
 /** Fetch address rows joined with their cached location, keyed by address id. */
 export async function getAddressDetails(ids: string[]): Promise<Map<string, AddressDetail>> {
   if (ids.length === 0) return new Map();
-  const { data, error } = await db()
-    .from("addresses")
-    .select(
-      "id, type, google_maps_id, standing_bundles, google_maps_locations(cached_formatted_address, cached_latitude, cached_longitude)",
-    )
-    .in("id", ids);
-  if (error) throwDb(error);
+  const data = await selectByIds<unknown>(ids, (batch) =>
+    db()
+      .from("addresses")
+      .select(
+        "id, type, google_maps_id, standing_bundles, google_maps_locations(cached_formatted_address, cached_latitude, cached_longitude)",
+      )
+      .in("id", batch),
+  );
 
   const map = new Map<string, AddressDetail>();
   // PostgREST returns the many-to-one embed as a single object; the untyped
   // client infers an array, so cast through unknown until types are generated.
-  for (const row of (data ?? []) as unknown as Array<{
+  for (const row of data as Array<{
     id: string;
     type: AddressType;
     google_maps_id: string;

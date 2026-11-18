@@ -23,7 +23,7 @@ import type {
 
 import { getAddressDetails } from "./addresses";
 import { labelType, routeLabel } from "./derive";
-import { db, throwDb } from "./shared";
+import { db, selectByIds, throwDb, today } from "./shared";
 
 export interface LabelBundle {
   deliveryId: string;
@@ -107,8 +107,10 @@ export async function listLabelIssues(): Promise<IssueRow[]> {
 /**
  * The issue labels belong to.
  *
- * Defaults to the most recent OPEN one, because the flow is inherently "this
- * run" — you label the bundles you are about to send out. An explicit id lets
+ * Defaults to the next OPEN one dated today or later, the same issue Overview
+ * calls next, because the flow is inherently "this run" — you label the bundles
+ * you are about to send out. With no open issue still to come, the most recent
+ * open one. An explicit id lets
  * the office reprint a past issue after a printer jam or a torn sheet.
  * Reprinting is read-only in spirit, so nothing about a closed issue changes
  * except the `labelled` flags the caller opts into.
@@ -125,11 +127,12 @@ export async function resolveLabelIssue(issueId?: string): Promise<IssueRow> {
     .from("issues")
     .select("*")
     .eq("status", "open")
-    .order("date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order("date", { ascending: true });
   if (error) throwDb(error);
-  if (data) return data as IssueRow;
+  const open = (data ?? []) as IssueRow[];
+  const date = today();
+  const next = open.find((i) => i.date >= date) ?? open.at(-1);
+  if (next) return next;
 
   // No open issue. Fall back to the most recent closed one rather than failing,
   // so the screen still loads and the issue picker is reachable — otherwise
@@ -168,35 +171,32 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
   };
   if (deliveries.length === 0) return summary;
 
-  const [routesRes, volunteersRes, territoriesRes, captainsRes, labelsRes] = await Promise.all([
-    client
-      .from("volunteer_routes")
-      .select(
-        "id, street_name, assigned_volunteer_id, assigned_captain_id, start_address_id, end_address_id, drop_kind, drop_name",
-      )
-      .in(
-        "id",
-        deliveries.map((d) => d.route_id),
-      )
-      .is("deleted_at", null),
+  const [routeRows, volunteersRes, territoriesRes, captainsRes, labelRows] = await Promise.all([
+    selectByIds<unknown>(
+      deliveries.map((d) => d.route_id),
+      (batch) =>
+        client
+          .from("volunteer_routes")
+          .select(
+            "id, street_name, assigned_volunteer_id, assigned_captain_id, start_address_id, end_address_id, drop_kind, drop_name",
+          )
+          .in("id", batch)
+          .is("deleted_at", null),
+    ),
     client.from("volunteers").select("id, display_name, address_id, captain_territory_id"),
     client.from("captain_territories").select("id, assigned_captain_id"),
     client.from("captains").select("id, display_name, rt_number, retired_at"),
-    client
-      .from("bundle_labels")
-      .select("delivery_id, bundle_index")
-      .in(
-        "delivery_id",
-        deliveries.map((d) => d.id),
-      ),
+    selectByIds<unknown>(
+      deliveries.map((d) => d.id),
+      (batch) =>
+        client.from("bundle_labels").select("delivery_id, bundle_index").in("delivery_id", batch),
+    ),
   ]);
-  if (routesRes.error) throwDb(routesRes.error);
   if (volunteersRes.error) throwDb(volunteersRes.error);
   if (territoriesRes.error) throwDb(territoriesRes.error);
   if (captainsRes.error) throwDb(captainsRes.error);
-  if (labelsRes.error) throwDb(labelsRes.error);
 
-  const routes = (routesRes.data ?? []) as Pick<
+  const routes = routeRows as Pick<
     VolunteerRouteRow,
     | "id"
     | "street_name"
@@ -226,7 +226,7 @@ export async function listLabels(issueId?: string): Promise<LabelSheet> {
   const captainById = new Map(captains.map((c) => [c.id, c]));
 
   const labelled = new Set(
-    ((labelsRes.data ?? []) as Pick<BundleLabelRow, "delivery_id" | "bundle_index">[]).map(
+    (labelRows as Pick<BundleLabelRow, "delivery_id" | "bundle_index">[]).map(
       (l) => `${l.delivery_id}:${l.bundle_index}`,
     ),
   );
@@ -380,9 +380,10 @@ async function assertBundlesExist(
   issueId?: string,
 ): Promise<Map<string, RouteDeliveryRow>> {
   const ids = [...new Set(refs.map((r) => r.deliveryId))];
-  const { data, error } = await db().from("route_deliveries").select("*").in("id", ids);
-  if (error) throwDb(error);
-  const byId = new Map(((data ?? []) as RouteDeliveryRow[]).map((d) => [d.id, d]));
+  const data = await selectByIds<RouteDeliveryRow>(ids, (batch) =>
+    db().from("route_deliveries").select("*").in("id", batch),
+  );
+  const byId = new Map(data.map((d) => [d.id, d]));
 
   for (const ref of refs) {
     const delivery = byId.get(ref.deliveryId);

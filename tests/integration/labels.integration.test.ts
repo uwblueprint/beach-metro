@@ -11,6 +11,7 @@
 // @vitest-environment node
 import { afterAll, describe, expect, it } from "vitest";
 
+import { today } from "@/lib/services/shared";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const HAS_ENV = Boolean(process.env.SUPABASE_DB_URL && process.env.SUPABASE_SECRET_KEY);
@@ -41,6 +42,7 @@ const services = RUN
       issues: await import("@/lib/services/issues"),
       years: await import("@/lib/services/financial-years"),
       payouts: await import("@/lib/services/payouts"),
+      addresses: await import("@/lib/services/addresses"),
       territories: await import("@/lib/services/territories"),
     }
   : null;
@@ -325,5 +327,52 @@ describe.runIf(RUN)("a drop carried by a captain", () => {
     expect(detail.carriedDrops).toEqual([{ id: drop.id, name: "Corner Store", papers: 40 }]);
     const summaries = await S().territories.listTerritories({});
     expect(summaries.find((t) => t.id === territoryId)?.carriedDropCount).toBe(1);
+  });
+});
+
+describe.runIf(RUN)("an issue as large as the real roster", () => {
+  it("reads the addresses of hundreds of routes in one call", async () => {
+    const address = dropAddress();
+    const drop = await S().routes.createRouteRecord({
+      streetName: "Kingston Rd",
+      startAddress: address,
+      endAddress: address,
+      houseCount: 0,
+      bundles: [{ papers: 25 }],
+    });
+    created.routeIds.push(drop.id);
+    const { data, error } = await createAdminClient()
+      .from("volunteer_routes")
+      .select("start_address_id")
+      .eq("id", drop.id)
+      .single();
+    if (error) throw new Error(error.message);
+
+    // The sheet asks for every route's and carrier's address at once, about 450
+    // on the office's roster, which is past what one request URL can carry.
+    const ids = [...Array.from({ length: 599 }, () => crypto.randomUUID()), data.start_address_id];
+    const details = await S().addresses.getAddressDetails(ids);
+    expect(details.has(data.start_address_id)).toBe(true);
+  });
+});
+
+describe.runIf(RUN)("the issue labels open on", () => {
+  it("is the next open issue, not the last one created ahead", async () => {
+    const date = today();
+    const later = new Date(`${date}T12:00:00Z`);
+    later.setUTCDate(later.getUTCDate() + 28);
+    const year = await S().years.createYear({ name: unique("Year"), startDate: "2026-03-01" });
+    created.yearIds.push(year.id);
+    await S().issues.createIssuesBatch(year.id, {
+      issues: [
+        { name: unique("Next"), date },
+        { name: unique("Later"), date: later.toISOString().slice(0, 10) },
+      ],
+    });
+
+    // With a run created ahead of time, the newest open issue is not the one
+    // whose bundles go out next.
+    const resolved = await S().labels.resolveLabelIssue();
+    expect(resolved.date).toBe(date);
   });
 });
