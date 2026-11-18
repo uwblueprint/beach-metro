@@ -172,9 +172,11 @@ insert into financial_years (id, name, archived, start_date) values
 -- decoration: scripts verify them against a live recalculate, so if the maths
 -- ever changes the seed fails rather than quietly lying.
 --
--- Rollup for reference: delivery -> route -> volunteer -> territory -> captain.
+-- Rollup for reference: delivery -> route -> volunteer -> territory -> captain,
+-- or for a drop, delivery -> route -> the captain who carries it.
 --   route 1 (70p) + route 6 (25p) are Marcus's  -> Emily's territory
 --   route 2 (55p)                 is Sofia's    -> Oliver's territory
+--   routes 9 and 10 are drops Oliver carries himself
 --   route 3 is Aisha's, who is on vacation, so it is never carried (no rows)
 --   Maya has no volunteers, so her cells are always zero
 -- Emily is paid per bundle at $1.25, Oliver per drop at $2.00, Maya per paper at $0.
@@ -206,8 +208,7 @@ insert into route_deliveries (issue_id, route_id, paper_count, bundles, drop_cou
   ('11000000-0000-4000-8000-000000000004', 'e0000000-0000-4000-8000-000000000002', 40, '[{"papers":25},{"papers":15}]', 1, 0),
   ('11000000-0000-4000-8000-000000000004', 'e0000000-0000-4000-8000-000000000006', 50, '[{"papers":50}]',               1, 0),
   -- The two drops, on the live issue, so the labels screen has a Commercial and
-  -- a Residential row. They move no payout amount: the rollup runs through the
-  -- assigned volunteer and a drop has none, so it reaches no captain.
+  -- a Residential row. Each counts one drop towards Oliver, who carries them.
   ('11000000-0000-4000-8000-000000000004', 'e0000000-0000-4000-8000-000000000009', 125, '[{"papers":50},{"papers":50},{"papers":25}]', 1, 0),
   ('11000000-0000-4000-8000-000000000004', 'e0000000-0000-4000-8000-000000000010', 75,  '[{"papers":50},{"papers":25}]',               1, 0);
 
@@ -229,8 +230,9 @@ insert into captain_payouts
   ('11000000-0000-4000-8000-000000000003', 'c0000000-0000-4000-8000-000000000001', 3.75, null, null, 3.75, '2026-05-09', null, null, false, null),
   ('11000000-0000-4000-8000-000000000003', 'c0000000-0000-4000-8000-000000000002', 2.00, null, null, 2.00, '2026-05-09', null, null, false, null),
   ('11000000-0000-4000-8000-000000000003', 'c0000000-0000-4000-8000-000000000003', 0.00, null, null, 0.00, '2026-05-09', null, null, false, null),
-  -- I04 open and live. Emily: (3+1) bundles x $1.25. Oliver is overridden with a
-  -- reason. Maya was covered by Emily and carries a standalone comment.
+  -- I04 open and live. Emily: (3+1) bundles x $1.25. Oliver: route 2's drop plus
+  -- the two drops he carries, 3 x $2, overridden with a reason. Maya was covered
+  -- by Emily and carries a standalone comment.
   ('11000000-0000-4000-8000-000000000004', 'c0000000-0000-4000-8000-000000000001', 5.00, null, null, null, null, null, null, false, null),
-  ('11000000-0000-4000-8000-000000000004', 'c0000000-0000-4000-8000-000000000002', 2.00, 12.50, 'Invoiced separately for the school run', null, null, null, null, false, null),
+  ('11000000-0000-4000-8000-000000000004', 'c0000000-0000-4000-8000-000000000002', 6.00, 12.50, 'Invoiced separately for the school run', null, null, null, null, false, null),
   ('11000000-0000-4000-8000-000000000004', 'c0000000-0000-4000-8000-000000000003', 0.00, null, null, null, null, 'c0000000-0000-4000-8000-000000000001', 'Captain switching to monthly', false, null);

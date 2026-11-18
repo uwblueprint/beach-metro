@@ -31,7 +31,7 @@ export async function recalculateIssue(issueId: string): Promise<void> {
     await Promise.all([
       client.from("captain_payouts").select("*").eq("issue_id", issueId),
       client.from("route_deliveries").select("*").eq("issue_id", issueId),
-      client.from("volunteer_routes").select("id, assigned_volunteer_id"),
+      client.from("volunteer_routes").select("id, assigned_volunteer_id, assigned_captain_id"),
       client.from("volunteers").select("id, captain_territory_id"),
       client.from("captain_territories").select("id, assigned_captain_id"),
       client.from("captains").select("id, pay_type, pay_rate"),
@@ -51,7 +51,7 @@ export async function recalculateIssue(issueId: string): Promise<void> {
   const deliveries = (deliveriesRes.data ?? []) as RouteDeliveryRow[];
   const routes = (routesRes.data ?? []) as Pick<
     VolunteerRouteRow,
-    "id" | "assigned_volunteer_id"
+    "id" | "assigned_volunteer_id" | "assigned_captain_id"
   >[];
   const volunteers = (volunteersRes.data ?? []) as Pick<
     VolunteerRow,
@@ -66,17 +66,20 @@ export async function recalculateIssue(issueId: string): Promise<void> {
   ).map(coerceCaptainNumerics);
 
   // Rollup chain (data model ERD): delivery → route → volunteer → territory → captain.
-  const volunteerByRoute = new Map(routes.map((r) => [r.id, r.assigned_volunteer_id]));
+  // A drop holds no volunteer and names the captain who carries it directly.
+  const routeById = new Map(routes.map((r) => [r.id, r]));
   const territoryByVolunteer = new Map(volunteers.map((v) => [v.id, v.captain_territory_id]));
   const captainByTerritory = new Map(territories.map((t) => [t.id, t.assigned_captain_id]));
 
   const deliveriesByCaptain = new Map<string, RouteDeliveryRow[]>();
   for (const d of deliveries) {
-    const volunteerId = volunteerByRoute.get(d.route_id);
-    if (!volunteerId) continue; // detached/deleted route: contributes to nobody while open
-    const territoryId = territoryByVolunteer.get(volunteerId);
-    if (!territoryId) continue;
-    const captainId = captainByTerritory.get(territoryId);
+    const route = routeById.get(d.route_id);
+    if (!route) continue; // detached/deleted route: contributes to nobody while open
+    const territoryId = route.assigned_volunteer_id
+      ? territoryByVolunteer.get(route.assigned_volunteer_id)
+      : null;
+    const captainId =
+      route.assigned_captain_id ?? (territoryId ? captainByTerritory.get(territoryId) : null);
     if (!captainId) continue;
     const list = deliveriesByCaptain.get(captainId) ?? [];
     list.push(d);

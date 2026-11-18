@@ -425,9 +425,12 @@ function CaptainContent({ id }: { id: string }) {
   const captainName = captain.displayName;
   const commercialDrops = territory?.commercialDrops ?? [];
   const territoryVolunteers = territory?.volunteers ?? [];
-  const hasDrops = commercialDrops.length > 0 || territoryVolunteers.length > 0;
+  const carriedDrops = territory?.carriedDrops ?? [];
+  const hasDrops =
+    commercialDrops.length > 0 || territoryVolunteers.length > 0 || carriedDrops.length > 0;
   const territoryDropItems = [
     ...territoryVolunteers.map((volunteer) => ({ kind: "volunteer" as const, volunteer })),
+    ...carriedDrops.map((drop) => ({ kind: "carried" as const, drop })),
     ...commercialDrops.map((drop) => ({ kind: "commercial" as const, drop })),
   ];
   const payoutItems = payouts ?? [];
@@ -672,6 +675,10 @@ function CaptainContent({ id }: { id: string }) {
                   onEdit={() => openEditVolunteer(item.volunteer)}
                 >
                   {item.volunteer.displayName}
+                </SidePanelRow>
+              ) : item.kind === "carried" ? (
+                <SidePanelRow key={item.drop.id} meta={`${item.drop.papers} papers`} static>
+                  {item.drop.name}
                 </SidePanelRow>
               ) : (
                 <SidePanelRow

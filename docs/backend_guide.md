@@ -166,7 +166,8 @@ tests/      *.test.ts (unit) · integration/ (hosted-DB) · e2e/api-smoke.spec.t
    captain **active at that moment**. Then runs the live calc.
 2. **Live calc** (`recalc.recalculateIssue`) — for each **unpaid** cell of an
    **open** issue: roll deliveries up the chain (delivery → route → volunteer →
-   territory → captain), compute `rate × billable quantity` (missed deducted in the
+   territory → captain, or delivery → drop → the captain who carries it), compute
+   `rate × billable quantity` (missed deducted in the
    captain's pay unit, clamped at 0), write `calculated_amount`. Paid cells and
    closed issues are never touched.
 3. **Edit a delivery** → reseed bundles (unless bundles supplied; they must sum to

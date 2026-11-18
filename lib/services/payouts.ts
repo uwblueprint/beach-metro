@@ -136,19 +136,23 @@ export async function getPayout(id: string): Promise<PayoutDetail> {
   const captain = captainData ? coerceCaptainNumerics(captainData as CaptainRow) : null;
   if (!captain) throw notFound("Captain");
 
-  // Current rollup chain for this captain's territory.
-  const [territoryRes, deliveriesRes] = await Promise.all([
+  // Current rollup chain for this captain's territory, plus the drops they carry
+  // themselves, which hold no volunteer.
+  const [territoryRes, deliveriesRes, dropRes] = await Promise.all([
     client
       .from("captain_territories")
       .select("id")
       .eq("assigned_captain_id", captain.id)
       .maybeSingle(),
     client.from("route_deliveries").select("*").eq("issue_id", p.issue_id),
+    client.from("volunteer_routes").select("id, street_name").eq("assigned_captain_id", captain.id),
   ]);
   if (territoryRes.error) throwDb(territoryRes.error);
   if (deliveriesRes.error) throwDb(deliveriesRes.error);
+  if (dropRes.error) throwDb(dropRes.error);
 
   const perRoute: PayoutDetail["breakdown"]["perRoute"] = [];
+  const routes = (dropRes.data ?? []) as Pick<VolunteerRouteRow, "id" | "street_name">[];
   if (territoryRes.data) {
     const territoryId = (territoryRes.data as { id: string }).id;
     const { data: volunteerData, error: volunteerError } = await client
@@ -166,31 +170,31 @@ export async function getPayout(id: string): Promise<PayoutDetail> {
             .in("assigned_volunteer_id", volunteerIds)
         : { data: [], error: null };
     if (routeError) throwDb(routeError);
-    const routes = (routeData ?? []) as Pick<VolunteerRouteRow, "id" | "street_name">[];
-    const routeIds = new Set(routes.map((r) => r.id));
+    routes.push(...((routeData ?? []) as Pick<VolunteerRouteRow, "id" | "street_name">[]));
+  }
+  const routeIds = new Set(routes.map((r) => r.id));
 
-    for (const d of (deliveriesRes.data ?? []) as RouteDeliveryRow[]) {
-      if (!routeIds.has(d.route_id)) continue;
-      const counts = {
-        paperCount: d.paper_count,
-        bundles: d.bundles,
-        dropCount: d.drop_count,
-        missedCount: d.missed_count,
-      };
-      const unitCount =
-        captain.pay_type === "bundle"
-          ? d.bundles.length
-          : captain.pay_type === "paper"
-            ? d.paper_count
-            : d.drop_count;
-      perRoute.push({
-        routeId: d.route_id,
-        streetName: routes.find((r) => r.id === d.route_id)?.street_name ?? "",
-        unitCount,
-        missedCount: d.missed_count,
-        billable: billableQuantity(captain.pay_type, counts),
-      });
-    }
+  for (const d of (deliveriesRes.data ?? []) as RouteDeliveryRow[]) {
+    if (!routeIds.has(d.route_id)) continue;
+    const counts = {
+      paperCount: d.paper_count,
+      bundles: d.bundles,
+      dropCount: d.drop_count,
+      missedCount: d.missed_count,
+    };
+    const unitCount =
+      captain.pay_type === "bundle"
+        ? d.bundles.length
+        : captain.pay_type === "paper"
+          ? d.paper_count
+          : d.drop_count;
+    perRoute.push({
+      routeId: d.route_id,
+      streetName: routes.find((r) => r.id === d.route_id)?.street_name ?? "",
+      unitCount,
+      missedCount: d.missed_count,
+      billable: billableQuantity(captain.pay_type, counts),
+    });
   }
 
   const substituteName = p.substitute_captain_id

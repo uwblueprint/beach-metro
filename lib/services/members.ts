@@ -84,7 +84,7 @@ export async function listMembers(filters: z.infer<typeof membersQuery>): Promis
       // territory by what it contains. See docs/open_items.md if the office
       // turns out to refer to territories by number.
       routeInfo: territory
-        ? `${plural(territory.volunteerCount, "volunteer")}, ${plural(territory.commercialDropCount, "drop")}`
+        ? `${plural(territory.volunteerCount, "volunteer")}, ${plural(territory.commercialDropCount + territory.carriedDropCount, "drop")}`
         : "No territory",
       routeId: null,
       captainName: c.displayName,

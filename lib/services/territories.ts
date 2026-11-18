@@ -9,7 +9,13 @@ import type {
   updateCommercialDrop,
   updateTerritory,
 } from "@/lib/validation/people";
-import type { AddressRow, CaptainRow, CaptainTerritoryRow, VolunteerRow } from "@/types/db";
+import type {
+  AddressRow,
+  CaptainRow,
+  CaptainTerritoryRow,
+  VolunteerRouteRow,
+  VolunteerRow,
+} from "@/types/db";
 
 import { createAddress, getAddressDetails, type AddressDetail } from "./addresses";
 import { volunteerStatus, type VolunteerStatus } from "./derive";
@@ -21,11 +27,17 @@ export interface TerritorySummary {
   captain: { id: string; name: string; retired: boolean } | null;
   volunteerCount: number;
   commercialDropCount: number;
+  /**
+   * Drops on the Deliveries page that the territory's captain carries. Counted
+   * apart from commercialDropCount, which counts addresses added to the
+   * territory itself.
+   */
+  carriedDropCount: number;
 }
 
 export interface TerritoryDetail extends Omit<
   TerritorySummary,
-  "volunteerCount" | "commercialDropCount"
+  "volunteerCount" | "commercialDropCount" | "carriedDropCount"
 > {
   volunteers: Array<{
     id: string;
@@ -35,6 +47,7 @@ export interface TerritoryDetail extends Omit<
     status: VolunteerStatus;
   }>;
   commercialDrops: AddressDetail[];
+  carriedDrops: Array<{ id: string; name: string; papers: number }>;
 }
 
 /** Every commercial drop in the system, for Drop Details pickers. */
@@ -98,20 +111,27 @@ export async function listTerritories(
   filters: z.infer<typeof territoriesQuery>,
 ): Promise<TerritorySummary[]> {
   const client = db();
-  const [tRes, cRes, vRes, aRes] = await Promise.all([
+  const [tRes, cRes, vRes, aRes, rRes] = await Promise.all([
     client.from("captain_territories").select("*"),
     client.from("captains").select("id, display_name, retired_at"),
     client.from("volunteers").select("id, captain_territory_id"),
     client.from("addresses").select("id, territory_id").eq("type", "commercial"),
+    client
+      .from("volunteer_routes")
+      .select("assigned_captain_id")
+      .not("assigned_captain_id", "is", null)
+      .is("deleted_at", null),
   ]);
   if (tRes.error) throwDb(tRes.error);
   if (cRes.error) throwDb(cRes.error);
   if (vRes.error) throwDb(vRes.error);
   if (aRes.error) throwDb(aRes.error);
+  if (rRes.error) throwDb(rRes.error);
 
   const captains = (cRes.data ?? []) as Pick<CaptainRow, "id" | "display_name" | "retired_at">[];
   const volunteers = (vRes.data ?? []) as Pick<VolunteerRow, "id" | "captain_territory_id">[];
   const drops = (aRes.data ?? []) as Pick<AddressRow, "id" | "territory_id">[];
+  const carriedDrops = (rRes.data ?? []) as Pick<VolunteerRouteRow, "assigned_captain_id">[];
 
   let all = ((tRes.data ?? []) as CaptainTerritoryRow[]).map((t): TerritorySummary => {
     const captain = t.assigned_captain_id
@@ -129,6 +149,9 @@ export async function listTerritories(
         : null,
       volunteerCount: volunteers.filter((v) => v.captain_territory_id === t.id).length,
       commercialDropCount: drops.filter((d) => d.territory_id === t.id).length,
+      carriedDropCount: t.assigned_captain_id
+        ? carriedDrops.filter((r) => r.assigned_captain_id === t.assigned_captain_id).length
+        : 0,
     };
   });
 
@@ -157,7 +180,7 @@ export async function getTerritory(id: string): Promise<TerritoryDetail> {
   const t = await fetchTerritory(id);
   const client = db();
 
-  const [cRes, vRes, aRes] = await Promise.all([
+  const [cRes, vRes, aRes, rRes] = await Promise.all([
     t.assigned_captain_id
       ? client
           .from("captains")
@@ -167,10 +190,18 @@ export async function getTerritory(id: string): Promise<TerritoryDetail> {
       : Promise.resolve({ data: null, error: null }),
     client.from("volunteers").select("*").eq("captain_territory_id", id),
     client.from("addresses").select("id").eq("territory_id", id).eq("type", "commercial"),
+    t.assigned_captain_id
+      ? client
+          .from("volunteer_routes")
+          .select("id, drop_name, street_name, papers")
+          .eq("assigned_captain_id", t.assigned_captain_id)
+          .is("deleted_at", null)
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (cRes.error) throwDb(cRes.error);
   if (vRes.error) throwDb(vRes.error);
   if (aRes.error) throwDb(aRes.error);
+  if (rRes.error) throwDb(rRes.error);
 
   const captain = cRes.data as Pick<CaptainRow, "id" | "display_name" | "retired_at"> | null;
   const date = today();
@@ -197,6 +228,11 @@ export async function getTerritory(id: string): Promise<TerritoryDetail> {
     commercialDrops: dropIds
       .map((id) => dropDetails.get(id))
       .filter((d): d is AddressDetail => !!d),
+    carriedDrops: (
+      (rRes.data ?? []) as Pick<VolunteerRouteRow, "id" | "drop_name" | "street_name" | "papers">[]
+    )
+      .map((r) => ({ id: r.id, name: r.drop_name ?? r.street_name, papers: r.papers }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
   };
 }
 

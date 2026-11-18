@@ -87,7 +87,7 @@ describe.skipIf(!RUN)("seeded finance data", () => {
         client.from("issues").select("id, name"),
         client.from("captains").select("id, pay_type, pay_rate"),
         client.from("route_deliveries").select("*"),
-        client.from("volunteer_routes").select("id, assigned_volunteer_id"),
+        client.from("volunteer_routes").select("id, assigned_volunteer_id, assigned_captain_id"),
         client.from("volunteers").select("id, captain_territory_id"),
         client.from("captain_territories").select("id, assigned_captain_id"),
       ]);
@@ -102,10 +102,14 @@ describe.skipIf(!RUN)("seeded finance data", () => {
       pay_type: "bundle" | "paper" | "drop";
       pay_rate: number;
     }[];
-    const routeToVolunteer = new Map(
-      ((routesRes.data ?? []) as { id: string; assigned_volunteer_id: string | null }[]).map(
-        (r) => [r.id, r.assigned_volunteer_id],
-      ),
+    const routes = new Map(
+      (
+        (routesRes.data ?? []) as {
+          id: string;
+          assigned_volunteer_id: string | null;
+          assigned_captain_id: string | null;
+        }[]
+      ).map((r) => [r.id, r]),
     );
     const volunteerToTerritory = new Map(
       ((volunteersRes.data ?? []) as { id: string; captain_territory_id: string | null }[]).map(
@@ -131,9 +135,12 @@ describe.skipIf(!RUN)("seeded finance data", () => {
         const captain = captains.find((c) => c.id === cell.captain_id);
         if (!captain) continue;
 
-        // Same rollup the service walks: delivery -> route -> volunteer -> territory -> captain.
+        // Same rollup the service walks: delivery -> route -> volunteer -> territory -> captain,
+        // or straight to the captain for a drop they carry.
         const mine = deliveries.filter((d) => {
-          const volunteerId = routeToVolunteer.get(d.route_id as string);
+          const route = routes.get(d.route_id as string);
+          if (route?.assigned_captain_id) return route.assigned_captain_id === captain.id;
+          const volunteerId = route?.assigned_volunteer_id;
           const territoryId = volunteerId ? volunteerToTerritory.get(volunteerId) : null;
           return territoryId ? territoryToCaptain.get(territoryId) === captain.id : false;
         });
@@ -163,6 +170,8 @@ describe.skipIf(!RUN)("seeded finance data", () => {
     if (!seededYear) return;
 
     const detail = await S().years.getYearDetail(seededYear.id);
+    // A shared database whose sample issues were removed has nothing seeded to render.
+    if (!detail.issues.some((i) => i.name.startsWith("Issue 0"))) return;
     expect(detail.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(detail.captains.length).toBeGreaterThan(0);
     expect(detail.issues.length).toBeGreaterThan(0);

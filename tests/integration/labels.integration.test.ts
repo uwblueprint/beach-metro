@@ -5,7 +5,9 @@
 //
 // This suite exists because the route-level tests cannot see it: a drop can
 // carry the right kind, name and captain and still land in the wrong group on
-// the sheet, since the sheet resolves all three for itself.
+// the sheet, since the sheet resolves all three for itself. The captain's pay
+// and territory resolve the drop's captain for themselves too, so they are
+// checked here as well.
 // @vitest-environment node
 import { afterAll, describe, expect, it } from "vitest";
 
@@ -38,6 +40,8 @@ const services = RUN
       routes: await import("@/lib/services/routes"),
       issues: await import("@/lib/services/issues"),
       years: await import("@/lib/services/financial-years"),
+      payouts: await import("@/lib/services/payouts"),
+      territories: await import("@/lib/services/territories"),
     }
   : null;
 
@@ -51,9 +55,14 @@ const TAG = "ITLABELS";
 let seq = 0;
 const unique = (label: string) => `${TAG}-${label}-${Date.now()}-${++seq}`;
 
-const created = { yearIds: [] as string[], routeIds: [] as string[], captainIds: [] as string[] };
+const created = {
+  yearIds: [] as string[],
+  routeIds: [] as string[],
+  captainIds: [] as string[],
+  territoryIds: [] as string[],
+};
 
-async function makeCaptain(rtNumber: string) {
+async function makeCaptain(rtNumber: string, payType: "bundle" | "paper" | "drop" = "drop") {
   const name = unique("Cap");
   const { data, error } = await createAdminClient()
     .from("captains")
@@ -64,7 +73,7 @@ async function makeCaptain(rtNumber: string) {
       email: `${name.toLowerCase()}@example.com`,
       phone: "416-555-0431",
       rt_number: rtNumber,
-      pay_type: "drop",
+      pay_type: payType,
       pay_rate: 1,
       pay_cadence: "biweekly",
       start_date: "2026-01-01",
@@ -130,6 +139,7 @@ afterAll(async () => {
     await db.from("route_deliveries").delete().eq("route_id", id);
     await db.from("volunteer_routes").delete().eq("id", id);
   }
+  for (const id of created.territoryIds) await db.from("captain_territories").delete().eq("id", id);
   for (const id of created.captainIds) await db.from("captains").delete().eq("id", id);
 });
 
@@ -252,5 +262,68 @@ describe.runIf(RUN)("a drop on the label sheet", () => {
     expect(found.route.type).toBe("carrier");
     // No volunteer and no captain, so it falls to the Unassigned pile.
     expect(found.group.captainId).toBeNull();
+  });
+});
+
+describe.runIf(RUN)("a drop carried by a captain", () => {
+  async function territoryFor(captainId: string) {
+    const { data, error } = await createAdminClient()
+      .from("captain_territories")
+      .insert({ assigned_captain_id: captainId })
+      .select("id")
+      .single();
+    if (error) throw new Error(`territory fixture failed: ${error.message}`);
+    created.territoryIds.push(data.id);
+    return data.id as string;
+  }
+
+  it("is paid to that captain and listed in their pay breakdown", async () => {
+    const captain = await makeCaptain(unique("RT").slice(-8), "bundle");
+    const address = dropAddress();
+    const drop = await S().routes.createRouteRecord({
+      streetName: "Kingston Rd",
+      startAddress: address,
+      endAddress: address,
+      houseCount: 0,
+      bundles: [{ papers: 50 }, { papers: 25 }],
+      assignedCaptainId: captain.id,
+    });
+    created.routeIds.push(drop.id);
+
+    const issue = await makeIssue();
+    const { data, error } = await createAdminClient()
+      .from("captain_payouts")
+      .select("id, calculated_amount")
+      .eq("issue_id", issue.id)
+      .eq("captain_id", captain.id)
+      .single();
+    if (error) throw new Error(error.message);
+
+    // Two bundles at the fixture's rate of 1. A drop holds no volunteer, so
+    // reaching its captain through a volunteer paid nothing for it.
+    expect(Number(data.calculated_amount)).toBe(2);
+    const detail = await S().payouts.getPayout(data.id);
+    expect(detail.breakdown.perRoute.map((r) => r.routeId)).toEqual([drop.id]);
+  });
+
+  it("is counted and listed in that captain's territory", async () => {
+    const captain = await makeCaptain(unique("RT").slice(-8));
+    const territoryId = await territoryFor(captain.id);
+    const address = dropAddress();
+    const drop = await S().routes.createRouteRecord({
+      streetName: "Kingston Rd",
+      startAddress: address,
+      endAddress: address,
+      houseCount: 0,
+      bundles: [{ papers: 40 }],
+      assignedCaptainId: captain.id,
+      dropName: "Corner Store",
+    });
+    created.routeIds.push(drop.id);
+
+    const detail = await S().territories.getTerritory(territoryId);
+    expect(detail.carriedDrops).toEqual([{ id: drop.id, name: "Corner Store", papers: 40 }]);
+    const summaries = await S().territories.listTerritories({});
+    expect(summaries.find((t) => t.id === territoryId)?.carriedDropCount).toBe(1);
   });
 });
