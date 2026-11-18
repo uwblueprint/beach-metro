@@ -6,11 +6,21 @@ import { useMemo, useState } from "react";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { PillGroup } from "@/components/ui/pill-group";
 import { SearchBar } from "@/components/ui/search-bar";
 import { Select } from "@/components/ui/select";
 import { useExportLabels, useLabels, useMarkLabels } from "@/features/labels/api";
 import type { BundleRef, LabelRoute, LabelSheet } from "@/features/labels/api";
+import { LABELS_PER_PAGE } from "@/lib/pdf/label-geometry";
 import { cn } from "@/lib/utils";
 
 /**
@@ -216,6 +226,11 @@ export default function LabelsPage() {
   const [expandedRoutes, setExpandedRoutes] = useState<Set<string>>(new Set());
   const [selectedBundleIds, setSelectedBundleIds] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
+  // The bundles Export Labels will print, held while the office confirms.
+  const [pendingExport, setPendingExport] = useState<{
+    bundles: BundleRef[];
+    reprints: number;
+  } | null>(null);
 
   const captains = useMemo(() => toCaptains(sheet), [sheet]);
   const totalBundles = sheet?.bundleCount ?? 0;
@@ -227,7 +242,7 @@ export default function LabelsPage() {
     () =>
       (sheet?.issues ?? []).map((i) => ({
         value: i.id,
-        label: i.status === "open" ? `${i.name} (current)` : `${i.name} — ${i.date}`,
+        label: i.status === "open" ? `${i.name} (open)` : `${i.name} — ${i.date}`,
       })),
     [sheet],
   );
@@ -247,6 +262,10 @@ export default function LabelsPage() {
       }))
       .filter((captain) => captain.routes.length > 0);
   }, [captains, searchQuery, typeFilter]);
+  const visibleBundles = visibleCaptains.reduce(
+    (sum, captain) => sum + captain.routes.reduce((n, route) => n + route.bundles.length, 0),
+    0,
+  );
 
   const selectedCount = selectedBundleIds.size;
   // Sheet still loading/failed counts as busy too, so Export can't run
@@ -274,11 +293,12 @@ export default function LabelsPage() {
   }
 
   /**
-   * Exports the ticked bundles, or every unlabelled one when nothing is ticked
-   * — "print what still needs a label" is the common case. Exporting also marks
-   * them labelled server-side, so this changes state rather than previewing.
+   * Gathers the ticked bundles, or every unlabelled one when nothing is ticked
+   * — "print what still needs a label" is the common case — and asks the office
+   * to confirm. Exporting also marks them labelled server-side, so it changes
+   * state rather than previewing.
    */
-  async function handleExport() {
+  function handleExport() {
     setActionError(null);
     if (isPending || isError) return; // guarded by the disabled button; defensive here too
     const bundles: BundleRef[] =
@@ -303,12 +323,26 @@ export default function LabelsPage() {
       return;
     }
 
+    const labelled = new Set(
+      captains.flatMap((captain) =>
+        captain.routes.flatMap((route) => route.bundles.filter((b) => b.labelled).map((b) => b.id)),
+      ),
+    );
+    const reprints = bundles.filter((b) =>
+      labelled.has(bundleKey(b.deliveryId, b.bundleIndex)),
+    ).length;
+    setPendingExport({ bundles, reprints });
+  }
+
+  async function confirmExport() {
+    if (!pendingExport) return;
     try {
-      await exportLabels.mutateAsync({ bundles, issueId: sheet?.issue.id });
+      await exportLabels.mutateAsync({ bundles: pendingExport.bundles, issueId: sheet?.issue.id });
       clearSelection();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Could not export labels.");
     }
+    setPendingExport(null);
   }
 
   return (
@@ -319,15 +353,11 @@ export default function LabelsPage() {
             <div className="flex items-center gap-2">
               <h1 className="text-md text-primary">Labels</h1>
               <p className="text-md text-tertiary">
+                {revealResults ? `${visibleBundles} of ` : ""}
                 {totalBundles} {totalBundles === 1 ? "bundle" : "bundles"}
               </p>
             </div>
-            <Button
-              variant="primary"
-              type="button"
-              onClick={() => void handleExport()}
-              disabled={busy}
-            >
+            <Button variant="primary" type="button" onClick={handleExport} disabled={busy}>
               <Printer data-icon="inline-start" />
               Export Labels
             </Button>
@@ -355,10 +385,7 @@ export default function LabelsPage() {
                   aria-label="Issue"
                   value={sheet?.issue.id ?? ""}
                   onChange={(value) => {
-                    // Selecting the open issue clears the override, so the screen
-                    // goes back to following whichever issue is current.
-                    const picked = sheet?.issues.find((i) => i.id === value);
-                    setIssueId(picked && picked.status === "open" ? undefined : value);
+                    setIssueId(value);
                     clearSelection();
                   }}
                   options={issueOptions}
@@ -579,7 +606,66 @@ export default function LabelsPage() {
             </div>
           </div>
         ) : null}
+
+        <Dialog
+          open={pendingExport !== null}
+          onOpenChange={(open) => {
+            if (!open && !exportLabels.isPending) setPendingExport(null);
+          }}
+        >
+          <DialogContent>
+            {pendingExport ? (
+              <ExportConfirmation
+                labels={pendingExport.bundles.length}
+                reprints={pendingExport.reprints}
+                exporting={exportLabels.isPending}
+                onConfirm={() => void confirmExport()}
+              />
+            ) : null}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
+  );
+}
+
+function ExportConfirmation({
+  labels,
+  reprints,
+  exporting,
+  onConfirm,
+}: {
+  labels: number;
+  reprints: number;
+  exporting: boolean;
+  onConfirm: () => void;
+}) {
+  const sheets = Math.ceil(labels / LABELS_PER_PAGE);
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>
+          Export {labels} {labels === 1 ? "label" : "labels"}?
+        </DialogTitle>
+      </DialogHeader>
+      <DialogBody>
+        <p className="text-md text-secondary">
+          That fills {sheets} {sheets === 1 ? "sheet" : "sheets"} of label stock, and every bundle
+          exported is marked labelled.
+        </p>
+        {reprints > 0 ? (
+          <p className="text-md text-secondary">
+            {reprints} of them {reprints === 1 ? "is" : "are"} already labelled and will print
+            again.
+          </p>
+        ) : null}
+      </DialogBody>
+      <DialogFooter>
+        <DialogClose render={<Button variant="default" disabled={exporting} />}>Cancel</DialogClose>
+        <Button type="button" variant="primary" disabled={exporting} onClick={onConfirm}>
+          {exporting ? "Exporting…" : "Export labels"}
+        </Button>
+      </DialogFooter>
+    </>
   );
 }

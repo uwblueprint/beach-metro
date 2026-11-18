@@ -12,7 +12,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useDeleteMember, useReactivateMember, type MemberRow } from "@/features/members/api";
+import { useReactivateMember, type MemberRow } from "@/features/members/api";
+import { DeleteMemberDialog, type DeleteMemberTarget } from "@/components/delete-member-dialog";
 import { RetireMemberDialog, type RetireMemberTarget } from "@/components/retire-member-dialog";
 import { RoleTag } from "@/components/role-tag";
 import { cn } from "@/lib/utils";
@@ -306,18 +307,17 @@ function TableCell({
 function RowActions({
   member,
   onOpenDetails,
-  onDeleted,
   onRequestRetire,
+  onRequestDelete,
 }: {
   member: MemberRow;
   onOpenDetails?: (memberId: string) => void;
-  onDeleted?: (memberId: string) => void;
   onRequestRetire: (member: RetireMemberTarget) => void;
+  onRequestDelete: (member: DeleteMemberTarget) => void;
 }) {
   const reactivate = useReactivateMember();
-  const deleteMember = useDeleteMember();
   const isRetired = member.status === "retired";
-  const isBusy = reactivate.isPending || deleteMember.isPending;
+  const isBusy = reactivate.isPending;
 
   return (
     <DropdownMenu>
@@ -356,22 +356,9 @@ function RowActions({
         <DropdownMenuItem
           variant="destructive"
           disabled={isBusy}
-          onClick={() => {
-            const detail =
-              member.role === "volunteer"
-                ? "Their routes will become vacant."
-                : "Their territory will be deleted and every volunteer in it will be left without a territory.";
-            if (
-              !window.confirm(`Permanently delete ${member.name}? This cannot be undone. ${detail}`)
-            )
-              return;
-            deleteMember.mutate(
-              { id: member.id, role: member.role },
-              { onSuccess: () => onDeleted?.(member.id) },
-            );
-          }}
+          onClick={() => onRequestDelete({ id: member.id, role: member.role, name: member.name })}
         >
-          {deleteMember.isPending ? "Deleting…" : "Delete member"}
+          Delete member
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -381,6 +368,7 @@ function RowActions({
 function MembersTable({ state, members, selectedId, onRowClick, onDeleted }: MembersTableProps) {
   const columns = COLUMNS[state];
   const [retireTarget, setRetireTarget] = useState<RetireMemberTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteMemberTarget | null>(null);
   const [sort, setSort] = useState<Sort | null>(null);
   const rows = useMemo(() => sortMembers(members, sort), [members, sort]);
 
@@ -425,8 +413,8 @@ function MembersTable({ state, members, selectedId, onRowClick, onDeleted }: Mem
               <RowActions
                 member={member}
                 onOpenDetails={onRowClick}
-                onDeleted={onDeleted}
                 onRequestRetire={setRetireTarget}
+                onRequestDelete={setDeleteTarget}
               />
             </div>
           ))}
@@ -439,6 +427,15 @@ function MembersTable({ state, members, selectedId, onRowClick, onDeleted }: Mem
         onOpenChange={(open) => {
           if (!open) setRetireTarget(null);
         }}
+      />
+
+      <DeleteMemberDialog
+        member={deleteTarget}
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        onDeleted={onDeleted}
       />
     </>
   );

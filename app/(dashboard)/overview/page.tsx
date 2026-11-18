@@ -857,7 +857,7 @@ export default function OverviewPage() {
             ) : (
               <>
                 {/* Stats row */}
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                   <StatCard
                     label="Papers for next issue"
                     href="/labels"
@@ -876,12 +876,12 @@ export default function OverviewPage() {
                   />
                   <StatCard
                     label="Routes missing a carrier"
-                    href="/routes"
+                    href="/routes?vacancy=vacant"
                     value={String(overview.stats.routesMissingCarrier)}
                     sub={
                       original ? (
                         <Link
-                          href="/routes"
+                          href="/routes?vacancy=vacant"
                           className="inline-flex items-center gap-0.5 text-secondary transition-colors duration-150 hover:text-primary"
                         >
                           View routes

@@ -289,6 +289,8 @@ function RouteOverlay(props: {
         map,
         position,
         clickable: true,
+        // The pin's name for screen readers and its hover tooltip.
+        title: routeRef.current.streetName,
         icon: pointIcon(asDrop, false, color, opacity),
         zIndex: 3,
       });

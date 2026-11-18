@@ -753,7 +753,7 @@ export function PaymentCell({
           <div className="relative flex size-4 shrink-0 items-center justify-center">
             <button
               type="button"
-              aria-label="Mark paid"
+              aria-label={paid ? "Paid" : "Mark paid"}
               disabled={paid}
               onClick={onMarkPaid}
               className={cn(

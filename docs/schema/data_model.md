@@ -345,6 +345,9 @@ export interface CaptainPayout {
   // Paid locks the cell against override / freeze / unfreeze / substitute / transfer.
   paid: boolean;
   paidAt?: DateOnly | null;
+  // When anything stored on the cell last changed. Stamped by a database trigger,
+  // so every writer, the live recalculation included, keeps it true.
+  updatedAt: Timestamp;
 }
 ```
 

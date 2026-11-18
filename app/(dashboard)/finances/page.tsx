@@ -63,8 +63,8 @@ import {
   NO_SUBSTITUTE,
   filterFinancesCaptains,
   filterFinancesIssues,
+  formatChangedDate,
   formatCurrency,
-  formatIssueDateLong,
   yearDateRange,
   type CellKey,
   type CellOverride,
@@ -1489,7 +1489,7 @@ export default function FinancesPage() {
                                 paymentDetail={{
                                   captainName: captain.name,
                                   issueLabel: issue.name,
-                                  lastModified: formatIssueDateLong(issue.date),
+                                  lastModified: formatChangedDate(cell.updatedAt),
                                   territory: `${captain.name}'s territory`,
                                   bundleCount: quantity,
                                   ratePerBundle: captain.payRate,

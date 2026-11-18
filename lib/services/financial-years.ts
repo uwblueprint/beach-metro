@@ -59,6 +59,8 @@ export interface YearDetail {
       substituteCaptainId: string | null;
       substituteCaptainName: string | null;
       paid: boolean;
+      /** When anything stored on the cell last changed, as an ISO timestamp. */
+      updatedAt: string;
     }>;
   }>;
 }
@@ -174,6 +176,7 @@ export async function getYearDetail(id: string): Promise<YearDetail> {
           substituteCaptainId: p.substitute_captain_id,
           substituteCaptainName: nameOf(p.substitute_captain_id),
           paid: p.paid,
+          updatedAt: p.updated_at,
         })),
       };
     }),

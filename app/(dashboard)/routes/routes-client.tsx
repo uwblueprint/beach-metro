@@ -9,6 +9,7 @@ import {
   forwardRef,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -797,16 +798,22 @@ function RoutesFilterSection(props: {
   );
 }
 
-export function RoutesClient({ initialRouteId = null }: { initialRouteId?: string | null }) {
+export function RoutesClient({
+  initialRouteId = null,
+  initialVacancy = null,
+}: {
+  initialRouteId?: string | null;
+  initialVacancy?: VacancyFilter | null;
+}) {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [showHomes] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(initialRouteId);
   const [detailMemberHome, setDetailMemberHome] = useState<SelectedMemberHome | null>(null);
   const [creating, setCreating] = useState(false);
-  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(initialVacancy !== null);
   const [deliveryType, setDeliveryType] = useState<DeliveryTypeFilter | null>(null);
-  const [vacancy, setVacancy] = useState<VacancyFilter | null>(null);
+  const [vacancy, setVacancy] = useState<VacancyFilter | null>(initialVacancy);
   const [captainIds, setCaptainIds] = useState<string[]>([]);
   // Default = new pill filters. Shift+F cycles pills → legacy sidebar → map overlay.
   const [filterPlacement, setFilterPlacement] = useState<FilterPlacement>("pills");
@@ -1340,9 +1347,11 @@ function InputField(props: {
   min?: number;
   labelSuffix?: string;
 }) {
+  const id = useId();
   return (
-    <SidePanelField label={props.label} labelSuffix={props.labelSuffix}>
+    <SidePanelField label={props.label} labelSuffix={props.labelSuffix} htmlFor={id}>
       <Input
+        id={id}
         value={props.value}
         onChange={props.onChange ? (e) => props.onChange!(e.target.value) : undefined}
         readOnly={!props.onChange}
@@ -1705,8 +1714,13 @@ function RouteDetailPanel({
               onChange={setSide}
             />
             {/* Read-only: house count is manual for MVP and has no edit path in
-                this panel yet. A drop is one address, so it has no house count. */}
-            <InputField label="House Count" value={String(r.effectiveHouseCount)} />
+                this panel yet. A drop is one address, so it has no house count.
+                A street route always has houses, so 0 means nobody has counted them. */}
+            <InputField
+              label="House Count"
+              value={r.effectiveHouseCount > 0 ? String(r.effectiveHouseCount) : ""}
+              placeholder="Not counted yet"
+            />
           </>
         )}
 
@@ -1720,6 +1734,7 @@ function RouteDetailPanel({
 
         <SidePanelField label={asDrop ? "Drop Notes" : "Route Notes"} labelSuffix="(optional)">
           <textarea
+            aria-label={asDrop ? "Drop notes" : "Route notes"}
             className="w-full rounded-[8px] border border-hairline bg-bg px-3 py-2 text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40"
             rows={4}
             value={notes ?? r.notes ?? ""}
@@ -1807,7 +1822,8 @@ function CreateRoutePanel(props: CreatePanelProps) {
   const [endPlaceId, setEndPlaceId] = useState<string | null>(null);
   const [papersRows, setPapersRows] = useState<number[]>([0]);
   const [papersValid, setPapersValid] = useState(true);
-  const [houseCount, setHouseCount] = useState("0");
+  // Blank is stored as 0, which a street route only holds when nobody has counted.
+  const [houseCount, setHouseCount] = useState("");
   const [side, setSide] = useState("");
   const [volunteerId, setVolunteerId] = useState("");
   const [note, setNote] = useState("");
@@ -1931,7 +1947,7 @@ function CreateRoutePanel(props: CreatePanelProps) {
           min={0}
           value={houseCount}
           onChange={setHouseCount}
-          placeholder="0"
+          placeholder="Not counted yet"
         />
 
         <BundlePapersTable
@@ -1943,6 +1959,7 @@ function CreateRoutePanel(props: CreatePanelProps) {
 
         <SidePanelField label="Route Notes" labelSuffix="(optional)">
           <textarea
+            aria-label="Route notes"
             className="w-full rounded-[8px] border border-hairline bg-bg px-3 py-2 text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40"
             rows={4}
             value={note}
@@ -2123,6 +2140,7 @@ function CreateDropPanel(props: CreatePanelProps) {
 
         <SidePanelField label="Drop Notes" labelSuffix="(optional)">
           <textarea
+            aria-label="Drop notes"
             className="w-full rounded-[8px] border border-hairline bg-bg px-3 py-2 text-md text-primary outline-none transition-colors focus-visible:border-active focus-visible:ring-3 focus-visible:ring-active/40"
             rows={4}
             value={note}

@@ -469,3 +469,17 @@ afterAll(async () => {
     await client.from("financial_years").delete().eq("id", y.id);
   }
 });
+
+describe.skipIf(!RUN)("when a cell last changed", () => {
+  it("moves when anything on the cell changes, and stays put on a write that changes nothing", async () => {
+    const { issueId } = await makeYearWithIssue();
+    const [cell] = await S().payouts.listPayouts(issueId);
+
+    const commented = await S().payouts.setPayoutComment(cell.id, { comment: "Paid in cash" });
+    expect(Date.parse(commented.updatedAt)).toBeGreaterThan(Date.parse(cell.updatedAt));
+
+    // The same comment again stores nothing new, so the cell has not changed.
+    const again = await S().payouts.setPayoutComment(cell.id, { comment: "Paid in cash" });
+    expect(again.updatedAt).toBe(commented.updatedAt);
+  });
+});

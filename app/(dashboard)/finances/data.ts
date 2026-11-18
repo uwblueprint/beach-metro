@@ -78,6 +78,20 @@ export function formatIssueDateLong(iso: string): string {
   return `${MONTHS_LONG[month - 1]} ${ordinal(day)}`;
 }
 
+/**
+ * A stored timestamp as the day it fell on in Toronto, in the long form, so a
+ * change made late in the evening reads as that evening and not the next day.
+ */
+export function formatChangedDate(timestamp: string): string {
+  const day = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(timestamp));
+  return formatIssueDateLong(day);
+}
+
 /** "2026-03-10" -> "Mar 10th", the short form used inside the cell popover. */
 export function formatIssueDateShort(iso: string): string {
   const [, month, day] = iso.split("-").map(Number);

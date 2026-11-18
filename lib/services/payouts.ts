@@ -47,6 +47,8 @@ export interface PayoutSummary {
   comment: string | null;
   paid: boolean;
   paidAt: string | null;
+  /** When anything stored on the cell last changed, as an ISO timestamp. */
+  updatedAt: string;
 }
 
 export interface PayoutDetail extends PayoutSummary {
@@ -92,6 +94,7 @@ function toSummary(
     comment: p.comment,
     paid: p.paid,
     paidAt: p.paid_at,
+    updatedAt: p.updated_at,
   };
 }
 

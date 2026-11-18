@@ -153,6 +153,8 @@ export interface CaptainPayoutRow {
   comment: string | null;
   paid: boolean;
   paid_at: string | null;
+  /** Stamped by a trigger whenever anything else on the row changes. */
+  updated_at: string;
 }
 
 export interface RouteBundle {
