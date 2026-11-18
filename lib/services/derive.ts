@@ -241,3 +241,24 @@ export function recomposedDisplayName(
   const last = input.lastName === undefined ? current.last_name : input.lastName;
   return [first, last].filter(Boolean).join(" ").trim() || null;
 }
+
+type MapPoint = { lat: number; lng: number };
+
+/** Metres between two nearby points, close enough at a city's scale. */
+function metresBetween(a: MapPoint, b: MapPoint): number {
+  const dx = (b.lng - a.lng) * 111_320 * Math.cos((a.lat * Math.PI) / 180);
+  const dy = (b.lat - a.lat) * 110_540;
+  return Math.hypot(dx, dy);
+}
+
+/**
+ * Whether a walking path between a street route's two corners leaves the street,
+ * judged by being over 1.3 times the straight distance between them. A walk along
+ * one street stays near that line even where the street bends, as a crescent does,
+ * while a path that goes around a block to reach the far corner runs well past it.
+ */
+export function walkingPathDetours(path: MapPoint[], start: MapPoint, end: MapPoint): boolean {
+  let length = 0;
+  for (let i = 1; i < path.length; i++) length += metresBetween(path[i - 1], path[i]);
+  return length > 1.3 * metresBetween(start, end);
+}

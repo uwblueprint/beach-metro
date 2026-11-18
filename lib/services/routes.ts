@@ -33,6 +33,7 @@ import {
   routeLifecycle,
   sameAddressInput,
   volunteerStatus,
+  walkingPathDetours,
 } from "./derive";
 import { db, throwDb, today } from "./shared";
 
@@ -233,12 +234,14 @@ export interface RoutePathEntry {
 const routePathCache = new Map<string, { lat: number; lng: number }[]>();
 
 /**
- * Road-following path for every route that has both endpoints. Computed via the
- * Routes API and cached; a route whose call fails is simply omitted, so the map
- * draws a straight line for it rather than blanking.
+ * Road-following path for every street route. Computed via the Routes API and
+ * cached; a route left out is drawn by the map as a straight line between its
+ * corners. That covers a failed call, and a walk that detours around a block,
+ * which a straight line misrepresents less on the area's mostly straight streets.
+ * A drop is one point and is drawn as a pin, so it is never asked for.
  */
 export async function listRoutePaths(): Promise<RoutePathEntry[]> {
-  const routes = (await listRoutes({})).filter((r) => r.start && r.end);
+  const routes = (await listRoutes({})).filter((r) => !r.isDrop && r.start && r.end);
   const provider = getMapsProvider();
 
   const entries = await Promise.all(
@@ -251,15 +254,16 @@ export async function listRoutePaths(): Promise<RoutePathEntry[]> {
         try {
           const pts = await provider.routePath(start, end);
           const mapped = pts.map((p) => ({ lat: p.latitude, lng: p.longitude }));
-          if (mapped.length >= 2) {
-            routePathCache.set(key, mapped);
-            path = mapped;
-          }
+          const corners = [start, end].map((p) => ({ lat: p.latitude, lng: p.longitude }));
+          // An unusable path is cached as empty, so the call isn't repeated.
+          path =
+            mapped.length >= 2 && !walkingPathDetours(mapped, corners[0], corners[1]) ? mapped : [];
+          routePathCache.set(key, path);
         } catch {
           return null; // degrade to straight line on the client
         }
       }
-      return path && path.length >= 2 ? { id: r.id, path } : null;
+      return path.length >= 2 ? { id: r.id, path } : null;
     }),
   );
   return entries.filter((e): e is RoutePathEntry => e !== null);

@@ -14,6 +14,7 @@ import {
   sameAddressInput,
   volunteerNeedsAttention,
   volunteerStatus,
+  walkingPathDetours,
 } from "@/lib/services/derive";
 
 describe("greedySplit", () => {
@@ -306,5 +307,22 @@ describe("routeLifecycle", () => {
     expect(
       routeLifecycle({ isDrop: false, assignedVolunteerId: null, assignedCaptainId: "c1" }),
     ).toBe("vacant");
+  });
+});
+
+describe("walkingPathDetours", () => {
+  // Two corners about 300 m apart on one north-south street.
+  const start = { lat: 43.67, lng: -79.29 };
+  const end = { lat: 43.6727, lng: -79.29 };
+
+  it("accepts a path that follows the street, bend and all", () => {
+    const bend = { lat: 43.6713, lng: -79.2905 };
+    expect(walkingPathDetours([start, bend, end], start, end)).toBe(false);
+  });
+
+  it("flags a path that goes around a block to reach the far corner", () => {
+    const west = { lat: 43.67, lng: -79.2915 };
+    const westNorth = { lat: 43.6727, lng: -79.2915 };
+    expect(walkingPathDetours([start, west, westNorth, end], start, end)).toBe(true);
   });
 });
