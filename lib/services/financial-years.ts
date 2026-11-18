@@ -243,7 +243,13 @@ export async function exportYearCsv(id: string): Promise<{ filename: string; csv
     });
     lines.push([esc(issue.name), issue.date, issue.status, ...cells].join(","));
   }
-  return { filename: `${detail.name.replaceAll(/\s+/g, "-")}.csv`, csv: lines.join("\n") + "\n" };
+  // The name goes in a download header, which takes plain ASCII only, so a year
+  // named "2026–2027" with its en dash is cut down to letters, digits and hyphens.
+  const slug = detail.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return { filename: `finances-${slug}.csv`, csv: lines.join("\n") + "\n" };
 }
 
 /**

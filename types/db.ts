@@ -116,6 +116,11 @@ export interface VolunteerRouteRow {
   drop_name: string | null;
   notes: string | null;
   deleted_at: string | null;
+  /**
+   * The street route's line for the map, saved when its corners are set. Null for
+   * a drop, and for a route with no walk along the street, drawn straight instead.
+   */
+  path: { lat: number; lng: number }[] | null;
 }
 
 export interface FinancialYearRow {

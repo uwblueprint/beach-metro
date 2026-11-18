@@ -483,3 +483,20 @@ describe.skipIf(!RUN)("when a cell last changed", () => {
     expect(again.updatedAt).toBe(commented.updatedAt);
   });
 });
+
+describe.skipIf(!RUN)("the year's CSV export", () => {
+  it("downloads for a year whose name has an en dash, as the real year's does", async () => {
+    const year = await S().years.createYear({
+      name: `${unique()} 2026–2027`,
+      startDate: "2026-03-01",
+    });
+    createdYearIds.push(year.id);
+    const { filename } = await S().years.exportYearCsv(year.id);
+
+    // The download header takes plain ASCII only; an en dash in it threw a 500.
+    expect(
+      () => new Headers({ "content-disposition": `attachment; filename="${filename}"` }),
+    ).not.toThrow();
+    expect(filename).toMatch(/^finances-[a-z0-9-]+\.csv$/);
+  });
+});

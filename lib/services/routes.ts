@@ -3,8 +3,9 @@
 // never stored (route flow §3a).
 import type { z } from "zod";
 
-import { conflict, notFound } from "@/lib/api/errors";
+import { ServiceError, conflict, notFound } from "@/lib/api/errors";
 import { getMapsProvider } from "@/lib/maps";
+import type { LatLng } from "@/lib/maps/types";
 import type {
   createRoute,
   nearestVacantQuery,
@@ -29,11 +30,13 @@ import {
 } from "./addresses";
 import {
   greedySplit,
+  pointToward,
   routeEndpointLabel,
   routeLifecycle,
   sameAddressInput,
   volunteerStatus,
   walkingPathDetours,
+  type MapPoint,
 } from "./derive";
 import { db, throwDb, today } from "./shared";
 
@@ -229,44 +232,48 @@ export interface RoutePathEntry {
   path: { lat: number; lng: number }[];
 }
 
-// Compute Routes is billed per call, but a route's path only changes when its
-// endpoints move — so cache by id+endpoints for the server's lifetime.
-const routePathCache = new Map<string, { lat: number; lng: number }[]>();
-
 /**
- * Road-following path for every street route. Computed via the Routes API and
- * cached; a route left out is drawn by the map as a straight line between its
- * corners. That covers a failed call, and a walk that detours around a block,
- * which a straight line misrepresents less on the area's mostly straight streets.
- * A drop is one point and is drawn as a pin, so it is never asked for.
+ * The saved line of every street route that has one. A route left out is drawn by
+ * the map as a straight line between its corners, and a drop as a pin.
  */
 export async function listRoutePaths(): Promise<RoutePathEntry[]> {
-  const routes = (await listRoutes({})).filter((r) => !r.isDrop && r.start && r.end);
-  const provider = getMapsProvider();
+  const { data, error } = await db()
+    .from("volunteer_routes")
+    .select("id, path")
+    .is("deleted_at", null)
+    .not("path", "is", null);
+  if (error) throwDb(error);
+  return (data ?? []) as RoutePathEntry[];
+}
 
-  const entries = await Promise.all(
-    routes.map(async (r): Promise<RoutePathEntry | null> => {
-      const start = r.start!;
-      const end = r.end!;
-      const key = `${r.id}:${start.latitude},${start.longitude}:${end.latitude},${end.longitude}`;
-      let path = routePathCache.get(key);
-      if (!path) {
-        try {
-          const pts = await provider.routePath(start, end);
-          const mapped = pts.map((p) => ({ lat: p.latitude, lng: p.longitude }));
-          const corners = [start, end].map((p) => ({ lat: p.latitude, lng: p.longitude }));
-          // An unusable path is cached as empty, so the call isn't repeated.
-          path =
-            mapped.length >= 2 && !walkingPathDetours(mapped, corners[0], corners[1]) ? mapped : [];
-          routePathCache.set(key, path);
-        } catch {
-          return null; // degrade to straight line on the client
-        }
-      }
-      return path.length >= 2 ? { id: r.id, path } : null;
-    }),
-  );
-  return entries.filter((e): e is RoutePathEntry => e !== null);
+/** How far inside the street each end is moved before asking for the walk. */
+const METRES_INSIDE_STREET = 20;
+
+/**
+ * A street route's line along its street, from Google's walking directions. A
+ * corner sits where two streets meet, and a walk asked from it can start on the
+ * cross street and go around a block, so the walk is asked from points just
+ * inside the street and joined to the corners. Null when Google gives no walk that
+ * keeps to the street, which the map draws as a straight line.
+ */
+export async function walkingLine(start: LatLng, end: LatLng): Promise<MapPoint[] | null> {
+  const a = { lat: start.latitude, lng: start.longitude };
+  const b = { lat: end.latitude, lng: end.longitude };
+  const fromInside = pointToward(a, b, METRES_INSIDE_STREET);
+  const toInside = pointToward(b, a, METRES_INSIDE_STREET);
+  let walk: LatLng[];
+  try {
+    walk = await getMapsProvider().routePath(
+      { latitude: fromInside.lat, longitude: fromInside.lng },
+      { latitude: toInside.lat, longitude: toInside.lng },
+    );
+  } catch (err) {
+    if (err instanceof ServiceError) return null;
+    throw err;
+  }
+  if (walk.length < 2) return null;
+  const line = [a, ...walk.map((p) => ({ lat: p.latitude, lng: p.longitude })), b];
+  return walkingPathDetours(line, a, b) ? null : line;
 }
 
 async function fetchRoute(id: string): Promise<VolunteerRouteRow> {
@@ -335,12 +342,14 @@ export async function createRouteRecord(input: z.infer<typeof createRoute>): Pro
     input.bundles !== undefined ? input.bundles : greedySplit(input.papers ?? 0);
   const papers =
     input.bundles !== undefined ? bundles.reduce((s, b) => s + b.papers, 0) : (input.papers ?? 0);
+  const path = sameEndpoint ? null : await walkingLine(start.resolved, end.resolved);
 
   const { data, error } = await db()
     .from("volunteer_routes")
     .insert({
       start_address_id: start.address.id,
       end_address_id: end.address.id,
+      path,
       street_name: input.streetName,
       side: input.side ?? null,
       assigned_volunteer_id: input.assignedVolunteerId ?? null,
@@ -410,6 +419,16 @@ export async function updateRouteRecord(
   const startAfter = (patch.start_address_id as string | undefined) ?? existing.start_address_id;
   const endAfter = (patch.end_address_id as string | undefined) ?? existing.end_address_id;
   const isDropAfter = startAfter === endAfter;
+
+  // The line runs between the corners, so it is worked out again when one moves.
+  if (patch.start_address_id !== undefined || patch.end_address_id !== undefined) {
+    const corners = isDropAfter
+      ? new Map<string, AddressDetail>()
+      : await getAddressDetails([startAfter, endAfter]);
+    const from = coord(corners.get(startAfter));
+    const to = coord(corners.get(endAfter));
+    patch.path = from && to ? await walkingLine(from, to) : null;
+  }
 
   // Only a drop carries these. Ignoring them on a street route matches what
   // create does with the same input, instead of letting the write reach the

@@ -327,3 +327,70 @@ describe.runIf(RUN_KIND)("drop kind and name", () => {
     expect(moved.startAddress.id).toBe(drop.startAddress.id);
   });
 });
+
+describe.runIf(RUN)("a street route's line on the map", () => {
+  // A corner read back from the database is rounded at the fourteenth decimal place.
+  const at = (
+    p: { lat: number; lng: number } | undefined,
+    c: { latitude: number; longitude: number },
+  ) => {
+    expect(p!.lat).toBeCloseTo(c.latitude, 9);
+    expect(p!.lng).toBeCloseTo(c.longitude, 9);
+  };
+
+  async function savedPath(id: string) {
+    const { data, error } = await createAdminClient()
+      .from("volunteer_routes")
+      .select("path")
+      .eq("id", id)
+      .single();
+    if (error) throw new Error(error.message);
+    return data.path as { lat: number; lng: number }[] | null;
+  }
+
+  const streetRoute = async () => {
+    const route = await S().routes.createRouteRecord({
+      streetName: "Lee Ave",
+      startAddress: dropAddress(),
+      endAddress: dropAddress(),
+      houseCount: 0,
+      bundles: [{ papers: 25 }],
+    });
+    created.routeIds.push(route.id);
+    return route;
+  };
+
+  it("is saved when the route is created, running from corner to corner", async () => {
+    const route = await streetRoute();
+    const path = await savedPath(route.id);
+
+    expect(path).not.toBeNull();
+    at(path![0], route.start!);
+    at(path!.at(-1), route.end!);
+    const listed = await S().routes.listRoutePaths();
+    expect(listed.find((p) => p.id === route.id)?.path).toEqual(path);
+  });
+
+  it("is worked out again when a corner moves", async () => {
+    const route = await streetRoute();
+    const moved = await S().routes.updateRouteRecord(route.id, { endAddress: dropAddress() });
+    const path = await savedPath(route.id);
+
+    at(path!.at(-1), moved.end!);
+    expect(moved.end).not.toEqual(route.end);
+  });
+
+  it("is never saved for a drop, which draws as a pin", async () => {
+    const address = dropAddress();
+    const drop = await S().routes.createRouteRecord({
+      streetName: "Kingston Rd",
+      startAddress: address,
+      endAddress: address,
+      houseCount: 0,
+      bundles: [{ papers: 25 }],
+    });
+    created.routeIds.push(drop.id);
+
+    expect(await savedPath(drop.id)).toBeNull();
+  });
+});

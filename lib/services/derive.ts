@@ -242,7 +242,7 @@ export function recomposedDisplayName(
   return [first, last].filter(Boolean).join(" ").trim() || null;
 }
 
-type MapPoint = { lat: number; lng: number };
+export type MapPoint = { lat: number; lng: number };
 
 /** Metres between two nearby points, close enough at a city's scale. */
 function metresBetween(a: MapPoint, b: MapPoint): number {
@@ -261,4 +261,25 @@ export function walkingPathDetours(path: MapPoint[], start: MapPoint, end: MapPo
   let length = 0;
   for (let i = 1; i < path.length; i++) length += metresBetween(path[i - 1], path[i]);
   return length > 1.3 * metresBetween(start, end);
+}
+
+/**
+ * A point the given distance from `from` toward `to`, stopping short of the middle
+ * so the two ends of a short street never pass each other.
+ */
+export function pointToward(from: MapPoint, to: MapPoint, metres: number): MapPoint {
+  const share = Math.min(metres / metresBetween(from, to), 0.45);
+  return {
+    lat: from.lat + (to.lat - from.lat) * share,
+    lng: from.lng + (to.lng - from.lng) * share,
+  };
+}
+
+/**
+ * The street line of a Google address, "160 Fallingbrook Rd #401" from
+ * "160 Fallingbrook Rd #401, Toronto, ON M4E 3L5, Canada", as the office's own
+ * labels print it. The city, postcode and country would shrink the line to fit.
+ */
+export function streetLine(formattedAddress: string): string {
+  return formattedAddress.split(",")[0].trim();
 }

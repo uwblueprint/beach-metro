@@ -22,7 +22,7 @@ import type {
 } from "@/types/db";
 
 import { getAddressDetails } from "./addresses";
-import { labelType, routeLabel } from "./derive";
+import { labelType, routeLabel, streetLine } from "./derive";
 import { db, selectByIds, throwDb, today } from "./shared";
 
 export interface LabelBundle {
@@ -447,7 +447,7 @@ export async function exportLabelSheet(
       // drop is carried by a captain, so an unnamed one leaves the line empty
       // rather than calling itself vacant.
       name: labelName(route),
-      address: route?.address ?? "",
+      address: route?.address ? streetLine(route.address) : "",
       bundleLine: total > 1 ? `Bundle ${ref.bundleIndex + 1} of ${total}` : "",
     };
   });

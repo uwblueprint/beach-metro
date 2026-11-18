@@ -12,7 +12,9 @@ import {
   labelType,
   routeLifecycle,
   sameAddressInput,
+  streetLine,
   volunteerNeedsAttention,
+  pointToward,
   volunteerStatus,
   walkingPathDetours,
 } from "@/lib/services/derive";
@@ -324,5 +326,34 @@ describe("walkingPathDetours", () => {
     const west = { lat: 43.67, lng: -79.2915 };
     const westNorth = { lat: 43.6727, lng: -79.2915 };
     expect(walkingPathDetours([start, west, westNorth, end], start, end)).toBe(true);
+  });
+});
+
+describe("pointToward", () => {
+  const start = { lat: 43.67, lng: -79.29 };
+  const end = { lat: 43.6727, lng: -79.29 }; // about 300 m north
+
+  it("moves the given distance along the line to the other end", () => {
+    const p = pointToward(start, end, 20);
+    expect(p.lng).toBe(start.lng);
+    expect((p.lat - start.lat) * 110_540).toBeCloseTo(20, 0);
+  });
+
+  it("stops short of the middle on a street shorter than twice the distance", () => {
+    const near = { lat: 43.6702, lng: -79.29 }; // about 22 m north
+    const p = pointToward(start, near, 20);
+    expect((p.lat - start.lat) / (near.lat - start.lat)).toBeCloseTo(0.45, 5);
+  });
+});
+
+describe("streetLine", () => {
+  it("keeps the house number, street and unit, and drops the rest", () => {
+    expect(streetLine("160 Fallingbrook Rd #401, Toronto, ON M4E 3L5, Canada")).toBe(
+      "160 Fallingbrook Rd #401",
+    );
+  });
+
+  it("keeps an address with no comma whole", () => {
+    expect(streetLine("29 Bingham Ave")).toBe("29 Bingham Ave");
   });
 });

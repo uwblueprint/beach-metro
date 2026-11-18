@@ -271,6 +271,9 @@ export interface VolunteerRoute {
   bundles: RouteBundle[]; // standing per-bundle breakdown (source of truth for labels / issue seed)
   notes?: string | null; // still a plain string here, unlike people (see MemberNote)
   deletedAt?: Timestamp | null; // soft delete: hidden from views, row retained so past RouteDelivery still resolves
+  // The map's line along the street, saved from a walking route when the corners are
+  // set. Null for a drop, and where no walk keeps to the street (drawn straight).
+  path?: { lat: number; lng: number }[] | null;
   // No territoryId: territory/captain derive via assignedVolunteerId -> captainTerritoryId.
 }
 ```
